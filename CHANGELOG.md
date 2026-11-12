@@ -24,3 +24,10 @@ ships.
 - The web interface (TypeScript + Alpine) in `web/`, and the Python implementation it was built with in `legacy/`, kept
   as the reference until the Go binary reaches parity.
 - Landing page in `site/`.
+- Storage: `sqlite` (default, pure Go) and `json` drivers behind one interface and one test suite; workspaces with
+  append-only history (trees stored once per content hash), conflict detection, undo and redo as entries, tab
+  snapshots; `storage migrate --to json|sqlite` copies everything, history included.
+- `browser-foreman import FILE` for Chrome's Bookmarks JSON and any exported bookmarks HTML (Firefox, Safari, Chrome,
+  Browser Foreman), and `workspace list|history|undo|redo`.
+- `GET /api/v1/workspaces`, `/api/v1/workspaces/{id}` (`?at=N`) and `/api/v1/workspaces/{id}/history`, token
+  required.

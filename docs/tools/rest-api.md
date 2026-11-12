@@ -1,13 +1,13 @@
 # REST API
 
-Seven endpoints today, all under `/api/v1`, all JSON. Phase 4 of the [roadmap](../roadmap.md) adds bookmarks,
+Ten endpoints today, all under `/api/v1`, all JSON. Phase 4 of the [roadmap](../roadmap.md) adds bookmarks,
 folders, workspaces, history, tabs and settings.
 
 ## Rules for every request
 
 - Send it to a local host (`127.0.0.1`, `::1` or `localhost`) in `local` mode; any other Host is refused with `403`.
 - From a browser, the Origin must be this server's own; another site gets `403`.
-- Writes need `Authorization: Bearer <token>` (`BROFO_API_TOKEN`). Missing or wrong: `401`. No token configured on
+- Writes, and reading bookmarks (they are private), need `Authorization: Bearer <token>` (`BROFO_API_TOKEN`). Missing or wrong: `401`. No token configured on
   the server: `503`.
 - Errors are `{"error": "message"}`.
 
@@ -22,6 +22,9 @@ folders, workspaces, history, tabs and settings.
 | `POST` | `/api/v1/webhooks` | yes | body `{url, events, secret}`; `201` with the subscription, `400` with the reason |
 | `DELETE` | `/api/v1/webhooks/{id}` | yes | `204`, or `404` |
 | `POST` | `/api/v1/webhooks/{id}/test` | yes | sends a `webhook.test` event now; `200` with the delivery record |
+| `GET` | `/api/v1/workspaces` | yes | `200 {"workspaces": [{id, name, created, head, bookmarks, folders}]}` |
+| `GET` | `/api/v1/workspaces/{id}` | yes | the workspace, its last entry and its tree; `?at=N` for the tree after entry N |
+| `GET` | `/api/v1/workspaces/{id}/history` | yes | `200 {"history": [entries, oldest first]}` |
 
 ## Example
 

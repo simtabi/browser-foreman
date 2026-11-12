@@ -18,6 +18,7 @@ import (
 	"github.com/simtabi/browser-foreman/src/internal/api"
 	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/events"
+	"github.com/simtabi/browser-foreman/src/internal/store"
 	"github.com/simtabi/browser-foreman/src/internal/version"
 	"github.com/simtabi/browser-foreman/src/internal/webhooks"
 )
@@ -39,7 +40,7 @@ func Root() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(serveCmd(), versionCmd(), configCmd())
+	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd())
 	return root
 }
 
@@ -62,9 +63,14 @@ func serveCmd() *cobra.Command {
 				return err
 			}
 			bus := events.New(1000, time.Now)
-			store := webhooks.NewStore(c.Storage.Path)
-			srv := &api.Server{Cfg: c, Bus: bus, Hooks: store, Now: time.Now, Dispatch: &webhooks.Dispatcher{
-				Store: store, Client: &http.Client{Timeout: c.Webhooks.Timeout.Duration}, Attempts: c.Webhooks.Attempts,
+			data, err := store.Open(c.Storage.Driver, c.Storage.Path)
+			if err != nil {
+				return err
+			}
+			defer data.Close()
+			hooks := webhooks.NewStore(c.Storage.Path)
+			srv := &api.Server{Cfg: c, Bus: bus, Hooks: hooks, Data: data, Now: time.Now, Dispatch: &webhooks.Dispatcher{
+				Store: hooks, Client: &http.Client{Timeout: c.Webhooks.Timeout.Duration}, Attempts: c.Webhooks.Attempts,
 				Backoff: 2 * time.Second, Now: time.Now,
 				Log: func(d webhooks.Delivery) {
 					if !d.OK {

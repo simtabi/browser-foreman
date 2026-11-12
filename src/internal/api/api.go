@@ -8,6 +8,11 @@
 //	POST   /api/v1/webhooks                {url, events[], secret}                             token
 //	DELETE /api/v1/webhooks/{id}                                                               token
 //	POST   /api/v1/webhooks/{id}/test      sends a webhook.test event to that subscription     token
+//	GET    /api/v1/workspaces              workspaces with their size                          token
+//	GET    /api/v1/workspaces/{id}         one workspace and its tree (?at=N for an older one) token
+//	GET    /api/v1/workspaces/{id}/history every change, oldest first                          token
+//
+// Reading bookmarks needs the token too: they are private.
 //
 // Every request must come to a local Host (local mode) and, from a browser, from this server's own Origin. Requests
 // that change something need "Authorization: Bearer <token>" (BROFO_API_TOKEN).
@@ -28,6 +33,7 @@ import (
 
 	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/events"
+	"github.com/simtabi/browser-foreman/src/internal/store"
 	"github.com/simtabi/browser-foreman/src/internal/version"
 	"github.com/simtabi/browser-foreman/src/internal/webhooks"
 )
@@ -38,6 +44,7 @@ type Server struct {
 	Bus      *events.Bus
 	Hooks    *webhooks.Store
 	Dispatch *webhooks.Dispatcher
+	Data     store.Store
 	Now      func() time.Time
 }
 
@@ -51,6 +58,9 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/webhooks", s.auth(s.addHook))
 	m.HandleFunc("DELETE /api/v1/webhooks/{id}", s.auth(s.removeHook))
 	m.HandleFunc("POST /api/v1/webhooks/{id}/test", s.auth(s.testHook))
+	m.HandleFunc("GET /api/v1/workspaces", s.auth(s.listWorkspaces))
+	m.HandleFunc("GET /api/v1/workspaces/{id}", s.auth(s.getWorkspace))
+	m.HandleFunc("GET /api/v1/workspaces/{id}/history", s.auth(s.getHistory))
 	m.HandleFunc("GET /{$}", s.home)
 	return s.guard(m)
 }
@@ -267,6 +277,74 @@ func (s *Server) Run(ctx context.Context) error {
 		}
 		return err
 	}
+}
+
+type wsOut struct {
+	store.Workspace
+	Bookmarks int `json:"bookmarks"`
+	Folders   int `json:"folders"`
+}
+
+func (s *Server) listWorkspaces(w http.ResponseWriter, r *http.Request) {
+	all, err := s.Data.Workspaces(r.Context())
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	out := []wsOut{}
+	for _, x := range all {
+		t, _, err := s.Data.State(r.Context(), x.ID, 0)
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		bm, fo := t.Count()
+		out = append(out, wsOut{x, bm, fo})
+	}
+	writeJSON(w, 200, map[string]any{"workspaces": out})
+}
+
+func (s *Server) getWorkspace(w http.ResponseWriter, r *http.Request) {
+	x, err := s.Data.Workspace(r.Context(), r.PathValue("id"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, 404, "no workspace with that id")
+		return
+	} else if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	at := 0
+	if v := r.URL.Query().Get("at"); v != "" {
+		if at, err = strconv.Atoi(v); err != nil || at < 1 {
+			writeErr(w, 400, "at must be an entry number (1 or more)")
+			return
+		}
+	}
+	t, e, err := s.Data.State(r.Context(), x.ID, at)
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, 404, "no such entry")
+		return
+	} else if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	bm, fo := t.Count()
+	writeJSON(w, 200, map[string]any{"workspace": wsOut{x, bm, fo}, "entry": e, "tree": t})
+}
+
+func (s *Server) getHistory(w http.ResponseWriter, r *http.Request) {
+	h, err := s.Data.History(r.Context(), r.PathValue("id"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, 404, "no workspace with that id")
+		return
+	} else if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	if h == nil {
+		h = []store.Entry{}
+	}
+	writeJSON(w, 200, map[string]any{"history": h})
 }
 
 func newID() string {

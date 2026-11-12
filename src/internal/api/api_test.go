@@ -11,6 +11,7 @@ import (
 
 	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/events"
+	"github.com/simtabi/browser-foreman/src/internal/store"
 	"github.com/simtabi/browser-foreman/src/internal/webhooks"
 )
 
@@ -19,7 +20,11 @@ func newServer(t *testing.T, token string) *Server {
 	c := config.Defaults()
 	c.APIToken = token
 	st := webhooks.NewStore(t.TempDir())
-	return &Server{Cfg: c, Bus: events.New(100, time.Now), Hooks: st, Now: time.Now,
+	data, err := store.Open("json", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &Server{Cfg: c, Bus: events.New(100, time.Now), Hooks: st, Data: data, Now: time.Now,
 		Dispatch: &webhooks.Dispatcher{Store: st, Client: http.DefaultClient, Attempts: 1, Backoff: time.Millisecond, Now: time.Now}}
 }
 
@@ -105,5 +110,33 @@ func TestEventsStreamReplaysAndStreams(t *testing.T) {
 	}
 	if strings.Join(got, ",") != "a.two,a.three" {
 		t.Fatalf("got %v: want the replayed a.two, then the live a.three", got)
+	}
+}
+
+func TestWorkspacesAreReadOnlyAndNeedTheToken(t *testing.T) {
+	s := newServer(t, "tok")
+	ctx := context.Background()
+	_, _ = s.Data.CreateWorkspace(ctx, "main", "Chrome", time.Now())
+	tree := store.Tree{Root: &store.Node{ID: "root", Kind: store.KindFolder, Children: []*store.Node{
+		{ID: "b1", Kind: store.KindBookmark, Title: "Go", URL: "https://go.dev/"}}}}
+	_, _ = s.Data.Commit(ctx, "main", 0, store.Change{Op: "import", Summary: "Imported 1", Tree: tree}, time.Now())
+	h := s.Handler()
+	if w := do(h, "GET", "/api/v1/workspaces", "", "127.0.0.1:8765", "", ""); w.Code != 401 {
+		t.Fatalf("bookmarks without the token: %d", w.Code)
+	}
+	if w := do(h, "GET", "/api/v1/workspaces", "", "127.0.0.1:8765", "", "tok"); w.Code != 200 || !strings.Contains(w.Body.String(), `"bookmarks":1`) {
+		t.Fatalf("list %d %s", w.Code, w.Body)
+	}
+	if w := do(h, "GET", "/api/v1/workspaces/main", "", "127.0.0.1:8765", "", "tok"); w.Code != 200 || !strings.Contains(w.Body.String(), "https://go.dev/") {
+		t.Fatalf("tree %d %s", w.Code, w.Body)
+	}
+	if w := do(h, "GET", "/api/v1/workspaces/main?at=9", "", "127.0.0.1:8765", "", "tok"); w.Code != 404 {
+		t.Fatalf("missing entry %d", w.Code)
+	}
+	if w := do(h, "GET", "/api/v1/workspaces/nope/history", "", "127.0.0.1:8765", "", "tok"); w.Code != 404 {
+		t.Fatalf("missing workspace %d", w.Code)
+	}
+	if w := do(h, "DELETE", "/api/v1/workspaces/main", "", "127.0.0.1:8765", "", "tok"); w.Code != 405 {
+		t.Fatalf("workspaces are read-only here: %d", w.Code)
 	}
 }

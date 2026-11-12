@@ -35,6 +35,12 @@ browser-foreman config init
 
 ### Usage
 
+Bring in a browser's bookmarks as a workspace, with its full history from here on:
+
+```bash
+browser-foreman import ~/Downloads/bookmarks.html --workspace main
+```
+
 Start the server (it listens on `127.0.0.1:8765` and answers on localhost only):
 
 ```bash
@@ -77,10 +83,12 @@ Hosted at <https://opensource.simtabi.com/documentation/simtabi/browser-foreman/
 - [REST API](docs/tools/rest-api.md) — every endpoint under `/api/v1`
 - [Events](docs/tools/events.md) — the event stream and every event type
 - [Webhooks](docs/tools/webhooks.md) — subscriptions, signatures, retries
+- [Storage](docs/tools/storage.md) — the sqlite and json drivers, history, undo and redo, migrating
 - [Web interface](docs/tools/web-interface.md) — the bookmark and tab views
 
 ### Recipes
 
+- [Import bookmarks](docs/recipes/import-bookmarks.md) — from Chrome, Edge, Brave, Firefox, Safari or an export
 - [Receive a webhook](docs/recipes/receive-a-webhook.md) — verify the signature in your endpoint
 - [Stream events](docs/recipes/stream-events.md) — follow changes live, and catch up after a reconnect
 

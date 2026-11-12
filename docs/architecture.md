@@ -12,9 +12,11 @@ interface and an API over them, and tells other programs what changed.
 | `api` | the HTTP server: `/api/v1`, the event stream, the Host/Origin/token checks |
 | `events` | the event bus and its replay buffer |
 | `webhooks` | subscriptions, signing, delivery with retries |
+| `store` | the storage interface, the sqlite and json drivers, history (undo, redo) and migration |
+| `importer` | reading Chrome's JSON and exported HTML bookmark files into a tree |
 | `version` | build metadata stamped by the Makefile |
 
-Planned packages (see the [roadmap](roadmap.md)): `store` (sqlite and json drivers), `auth` (users, sessions,
+Planned packages (see the [roadmap](roadmap.md)): `auth` (users, sessions,
 tokens), `browsers` (installed browsers, opening links, reading tabs), `web` (the embedded interface).
 
 Outside `src/`: `web/` holds the web interface's TypeScript sources; `legacy/` holds the Python implementation the
