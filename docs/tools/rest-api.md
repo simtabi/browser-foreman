@@ -1,6 +1,6 @@
 # REST API
 
-49 endpoints, all under `/api/v1`, all JSON. `GET /api/v1/openapi.json` describes every one (OpenAPI 3.1, with the
+63 endpoints, all under `/api/v1`, all JSON. `GET /api/v1/openapi.json` describes every one (OpenAPI 3.1, with the
 role each needs in `x-role`); a test fails if a route and the document ever disagree.
 
 ## Rules for every request
@@ -13,6 +13,8 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 - A change made with a session cookie must also send that session's `X-CSRF-Token` (from sign-in or `/auth/me`), or it
   is refused with `403`. Token requests need no CSRF header.
 - Each endpoint needs a role: viewer < editor < owner. Too low: `403`.
+- A request another site's page makes from a browser (`Sec-Fetch-Site: cross-site`, anything but following a link)
+  is refused, even one that sends no `Origin`, such as an image.
 - Every change to a workspace is one history entry made on the head you last saw. Send that head as
   `If-Match: "12"` (a workspace read's `ETag`); if someone changed it since, you get `412` and nothing is applied.
   Without `If-Match` the change applies to the current head.
@@ -65,6 +67,11 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `GET` | `/api/v1/webhooks/deliveries` | owner | the latest deliveries, newest first; `?subscription=`, `?limit=` (1–1000) |
 | `GET` | `/api/v1/backup` | owner | every workspace with its history, and the link results, as gzipped JSON; see [backup](backup.md) |
 | `POST` | `/api/v1/restore` | owner | the backup file as the body; adds, replaces nothing; `200 {"workspaces": {old: new}, "entries", "links"}` |
+| `GET` | `/api/v1/browsers`, `/api/v1/browsers/icon?name=` | viewer, none | installed browsers and the default; a browser's icon (public, so an `<img>` can load it; other sites cannot) |
+| `POST` | `/api/v1/open` | owner | open http(s) links in browsers; see [browsers and tabs](browsers-and-tabs.md) |
+| `GET`, `PUT` | `/api/v1/preferences` | viewer, owner | browsers, snapshots and re-checks |
+| `GET` | `/api/v1/tabs` and the `/api/v1/tabs/…` routes | viewer to owner | open tabs, snapshots, timeline, restore, close; see [browsers and tabs](browsers-and-tabs.md) |
+| `GET` | `/api/v1/linkchecks` | viewer | the running check and earlier ones, with links newly broken and fixed |
 | `GET` | `/api/v1/settings` | owner | the configuration in force, without secrets; read-only |
 | `POST` | `/api/v1/workspaces/{id}/rollback` | editor | body `{to}`: the state after entry `to` becomes the newest, as an entry you can undo |
 

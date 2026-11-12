@@ -15,7 +15,9 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string |
 /** A Tabler icon by class name, or with "browser:<name>" that browser's own app icon (served by the local server from
  *  the installed app; a globe if it cannot be had). Every menu, palette row and card gets real browser icons this way. */
 export const icon = (name: string, cls = ""): HTMLElement => name.startsWith("browser:") ? browserIcon(name.slice(8), cls) : el("i", `ti ${name} ${cls}`.trim());
-export const browserIconUrl = (name: string): string => `api/tabs/browser-icon?name=${encodeURIComponent(name)}`;
+// An <img> cannot go through the page's fetch, so the icon's address names the server's own route.
+export const browserIconUrl = (name: string): string =>
+  ((window as unknown as { BM_WS?: { v1?: boolean } }).BM_WS?.v1 ? "api/v1/browsers/icon" : "api/tabs/browser-icon") + `?name=${encodeURIComponent(name)}`;
 export function browserIcon(name: string, cls = ""): HTMLElement {
   const img = el("img", `browser-ico ${cls}`.trim()); img.src = browserIconUrl(name); img.alt = ""; img.width = img.height = 16;
   img.onerror = () => img.replaceWith(el("i", `ti ti-world ${cls}`.trim()));

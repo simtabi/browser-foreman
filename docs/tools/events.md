@@ -54,7 +54,12 @@ of that buffer, the stream starts with `: some events were missed; reload the st
 | `link.checked` | an address's status changed: `{url, status, previous, final, note}` |
 | `linkcheck.finished` | `{id, workspace, state, checked, total, changed, dead}` |
 
-Still to come: `tabs.snapshot.saved`, `tabs.closed` (phase 5).
+| `tabs.snapshot.saved` | `{id, reason, windows, tabs, incognito_windows, incognito_tabs}`; never pages |
+| `tabs.closed` | `{closed, skipped, undo_snapshot}` |
+| `tabs.restored` | `{id, windows}` |
+| `links.opened` | `{count, how, browsers, ok}`; never the links |
+| `preferences.updated` | `{open_with, autosave}` |
+| `linkcheck.scheduled` | a scheduled re-check started: `{workspace, due}` |
 
 ---
 [← Docs index](../../README.md#documentation)

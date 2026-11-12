@@ -136,6 +136,13 @@ func Migrate(ctx context.Context, src, dst Store) (workspaces, entries int, err 
 	if err := dst.SaveLinks(ctx, results); err != nil {
 		return workspaces, entries, err
 	}
+	if doc, err := src.PrefsDoc(ctx); err != nil {
+		return workspaces, entries, err
+	} else if doc != nil {
+		if err := dst.SavePrefsDoc(ctx, doc); err != nil {
+			return workspaces, entries, err
+		}
+	}
 	tabs, err := src.TabSnapshots(ctx, 0)
 	if err != nil {
 		return workspaces, entries, err

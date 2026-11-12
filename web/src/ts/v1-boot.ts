@@ -3,6 +3,7 @@
 // page already uses: the page's saves become PUT /api/v1/workspaces/{id}/tree, undo and redo go to the server.
 
 import { toPage, fromPage, linkFields, type V1Tree, type V1Link, type PageState } from "./v1";
+import { legacy } from "./v1-compat";
 
 export interface WorkspaceInfo { id: string; name: string; head: number; notes?: string; locked?: boolean; archived?: boolean }
 interface Boot {
@@ -83,6 +84,31 @@ if (boot) {
     if (!r.ok) throw new Error(j.error ?? `the server answered ${r.status}`);
     return j;
   };
+  // The page's older calls (api/tabs, api/open, api/rechecks…) are answered through /api/v1 (v1-compat.ts).
+  const nativeFetch = window.fetch.bind(window);
+  const callStatus = async (method: string, path: string, body?: unknown): Promise<any> => {
+    const r = await nativeFetch(`api/v1/${path}`, { method, headers: headers(), body: body === undefined ? undefined : JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw Object.assign(new Error(j.error ?? `the server answered ${r.status}`), { status: r.status });
+    return j;
+  };
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const rel = url.replace(location.origin + "/", "").replace(/^\.?\//, "");
+    if (!rel.startsWith("api/") || rel.startsWith("api/v1/")) return nativeFetch(input, init);
+    const [path, query = ""] = rel.slice(4).split("?");
+    let body: unknown;
+    try { body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined; } catch { body = undefined; }
+    try {
+      const a = await legacy(init?.method ?? "GET", path ?? "", query, body, callStatus, boot.workspace.id);
+      if (!a) return new Response(JSON.stringify({ error: "not available with this server" }), { status: 404, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify(a.body), { status: a.status, headers: { "Content-Type": "application/json" } });
+    } catch (e) {
+      const err = e as Error & { status?: number };
+      return new Response(JSON.stringify({ error: err.message }), { status: err.status ?? 502, headers: { "Content-Type": "application/json" } });
+    }
+  };
+
   // Link checks, in the shape the page's activity panel reads (it was written for the Python server's jobs).
   const pageIdsByURL = new Map<string, number[]>();
   for (const i of page.data.keep) pageIdsByURL.set(i.u, [...(pageIdsByURL.get(i.u) ?? []), i.id]);

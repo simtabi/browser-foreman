@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"github.com/simtabi/browser-foreman/src/internal/auth"
+	"github.com/simtabi/browser-foreman/src/internal/browsers"
 	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/events"
 	"github.com/simtabi/browser-foreman/src/internal/linkcheck"
 	"github.com/simtabi/browser-foreman/src/internal/store"
+	"github.com/simtabi/browser-foreman/src/internal/tabs"
 	"github.com/simtabi/browser-foreman/src/internal/webhooks"
 )
 
@@ -29,7 +31,9 @@ func newServer(t *testing.T, token string) *Server {
 	checker := linkcheck.New(5 * time.Second)
 	checker.AllowPrivate = true // tests check httptest servers on loopback
 	checker.Limiter.Default = linkcheck.Rule{Concurrent: 4}
+	bs := &browsers.Service{Platform: &fakeBrowsers{}}
 	return &Server{Cfg: c, Bus: events.New(1000, time.Now), Hooks: st, Data: data, Now: time.Now, Checker: checker,
+		Browsers: bs, Tabs: &tabs.Service{Data: data, Browsers: bs, Reader: &fakeTabs{}, Closer: &fakeTabs{}, Now: time.Now},
 		Limit:    auth.NewLimiter(5, 15*time.Minute, 15*time.Minute),
 		Dispatch: &webhooks.Dispatcher{Store: st, Client: http.DefaultClient, Attempts: 1, Backoff: time.Millisecond, Now: time.Now}}
 }
@@ -145,5 +149,27 @@ func TestWorkspacesAreReadOnlyAndNeedTheToken(t *testing.T) {
 	}
 	if w := do(h, "DELETE", "/api/v1/workspaces/main", "", "127.0.0.1:8765", "", "tok"); w.Code != 405 {
 		t.Fatalf("workspaces are read-only here: %d", w.Code)
+	}
+}
+
+func TestCrossSiteLoadsAreRefused(t *testing.T) {
+	h := newServer(t, "tok").Handler()
+	req := func(site, mode string) int {
+		r := httptest.NewRequest("GET", "/api/v1/browsers/icon?name=Google%20Chrome", nil)
+		r.Host = "127.0.0.1:8765"
+		r.Header.Set("Sec-Fetch-Site", site)
+		r.Header.Set("Sec-Fetch-Mode", mode)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+	if c := req("cross-site", "no-cors"); c != 403 {
+		t.Fatalf("another site's <img> learned what this server holds: %d", c)
+	}
+	if c := req("same-origin", "no-cors"); c != 200 {
+		t.Fatalf("the page's own <img>: %d", c)
+	}
+	if c := req("cross-site", "navigate"); c == 403 {
+		t.Fatal("following a link to this server must still work")
 	}
 }

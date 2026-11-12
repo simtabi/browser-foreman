@@ -21,10 +21,12 @@ import (
 	"time"
 
 	"github.com/simtabi/browser-foreman/src/internal/auth"
+	"github.com/simtabi/browser-foreman/src/internal/browsers"
 	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/events"
 	"github.com/simtabi/browser-foreman/src/internal/linkcheck"
 	"github.com/simtabi/browser-foreman/src/internal/store"
+	"github.com/simtabi/browser-foreman/src/internal/tabs"
 	"github.com/simtabi/browser-foreman/src/internal/version"
 	"github.com/simtabi/browser-foreman/src/internal/webhooks"
 )
@@ -40,6 +42,9 @@ type Server struct {
 	Now      func() time.Time
 	UI       fs.FS // the web interface's files; nil: the ones embedded in the binary
 	Checker  *linkcheck.Checker
+	Browsers *browsers.Service
+	Tabs     *tabs.Service
+	icons    iconCache
 	// Deliveries is the webhook delivery log (the dispatcher's Log writes to it); nil: none kept.
 	Deliveries *webhooks.Log
 	checks     checkRunner
@@ -92,6 +97,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/workspaces/{id}/redo", s.require(store.RoleEditor, s.undoRedo("redo")))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/rollback", s.require(store.RoleEditor, s.rollback))
 	m.HandleFunc("GET /api/v1/workspaces/{id}/links", s.require(store.RoleViewer, s.getLinks))
+	m.HandleFunc("GET /api/v1/linkchecks", s.require(store.RoleViewer, s.listChecks))
 	m.HandleFunc("POST /api/v1/linkchecks", s.require(store.RoleEditor, s.startCheck))
 	m.HandleFunc("GET /api/v1/linkchecks/{id}", s.require(store.RoleViewer, s.getCheck))
 	m.HandleFunc("POST /api/v1/linkchecks/{id}/pause", s.require(store.RoleEditor, s.controlCheck("pause")))
@@ -100,6 +106,19 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/backup", s.require(store.RoleOwner, s.backup))
 	m.HandleFunc("POST /api/v1/restore", s.require(store.RoleOwner, s.restore))
 	m.HandleFunc("GET /api/v1/settings", s.require(store.RoleOwner, s.settings))
+	m.HandleFunc("GET /api/v1/browsers", s.require(store.RoleViewer, s.listBrowsers))
+	m.HandleFunc("GET /api/v1/browsers/icon", s.browserIcon) // public: an <img> cannot send a token; guard refuses cross-site loads
+	m.HandleFunc("POST /api/v1/open", s.require(store.RoleOwner, s.openLinks))
+	m.HandleFunc("GET /api/v1/preferences", s.require(store.RoleViewer, s.getPrefs))
+	m.HandleFunc("PUT /api/v1/preferences", s.require(store.RoleOwner, s.putPrefs))
+	m.HandleFunc("GET /api/v1/tabs", s.require(store.RoleViewer, s.liveTabs))
+	m.HandleFunc("GET /api/v1/tabs/snapshots", s.require(store.RoleViewer, s.listSnapshots))
+	m.HandleFunc("GET /api/v1/tabs/timeline", s.require(store.RoleViewer, s.timeline))
+	m.HandleFunc("POST /api/v1/tabs/ages", s.require(store.RoleViewer, s.ages))
+	m.HandleFunc("POST /api/v1/tabs/snapshots", s.require(store.RoleEditor, s.takeSnapshot))
+	m.HandleFunc("GET /api/v1/tabs/snapshots/{id}", s.require(store.RoleViewer, s.getSnapshot))
+	m.HandleFunc("POST /api/v1/tabs/snapshots/{id}/restore", s.require(store.RoleOwner, s.restoreSnapshot))
+	m.HandleFunc("POST /api/v1/tabs/close", s.require(store.RoleOwner, s.closeTabs))
 	m.HandleFunc("GET /{$}", s.page)
 	m.Handle("GET /assets/", s.assets())
 	return s.guard(m)
@@ -119,6 +138,12 @@ func (s *Server) guard(next http.Handler) http.Handler {
 			return
 		}
 		if o := r.Header.Get("Origin"); o != "" && o != "http://"+r.Host && o != "https://"+r.Host {
+			writeErr(w, http.StatusForbidden, "requests from other sites are refused")
+			return
+		}
+		// Browsers mark where a request comes from. A page on another site loading an image or script from here (which
+		// sends no Origin) is refused too, so it cannot even learn what answers; following a link here still works.
+		if r.Header.Get("Sec-Fetch-Site") == "cross-site" && r.Header.Get("Sec-Fetch-Mode") != "navigate" {
 			writeErr(w, http.StatusForbidden, "requests from other sites are refused")
 			return
 		}

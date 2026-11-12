@@ -58,12 +58,14 @@ pull request, with tests and docs.
   `tabs.snapshot.saved`, …) and therefore available to webhooks.
 - An OpenAPI document at `/api/v1/openapi.json`.
 
-## Phase 5 — Browsers (next)
+## Phase 5 — Browsers (done)
 
 - Installed browsers and the system default, opening links in one, some or all of them, real browser icons.
 - Reading open tabs (macOS first), snapshots on change or on a schedule, restoring a session after a crash,
   incognito handled privately.
 - Scheduled link re-checks.
+- Done on macOS. Not ported from the Python tool yet: notes on tabs and windows, deleting snapshots, purging private
+  pages, reading browser history and profile files; Linux and Windows browsers.
 
 ## Phase 6 — Browser plugins
 

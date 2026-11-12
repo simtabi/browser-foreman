@@ -85,6 +85,7 @@ Hosted at <https://opensource.simtabi.com/documentation/simtabi/browser-foreman/
 - [Webhooks](docs/tools/webhooks.md) — subscriptions, signatures, retries
 - [Storage](docs/tools/storage.md) — the sqlite and json drivers, history, undo and redo, migrating
 - [Link checks](docs/tools/link-checks.md) — what a check finds, politeness, safety, running one
+- [Browsers and tabs](docs/tools/browsers-and-tabs.md) — opening links, open tabs, snapshots, restoring a session
 - [Backup and restore](docs/tools/backup.md) — what a backup holds and leaves out, restoring without replacing
 - [Web interface](docs/tools/web-interface.md) — the bookmark and tab views
 

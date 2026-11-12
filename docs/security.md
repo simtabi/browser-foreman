@@ -17,6 +17,11 @@ What Browser Foreman protects, and how. Report a weakness privately: see [SECURI
   `x-*` attributes. Bookmark data is embedded as JSON with `<`, `>`, `&`, U+2028 and U+2029 escaped, so a title cannot
   end the script it sits in. In `local` mode the page carries the API token, readable only from this computer (the
   Host and Origin checks keep other sites out); in `accounts` mode it needs a session and carries only its CSRF token.
+- **Other sites' pages get nothing.** Besides the Origin check, a request a browser marks `Sec-Fetch-Site:
+  cross-site` is refused unless it is following a link, so another site cannot even load an image from here.
+- **This computer's browsers.** Opening links, restoring a session and closing tabs need the owner role, open only
+  `http` and `https` addresses, and run only `open(1)` and the browsers' own automation. Reading tabs never starts a
+  browser; private windows' pages are not kept or published unless the owner turns that on.
 - **Headers.** Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
   `Referrer-Policy: no-referrer` and a Content Security Policy limited to the server itself.
 

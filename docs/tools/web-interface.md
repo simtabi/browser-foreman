@@ -22,11 +22,13 @@ saved as one history entry through `PUT /api/v1/workspaces/{id}/tree`, and the s
 If the bookmarks changed somewhere else since the page loaded, the save is refused and the page offers to reload, so
 nothing is overwritten.
 
-Still to come, so their parts of the page stay empty or show the server as not answering:
+Still to come, so their parts of the page stay empty or say they are not available yet:
 
 | Part | Arrives in |
 |---|---|
-| Open tabs, the Timeline's tab snapshots, the Browsers menu | phase 5 |
+
+Open tabs, the Timeline and the Browsers menu work through the server too ([browsers and tabs](browsers-and-tabs.md)).
+Notes on tabs, deleting snapshots and purging private pages answer that they are not available yet.
 
 The sections below describe the whole interface, as the Python implementation in `legacy/` serves it.
 

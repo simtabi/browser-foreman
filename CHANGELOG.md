@@ -59,6 +59,15 @@ ships.
 - The webhook delivery log: the latest 1,000 deliveries, `GET /api/v1/webhooks/deliveries`.
 - A new password signs the person out of their other sessions.
 - `GET /api/v1/settings`: the configuration in force, read-only and without secrets.
+- Browsers (macOS): the installed browsers, the system default and their icons; opening links as tabs, in a new
+  window or a private one, in one, some or all browsers (`POST /api/v1/open`, owner).
+- Open tabs (macOS): reading every tracked browser's windows and tabs, snapshots on change or on a schedule,
+  restoring a session, closing tabs after a snapshot that brings them back, a timeline of what opened and closed.
+  Private windows keep only their tab count unless the owner chooses otherwise. Preferences at
+  `/api/v1/preferences`.
+- Scheduled link re-checks of links whose last check is older than `recheck_days`.
+- The web interface's Open tabs view, Timeline and Browsers menu work with the Go server.
+- Requests another site's page makes from a browser are refused even without an Origin header.
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed

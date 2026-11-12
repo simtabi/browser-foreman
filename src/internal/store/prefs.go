@@ -1,0 +1,92 @@
+package store
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+)
+
+// Prefs are the owner's choices about browsers and tabs, kept with the data (not in the config files, which hold the
+// server's own settings). Every field has a default, so a store that has never saved them reads as Defaults.
+type Prefs struct {
+	// OpenWith: the browsers links open in; "System default" follows the system's choice.
+	OpenWith []string `json:"open_with"`
+	// Tracked: the browsers whose tabs are read; nil reads every scriptable one installed.
+	Tracked []string `json:"tracked,omitempty"`
+	// Autosave takes tab snapshots on its own: every IntervalSeconds, or on any change (SaveMode "change", checked
+	// every WatchSeconds).
+	Autosave        bool   `json:"autosave"`
+	SaveMode        string `json:"save_mode"`
+	IntervalSeconds int    `json:"interval_seconds"`
+	WatchSeconds    int    `json:"watch_seconds"`
+	// IncludeIncognito keeps private windows' pages in snapshots; otherwise only how many tabs they had.
+	IncludeIncognito bool `json:"include_incognito"`
+	// KeepDays: snapshots older than this are hidden from lists (never deleted).
+	KeepDays int `json:"keep_days"`
+	// RecheckDays re-checks every bookmarked link this often; 0 is off.
+	RecheckDays int `json:"recheck_days"`
+}
+
+// Defaults are what a new store reads.
+func Defaults() Prefs {
+	return Prefs{OpenWith: []string{"System default"}, Autosave: true, SaveMode: "change", IntervalSeconds: 300,
+		WatchSeconds: 15, KeepDays: 14, RecheckDays: 7}
+}
+
+// Validate refuses values that would make the server misbehave (a 1-second poll, a negative age).
+func (p Prefs) Validate() error {
+	switch {
+	case len(p.OpenWith) == 0 || len(p.OpenWith) > 12:
+		return errors.New("open_with: name 1 to 12 browsers")
+	case len(p.Tracked) > 20:
+		return errors.New("tracked: at most 20 browsers")
+	case p.SaveMode != "change" && p.SaveMode != "interval":
+		return errors.New(`save_mode: "change" or "interval"`)
+	case p.IntervalSeconds < 60 || p.IntervalSeconds > 86400:
+		return errors.New("interval_seconds: 60 to 86400")
+	case p.WatchSeconds < 5 || p.WatchSeconds > 3600:
+		return errors.New("watch_seconds: 5 to 3600")
+	case p.KeepDays < 1 || p.KeepDays > 3650:
+		return errors.New("keep_days: 1 to 3650")
+	case p.RecheckDays < 0 || p.RecheckDays > 365:
+		return errors.New("recheck_days: 0 (off) to 365")
+	}
+	for _, n := range append(append([]string{}, p.OpenWith...), p.Tracked...) {
+		if n == "" || len(n) > 60 {
+			return fmt.Errorf("browser name %q: 1 to 60 characters", n)
+		}
+	}
+	return nil
+}
+
+// PrefsStore is what a driver keeps: the preferences as one JSON document.
+type PrefsStore interface {
+	PrefsDoc(ctx context.Context) ([]byte, error) // nil when never saved
+	SavePrefsDoc(ctx context.Context, doc []byte) error
+}
+
+// LoadPrefs reads the preferences, filling anything never saved from Defaults.
+func LoadPrefs(ctx context.Context, s Store) (Prefs, error) {
+	p := Defaults()
+	doc, err := s.PrefsDoc(ctx)
+	if err != nil || doc == nil {
+		return p, err
+	}
+	if err := json.Unmarshal(doc, &p); err != nil {
+		return Defaults(), fmt.Errorf("stored preferences are unreadable: %w", err)
+	}
+	return p, nil
+}
+
+// SavePrefs validates and stores the preferences.
+func SavePrefs(ctx context.Context, s Store, p Prefs) error {
+	if err := p.Validate(); err != nil {
+		return err
+	}
+	b, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	return s.SavePrefsDoc(ctx, b)
+}

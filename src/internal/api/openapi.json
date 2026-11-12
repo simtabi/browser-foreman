@@ -933,6 +933,18 @@
           }
         },
         "description": "Body: {workspace, nodes?}"
+      },
+      "get": {
+        "summary": "The running check and earlier ones since the server started, with links newly broken and fixed",
+        "tags": [
+          "Link checks"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
       }
     },
     "/api/v1/linkchecks/{id}": {
@@ -1080,6 +1092,191 @@
           "Server"
         ],
         "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/browsers": {
+      "get": {
+        "summary": "The installed browsers, the system default, and the chosen ones",
+        "tags": [
+          "Browsers"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/browsers/icon": {
+      "get": {
+        "summary": "An installed browser's app icon as a 64-pixel PNG (?name=)",
+        "tags": [
+          "Browsers"
+        ],
+        "x-role": "none",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/open": {
+      "post": {
+        "summary": "Open http(s) links in browsers on this computer: as tabs, in a new window or a private one",
+        "tags": [
+          "Browsers"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {urls, how?, browsers?}"
+      }
+    },
+    "/api/v1/preferences": {
+      "get": {
+        "summary": "The owner's choices about browsers, tab snapshots and re-checks",
+        "tags": [
+          "Browsers"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      },
+      "put": {
+        "summary": "Change them; fields left out keep their values",
+        "tags": [
+          "Browsers"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: any of {open_with, tracked, autosave, save_mode, interval_seconds, watch_seconds, include_incognito, keep_days, recheck_days}"
+      }
+    },
+    "/api/v1/tabs": {
+      "get": {
+        "summary": "Every tracked browser's open windows and tabs now; private windows show only a count unless kept",
+        "tags": [
+          "Tabs"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/tabs/snapshots": {
+      "get": {
+        "summary": "Snapshots, newest first, without pages; older than keep_days only with ?all=1",
+        "tags": [
+          "Tabs"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      },
+      "post": {
+        "summary": "Take a snapshot now (unchanged sessions are not stored again unless force)",
+        "tags": [
+          "Tabs"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {reason?, force?}"
+      }
+    },
+    "/api/v1/tabs/snapshots/{id}": {
+      "get": {
+        "summary": "One snapshot with its windows and pages",
+        "tags": [
+          "Tabs"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/tabs/snapshots/{id}/restore": {
+      "post": {
+        "summary": "Reopen a snapshot's windows, each in a new window of its browser",
+        "tags": [
+          "Tabs"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {windows?: [positions]}"
+      }
+    },
+    "/api/v1/tabs/close": {
+      "post": {
+        "summary": "Close tabs, after a snapshot that brings them back; a tab that changed since it was read is left open",
+        "tags": [
+          "Tabs"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {items: [{browser, window_id, tab_id?, pos, url}]}"
+      }
+    },
+    "/api/v1/tabs/timeline": {
+      "get": {
+        "summary": "Snapshots of the last ?days (30), oldest first, with what opened and closed at each; ?browsers= narrows it",
+        "tags": [
+          "Tabs"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/tabs/ages": {
+      "post": {
+        "summary": "When each address was first seen open",
+        "tags": [
+          "Tabs"
+        ],
+        "x-role": "viewer",
+        "description": "Body: {urls}",
         "responses": {
           "default": {
             "description": "JSON; errors are {\"error\": \"message\"}"
