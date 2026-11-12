@@ -84,7 +84,12 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 <p class="text-secondary">Chrome, Edge, Brave, Vivaldi, Opera and Arc: their <code>Bookmarks</code> file or an export. Firefox and Safari: an exported HTML file.</p>`)
 		return
 	}
-	x := all[0]
+	x := all[0] // the first one not archived, unless every one is
+	for i := len(all) - 1; i >= 0; i-- {
+		if !all[i].Archived {
+			x = all[i]
+		}
+	}
 	if id := r.URL.Query().Get("ws"); id != "" {
 		found := false
 		for _, a := range all {
@@ -117,8 +122,9 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		built = h[n-1].At
 	}
 	boot, err := json.Marshal(map[string]any{ // json.Marshal escapes <, >, &, U+2028 and U+2029: safe inside <script>
-		"workspace": map[string]any{"id": x.ID, "name": x.Name, "head": x.Head},
-		"tree":      t, "built": built.UTC().Format(time.RFC3339), "can": canUndo(h), "auth": auth, "links": links,
+		"workspace":  map[string]any{"id": x.ID, "name": x.Name, "head": x.Head, "notes": x.Notes, "locked": x.Locked, "archived": x.Archived},
+		"workspaces": all,
+		"tree":       t, "built": built.UTC().Format(time.RFC3339), "can": canUndo(h), "auth": auth, "links": links,
 	})
 	if err != nil {
 		writeErr(w, 500, err.Error())

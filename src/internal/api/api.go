@@ -40,7 +40,9 @@ type Server struct {
 	Now      func() time.Time
 	UI       fs.FS // the web interface's files; nil: the ones embedded in the binary
 	Checker  *linkcheck.Checker
-	checks   checkRunner
+	// Deliveries is the webhook delivery log (the dispatcher's Log writes to it); nil: none kept.
+	Deliveries *webhooks.Log
+	checks     checkRunner
 }
 
 func contextWith(r *http.Request, p Principal) context.Context {
@@ -69,12 +71,14 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/webhooks", s.require(store.RoleOwner, s.addHook))
 	m.HandleFunc("DELETE /api/v1/webhooks/{id}", s.require(store.RoleOwner, s.removeHook))
 	m.HandleFunc("POST /api/v1/webhooks/{id}/test", s.require(store.RoleOwner, s.testHook))
+	m.HandleFunc("GET /api/v1/webhooks/deliveries", s.require(store.RoleOwner, s.listDeliveries))
 	m.HandleFunc("GET /api/v1/workspaces", s.require(store.RoleViewer, s.listWorkspaces))
 	m.HandleFunc("GET /api/v1/workspaces/{id}", s.require(store.RoleViewer, s.getWorkspace))
 	m.HandleFunc("GET /api/v1/workspaces/{id}/history", s.require(store.RoleViewer, s.getHistory))
 	m.HandleFunc("GET /api/v1/workspaces/{id}/trash", s.require(store.RoleViewer, s.getTrash))
 	m.HandleFunc("GET /api/v1/workspaces/{id}/export", s.require(store.RoleViewer, s.exportWorkspace))
 	m.HandleFunc("POST /api/v1/workspaces", s.require(store.RoleEditor, s.createWorkspace))
+	m.HandleFunc("PATCH /api/v1/workspaces/{id}", s.require(store.RoleEditor, s.updateWorkspace))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/import", s.require(store.RoleEditor, s.importInto))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/changes", s.require(store.RoleEditor, s.postChanges))
 	m.HandleFunc("PUT /api/v1/workspaces/{id}/tree", s.require(store.RoleEditor, s.putTree))
@@ -93,6 +97,9 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/linkchecks/{id}/pause", s.require(store.RoleEditor, s.controlCheck("pause")))
 	m.HandleFunc("POST /api/v1/linkchecks/{id}/resume", s.require(store.RoleEditor, s.controlCheck("resume")))
 	m.HandleFunc("POST /api/v1/linkchecks/{id}/cancel", s.require(store.RoleEditor, s.controlCheck("cancel")))
+	m.HandleFunc("GET /api/v1/backup", s.require(store.RoleOwner, s.backup))
+	m.HandleFunc("POST /api/v1/restore", s.require(store.RoleOwner, s.restore))
+	m.HandleFunc("GET /api/v1/settings", s.require(store.RoleOwner, s.settings))
 	m.HandleFunc("GET /{$}", s.page)
 	m.Handle("GET /assets/", s.assets())
 	return s.guard(m)
@@ -251,6 +258,30 @@ func (s *Server) removeHook(w http.ResponseWriter, r *http.Request) {
 }
 
 // testHook delivers a webhook.test event to one subscription now and answers with the delivery record.
+// listDeliveries shows the latest deliveries, newest first: ?subscription=wh_… for one, ?limit= (default 100, at most
+// 1000).
+func (s *Server) listDeliveries(w http.ResponseWriter, r *http.Request) {
+	if s.Deliveries == nil {
+		writeJSON(w, 200, map[string]any{"deliveries": []webhooks.Delivery{}})
+		return
+	}
+	limit := 100
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 1000 {
+			writeErr(w, 400, "limit must be 1 to 1000")
+			return
+		}
+		limit = n
+	}
+	out, err := s.Deliveries.Recent(r.URL.Query().Get("subscription"), limit)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]any{"deliveries": out})
+}
+
 func (s *Server) testHook(w http.ResponseWriter, r *http.Request) {
 	all, err := s.Hooks.List()
 	if err != nil {

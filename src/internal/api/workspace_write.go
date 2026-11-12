@@ -74,6 +74,10 @@ func (s *Server) commit(w http.ResponseWriter, r *http.Request, x store.Workspac
 		b = saw
 	}
 	e, err := s.Data.Commit(r.Context(), x.ID, b, c, s.Now())
+	if errors.Is(err, store.ErrLocked) {
+		writeErr(w, http.StatusLocked, err.Error())
+		return
+	}
 	if errors.Is(err, store.ErrConflict) {
 		code := http.StatusConflict
 		if viaHeader {
@@ -293,6 +297,10 @@ func (s *Server) undoRedo(op string) http.HandlerFunc {
 			run, kind = store.Redo, "redone"
 		}
 		e, err := run(r.Context(), s.Data, x.ID, s.Now())
+		if errors.Is(err, store.ErrLocked) {
+			writeErr(w, http.StatusLocked, err.Error())
+			return
+		}
 		if errors.Is(err, store.ErrNothing) {
 			writeErr(w, 409, err.Error())
 			return
@@ -426,4 +434,53 @@ func (s *Server) putTree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.commit(w, r, x, saw, given, given, store.Change{Op: "edit", Summary: edit.Summary(events), Tree: next}, events, "committed")
+}
+
+// updateWorkspace renames a workspace, sets its notes, locks or unlocks it, or archives it. While it is locked, only
+// unlocking is accepted (423 otherwise), so a locked workspace cannot be renamed or archived by mistake either.
+func (s *Server) updateWorkspace(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Name     *string `json:"name"`
+		Notes    *string `json:"notes"`
+		Locked   *bool   `json:"locked"`
+		Archived *bool   `json:"archived"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	x, ok := s.workspace(w, r)
+	if !ok {
+		return
+	}
+	if x.Locked && (in.Name != nil || in.Notes != nil || in.Archived != nil || in.Locked == nil || *in.Locked) {
+		writeErr(w, http.StatusLocked, store.ErrLocked.Error())
+		return
+	}
+	if in.Name != nil {
+		name := strings.TrimSpace(*in.Name)
+		if name == "" || len(name) > 200 {
+			writeErr(w, 400, "a name needs 1 to 200 characters")
+			return
+		}
+		x.Name = name
+	}
+	if in.Notes != nil {
+		if len(*in.Notes) > 20000 {
+			writeErr(w, 400, "notes can be at most 20,000 characters")
+			return
+		}
+		x.Notes = *in.Notes
+	}
+	if in.Locked != nil {
+		x.Locked = *in.Locked
+	}
+	if in.Archived != nil {
+		x.Archived = *in.Archived
+	}
+	if err := s.Data.UpdateWorkspace(r.Context(), x); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	_, _ = s.Bus.Publish("workspace.updated", map[string]any{"workspace": x.ID, "name": x.Name, "locked": x.Locked, "archived": x.Archived})
+	writeJSON(w, 200, map[string]any{"workspace": x})
 }

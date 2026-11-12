@@ -390,6 +390,29 @@
             }
           }
         ]
+      },
+      "patch": {
+        "summary": "Rename, set notes, lock or unlock, archive or bring back; a locked workspace accepts only unlocking (423)",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "editor",
+        "description": "Body: any of {name, notes, locked, archived}",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/v1/workspaces/{id}/history": {
@@ -1006,6 +1029,62 @@
             }
           }
         ]
+      }
+    },
+    "/api/v1/webhooks/deliveries": {
+      "get": {
+        "summary": "The latest deliveries, newest first, with what each receiver answered; ?subscription= and ?limit= (1–1000)",
+        "tags": [
+          "Webhooks"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/backup": {
+      "get": {
+        "summary": "Download every workspace with its whole history, and the link results, as gzipped JSON; accounts, tokens and webhook secrets are left out",
+        "tags": [
+          "Backup"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/restore": {
+      "post": {
+        "summary": "Add what a backup holds (gzipped or plain JSON body); replaces nothing: a taken workspace id comes back under a new one",
+        "tags": [
+          "Backup"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "summary": "The configuration in force, without secrets; read-only",
+        "tags": [
+          "Server"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
       }
     }
   }

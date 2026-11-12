@@ -24,6 +24,7 @@ type Principal struct {
 	Role string `json:"role"`
 	Via  string `json:"via"` // token, session, or local (the configured token in local mode)
 	csrf string
+	sess string // the session's stored hash, for a session
 }
 
 // who works out the caller: an API token (a person's, or in local mode the configured one, which acts as the owner),
@@ -54,7 +55,7 @@ func (s *Server) who(r *http.Request) (Principal, bool) {
 		if err != nil || u.Disabled {
 			return Principal{}, false
 		}
-		return Principal{User: u.Name, Role: u.Role, Via: "session", csrf: x.CSRF}, true
+		return Principal{User: u.Name, Role: u.Role, Via: "session", csrf: x.CSRF, sess: x.Hash}, true
 	}
 	return Principal{}, false
 }
@@ -368,6 +369,17 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 	if err := s.Data.UpdateUser(r.Context(), u); err != nil {
 		writeErr(w, 500, err.Error())
 		return
+	}
+	if in.Password != nil {
+		// A new password signs the person out everywhere else; the caller's own session stays when it is theirs.
+		keep := ""
+		if p := principal(r); p.User == u.Name && p.Via == "session" {
+			keep = p.sess
+		}
+		if err := s.Data.DeleteSessions(r.Context(), u.Name, keep); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
 	}
 	writeJSON(w, 200, out(u))
 }

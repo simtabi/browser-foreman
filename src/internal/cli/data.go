@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/simtabi/browser-foreman/src/internal/api"
 	"github.com/simtabi/browser-foreman/src/internal/importer"
 	"github.com/simtabi/browser-foreman/src/internal/store"
 )
@@ -173,4 +176,76 @@ func storageCmd() *cobra.Command {
 	_ = m.MarkFlagRequired("to")
 	c.AddCommand(m)
 	return c
+}
+
+func backupCmd() *cobra.Command {
+	return &cobra.Command{
+		Use: "backup FILE", Short: "Write every workspace with its history, and the link results, to FILE (gzipped JSON); no accounts or secrets",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := openStore()
+			if err != nil {
+				return err
+			}
+			defer s.Close()
+			b, err := store.MakeBackup(context.Background(), s, time.Now())
+			if err != nil {
+				return err
+			}
+			f, err := os.OpenFile(args[0], os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+			if err != nil {
+				return err // never overwrites: pick a new name
+			}
+			zw := gzip.NewWriter(f)
+			if err := json.NewEncoder(zw).Encode(b); err != nil {
+				f.Close()
+				return err
+			}
+			if err := zw.Close(); err != nil {
+				f.Close()
+				return err
+			}
+			if err := f.Close(); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "backed up %d workspaces (%d distinct trees) and %d link results to %s\n", len(b.Workspaces), len(b.Trees), len(b.Links), args[0])
+			return nil
+		},
+	}
+}
+
+func restoreCmd() *cobra.Command {
+	return &cobra.Command{
+		Use: "restore FILE", Short: "Add what a backup holds; replaces nothing (a taken workspace id comes back under a new one)",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			f, err := os.Open(args[0])
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			b, err := api.ReadBackup(f)
+			if err != nil {
+				return fmt.Errorf("%s is not a readable backup: %w", args[0], err)
+			}
+			s, err := openStore()
+			if err != nil {
+				return err
+			}
+			defer s.Close()
+			res, err := store.Restore(context.Background(), s, b, time.Now())
+			if err != nil {
+				return err
+			}
+			for from, to := range res.Workspaces {
+				if from == to {
+					fmt.Fprintf(cmd.OutOrStdout(), "restored %s\n", to)
+				} else {
+					fmt.Fprintf(cmd.OutOrStdout(), "restored %s as %s (that id was taken)\n", from, to)
+				}
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%d entries, %d newer link results\n", res.Entries, res.Links)
+			return nil
+		},
+	}
 }

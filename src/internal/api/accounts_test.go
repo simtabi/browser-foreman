@@ -217,3 +217,27 @@ func TestTheLastOwnerStays(t *testing.T) {
 		t.Fatalf("demote with another owner: %d", w.Code)
 	}
 }
+
+func TestPasswordChangeEndsOtherSessions(t *testing.T) {
+	s := accountsServer(t)
+	p := pw(t)
+	addUser(t, s, "ada", store.RoleOwner, p)
+	addUser(t, s, "bob", store.RoleViewer, pw(t))
+	h := s.Handler()
+	_, here := signIn(t, h, "ada", p)
+	_, there := signIn(t, h, "ada", p) // the same person on another device
+	next := pw(t)
+	body, _ := json.Marshal(map[string]string{"password": next})
+	if w := here.do(h, "PATCH", "/api/v1/users/ada", string(body), true); w.Code != 200 {
+		t.Fatalf("change %d %s", w.Code, w.Body)
+	}
+	if w := here.do(h, "GET", "/api/v1/auth/me", "", false); w.Code != 200 {
+		t.Fatalf("the session that changed the password was signed out: %d", w.Code)
+	}
+	if w := there.do(h, "GET", "/api/v1/auth/me", "", false); w.Code != 401 {
+		t.Fatalf("another session survived a password change: %d", w.Code)
+	}
+	if w, _ := signIn(t, h, "ada", next); w.Code != 200 {
+		t.Fatal("the new password does not work")
+	}
+}

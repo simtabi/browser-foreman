@@ -102,3 +102,17 @@ func TestPageInAccountsMode(t *testing.T) {
 		t.Fatalf("signed in: %s", w.Body)
 	}
 }
+
+func TestPageOpensTheFirstUnarchivedWorkspace(t *testing.T) {
+	s := withUI(seeded(t))
+	ctx := context.Background()
+	_, _ = s.Data.CreateWorkspace(ctx, "zed", "Zed", time.Now())
+	_, _ = s.Data.Commit(ctx, "zed", 0, store.Change{Op: "import", Summary: "x", Tree: store.Tree{Root: &store.Node{ID: "root", Kind: store.KindFolder}}}, time.Now())
+	main, _ := s.Data.Workspace(ctx, "main")
+	main.Archived = true
+	_ = s.Data.UpdateWorkspace(ctx, main)
+	body := get(s.Handler(), "/", nil).Body.String()
+	if !strings.Contains(body, `"workspace":{"archived":false,"head":1,"id":"zed"`) || !strings.Contains(body, `"workspaces":[`) {
+		t.Fatalf("%s", body[strings.Index(body, "BF_V1"):][:300])
+	}
+}

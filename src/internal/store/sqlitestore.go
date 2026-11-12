@@ -18,6 +18,8 @@ type SQLiteStore struct{ db *sql.DB }
 
 const schema = `
 CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, created TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS workspace_meta (id TEXT PRIMARY KEY REFERENCES workspaces(id), notes TEXT NOT NULL DEFAULT '',
+  locked INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS snapshots (hash TEXT PRIMARY KEY, body BLOB NOT NULL);
 CREATE TABLE IF NOT EXISTS entries (
   ws TEXT NOT NULL REFERENCES workspaces(id), seq INTEGER NOT NULL, at TEXT NOT NULL, op TEXT NOT NULL,
@@ -69,8 +71,9 @@ func (s *SQLiteStore) CreateWorkspace(ctx context.Context, id, name string, at t
 }
 
 func (s *SQLiteStore) Workspaces(ctx context.Context) ([]Workspace, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id, w.name, w.created, COALESCE(MAX(e.seq), 0) FROM workspaces w
-	  LEFT JOIN entries e ON e.ws = w.id GROUP BY w.id ORDER BY w.id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id, w.name, w.created, COALESCE(MAX(e.seq), 0),
+	  COALESCE(m.notes, ''), COALESCE(m.locked, 0), COALESCE(m.archived, 0) FROM workspaces w
+	  LEFT JOIN entries e ON e.ws = w.id LEFT JOIN workspace_meta m ON m.id = w.id GROUP BY w.id ORDER BY w.id`)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +82,7 @@ func (s *SQLiteStore) Workspaces(ctx context.Context) ([]Workspace, error) {
 	for rows.Next() {
 		var w Workspace
 		var created string
-		if err := rows.Scan(&w.ID, &w.Name, &created, &w.Head); err != nil {
+		if err := rows.Scan(&w.ID, &w.Name, &created, &w.Head, &w.Notes, &w.Locked, &w.Archived); err != nil {
 			return nil, err
 		}
 		w.Created, _ = time.Parse(ts, created)
@@ -91,13 +94,35 @@ func (s *SQLiteStore) Workspaces(ctx context.Context) ([]Workspace, error) {
 func (s *SQLiteStore) Workspace(ctx context.Context, id string) (Workspace, error) {
 	var w Workspace
 	var created string
-	err := s.db.QueryRowContext(ctx, `SELECT w.id, w.name, w.created, COALESCE((SELECT MAX(seq) FROM entries WHERE ws = w.id), 0)
-	  FROM workspaces w WHERE w.id = ?`, id).Scan(&w.ID, &w.Name, &created, &w.Head)
+	err := s.db.QueryRowContext(ctx, `SELECT w.id, w.name, w.created, COALESCE((SELECT MAX(seq) FROM entries WHERE ws = w.id), 0),
+	  COALESCE(m.notes, ''), COALESCE(m.locked, 0), COALESCE(m.archived, 0)
+	  FROM workspaces w LEFT JOIN workspace_meta m ON m.id = w.id WHERE w.id = ?`, id).Scan(&w.ID, &w.Name, &created, &w.Head, &w.Notes, &w.Locked, &w.Archived)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Workspace{}, ErrNotFound
 	}
 	w.Created, _ = time.Parse(ts, created)
 	return w, err
+}
+
+func (s *SQLiteStore) UpdateWorkspace(ctx context.Context, w Workspace) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `UPDATE workspaces SET name = ? WHERE id = ?`, w.Name, w.ID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO workspace_meta (id, notes, locked, archived) VALUES (?, ?, ?, ?)
+	  ON CONFLICT(id) DO UPDATE SET notes = excluded.notes, locked = excluded.locked, archived = excluded.archived`,
+		w.ID, w.Notes, w.Locked, w.Archived); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *SQLiteStore) Commit(ctx context.Context, id string, base int, c Change, at time.Time) (Entry, error) {
@@ -113,13 +138,16 @@ func (s *SQLiteStore) Commit(ctx context.Context, id string, base int, c Change,
 		return Entry{}, err
 	}
 	defer tx.Rollback()
-	var head int
-	var exists int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE((SELECT MAX(seq) FROM entries WHERE ws = ?), 0) FROM workspaces WHERE id = ?`, id, id).Scan(&exists, &head); err != nil {
+	var head, exists, locked int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE((SELECT MAX(seq) FROM entries WHERE ws = ?), 0),
+	  COALESCE((SELECT locked FROM workspace_meta WHERE id = ?), 0) FROM workspaces WHERE id = ?`, id, id, id).Scan(&exists, &head, &locked); err != nil {
 		return Entry{}, err
 	}
 	if exists == 0 {
 		return Entry{}, ErrNotFound
+	}
+	if locked != 0 {
+		return Entry{}, ErrLocked
 	}
 	if base != head {
 		return Entry{}, fmt.Errorf("%w (made on %d, now %d)", ErrConflict, base, head)

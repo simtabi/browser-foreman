@@ -4,8 +4,10 @@
 
 import { toPage, fromPage, linkFields, type V1Tree, type V1Link, type PageState } from "./v1";
 
+export interface WorkspaceInfo { id: string; name: string; head: number; notes?: string; locked?: boolean; archived?: boolean }
 interface Boot {
-  workspace: { id: string; name: string; head: number };
+  workspace: WorkspaceInfo;
+  workspaces: WorkspaceInfo[];
   tree: V1Tree;
   built: string;
   can: { undo: string | null; redo: string | null };
@@ -106,6 +108,11 @@ if (boot) {
   const ws = {
     refresh, job, ctl,
     v1: true,
+    call,
+    headers,
+    workspace: boot.workspace,
+    workspaces: boot.workspaces ?? [],
+    locked: !!boot.workspace.locked,
     id: boot.workspace.id,
     can: boot.can,
     // "refreshed" (link results the page kept itself) is claimed and ignored: the server keeps results by address and

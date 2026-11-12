@@ -42,14 +42,15 @@ pull request, with tests and docs.
 - Not in this phase: a sign-in page in the web interface (phase 4, with the rest of the interface), and ending a
   person's other sessions when their password changes (phase 4).
 
-## Phase 4 — Web interface and REST API parity (in progress)
+## Phase 4 — Web interface and REST API parity (done)
 
 - Done: the web interface embedded and served at `/`, with a sign-in page; bookmarks, folders, the Trash, history
   (undo, redo, rollback), import and export, all as `/api/v1` routes with an event for every change; the OpenAPI
   document.
 - Done: link checks (`/api/v1/linkchecks`), shown in the web interface.
-- Next in this phase: the webhook delivery log, settings, backups and restore, the
-  workspace menu (rename, lock, archive), ending a person's other sessions when their password changes.
+- Done: the webhook delivery log, read-only settings, backup and restore, the workspace menu (rename, notes, lock,
+  archive, History), and a new password ending the person's other sessions.
+- Left for later phases: the Open tabs view and the Browsers menu (phase 5); saving tabs as bookmarks (phase 5).
 - The web interface (in `web/`) embedded in the binary and served at `/`.
 - Every capability under `/api/v1`: bookmarks and folders, workspaces and history (undo, redo, rollback), link checks
   and refreshes, the Trash, import and export (Netscape HTML, Chrome JSON), backups and restore, settings.
@@ -57,7 +58,7 @@ pull request, with tests and docs.
   `tabs.snapshot.saved`, …) and therefore available to webhooks.
 - An OpenAPI document at `/api/v1/openapi.json`.
 
-## Phase 5 — Browsers
+## Phase 5 — Browsers (next)
 
 - Installed browsers and the system default, opening links in one, some or all of them, real browser icons.
 - Reading open tabs (macOS first), snapshots on change or on a schedule, restoring a session after a crash,

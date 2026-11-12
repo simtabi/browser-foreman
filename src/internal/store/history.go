@@ -100,6 +100,10 @@ func Migrate(ctx context.Context, src, dst Store) (workspaces, entries int, err 
 			}
 			entries++
 		}
+		// Notes, lock and archive go over last: a locked workspace would refuse the entries above.
+		if err := dst.UpdateWorkspace(ctx, w); err != nil {
+			return workspaces, entries, err
+		}
 		workspaces++
 	}
 	// People and their API tokens move too; sessions do not (everyone signs in again after a move).

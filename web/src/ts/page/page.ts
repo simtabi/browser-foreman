@@ -229,7 +229,8 @@ function thumb(i, cls) {
 // ---------- view: grouping, sorting, folder position, date range — what you see is what the download contains ----------
 const VIEW_DEFAULT = {group: "folder", sort: "name", folders: "first", from: "", to: ""};
 let view = Object.assign({}, VIEW_DEFAULT, store.get("view") || {});
-const readOnly = () => filter === "dupes";
+// Read-only: the duplicates view, and a locked workspace (the server refuses its changes anyway).
+const readOnly = () => filter === "dupes" || !!WS?.locked;
 const grouped = () => !readOnly() && view.group !== "folder";
 const vopen = new Set();
 const VIEW_OPTS = [

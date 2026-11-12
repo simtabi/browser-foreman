@@ -42,7 +42,7 @@ func Root() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd(), userCmd(), tokenCmd())
+	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd(), userCmd(), tokenCmd(), backupCmd(), restoreCmd())
 	return root
 }
 
@@ -71,13 +71,17 @@ func serveCmd() *cobra.Command {
 			}
 			defer data.Close()
 			hooks := webhooks.NewStore(c.Storage.Path)
-			srv := &api.Server{Cfg: c, Bus: bus, Hooks: hooks, Data: data, Now: time.Now,
+			deliveries := webhooks.NewLog(c.Storage.Path)
+			srv := &api.Server{Cfg: c, Bus: bus, Hooks: hooks, Data: data, Now: time.Now, Deliveries: deliveries,
 				Limit:   auth.NewLimiter(5, 15*time.Minute, 15*time.Minute),
 				Checker: linkcheck.New(15 * time.Second),
 				Dispatch: &webhooks.Dispatcher{
 					Store: hooks, Client: &http.Client{Timeout: c.Webhooks.Timeout.Duration}, Attempts: c.Webhooks.Attempts,
 					Backoff: 2 * time.Second, Now: time.Now,
 					Log: func(d webhooks.Delivery) {
+						if err := deliveries.Add(d); err != nil {
+							fmt.Fprintf(os.Stderr, "webhook delivery log: %v\n", err)
+						}
 						if !d.OK {
 							fmt.Fprintf(os.Stderr, "webhook %s: event %d failed after %d attempts: %s\n", d.Subscription, d.Event, d.Attempts, d.Error)
 						}

@@ -47,6 +47,8 @@ of that buffer, the stream starts with `: some events were missed; reload the st
 | `workspace.committed` | after any change above: `{workspace, seq, op, summary}` |
 | `workspace.imported`, `workspace.undone`, `workspace.redone`, `workspace.rolled_back` | the same fields |
 | `workspace.exported` | `{workspace, format, at}` |
+| `workspace.updated` | renamed, notes changed, locked or archived: `{workspace, name, locked, archived}` |
+| `backup.created`, `backup.restored` | counts; a restore names each workspace's new id |
 
 | `linkcheck.started` | `{id, workspace, total}` |
 | `link.checked` | an address's status changed: `{url, status, previous, final, note}` |

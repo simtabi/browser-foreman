@@ -37,6 +37,13 @@ A `2xx` answer is success. A network error, a `5xx` or a `429` is retried with e
 up to `webhooks.attempts` tries (default 5), each limited to `webhooks.timeout` (default 10 s). Any other `4xx` means the
 receiver refused it, so it is not retried. Failed deliveries are reported in the server's log.
 
+## The delivery log
+
+The latest 1,000 deliveries are kept in `deliveries.jsonl` in the state folder (`0600`), each with its event type,
+attempts, the receiver's last status and any error. `GET /api/v1/webhooks/deliveries` (owner role) lists them newest
+first; `?subscription=wh_…` narrows it to one subscription and `?limit=` takes 1 to 1,000 (100 by default). Secrets
+are never written there.
+
 ## Test
 
 `POST /api/v1/webhooks/{id}/test` sends a `webhook.test` event to that one subscription now and answers with the

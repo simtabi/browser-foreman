@@ -50,8 +50,11 @@ func writeAtomic(path string, b []byte) error {
 }
 
 type wsFile struct {
-	Name    string    `json:"name"`
-	Created time.Time `json:"created"`
+	Name     string    `json:"name"`
+	Created  time.Time `json:"created"`
+	Notes    string    `json:"notes,omitempty"`
+	Locked   bool      `json:"locked,omitempty"`
+	Archived bool      `json:"archived,omitempty"`
 }
 
 func (s *JSONStore) CreateWorkspace(_ context.Context, id, name string, at time.Time) (Workspace, error) {
@@ -118,11 +121,25 @@ func (s *JSONStore) workspace(id string) (Workspace, error) {
 	if err != nil {
 		return Workspace{}, err
 	}
-	w := Workspace{ID: id, Name: f.Name, Created: f.Created}
+	w := Workspace{ID: id, Name: f.Name, Created: f.Created, Notes: f.Notes, Locked: f.Locked, Archived: f.Archived}
 	if len(h) > 0 {
 		w.Head = h[len(h)-1].Seq
 	}
 	return w, nil
+}
+
+func (s *JSONStore) UpdateWorkspace(_ context.Context, w Workspace) error {
+	if ValidID(w.ID) != nil {
+		return ErrNotFound
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	old, err := s.workspace(w.ID)
+	if err != nil {
+		return err
+	}
+	b, _ := json.Marshal(wsFile{Name: w.Name, Created: old.Created, Notes: w.Notes, Locked: w.Locked, Archived: w.Archived})
+	return writeAtomic(filepath.Join(s.wsDir(w.ID), "workspace.json"), b)
 }
 
 func (s *JSONStore) history(id string) ([]Entry, error) {
@@ -174,6 +191,9 @@ func (s *JSONStore) Commit(_ context.Context, id string, base int, c Change, at 
 	w, err := s.workspace(id)
 	if err != nil {
 		return Entry{}, err
+	}
+	if w.Locked {
+		return Entry{}, ErrLocked
 	}
 	if base != w.Head {
 		return Entry{}, fmt.Errorf("%w (made on %d, now %d)", ErrConflict, base, w.Head)

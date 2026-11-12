@@ -49,6 +49,17 @@ What Browser Foreman protects, and how. Report a weakness privately: see [SECURI
   tokens and sessions at once; removing them deletes both.
 - **The last owner stays.** The API and the CLI refuse to demote, disable or remove the last owner who can sign in.
 - In `accounts` mode the configured `BROFO_API_TOKEN` grants nothing; only people's own tokens count.
+- **A new password signs the person out everywhere else.** Setting it through the API keeps only the session that
+  set it (when it is theirs); `browser-foreman user passwd` signs them out everywhere.
+
+## Locked workspaces and backups
+
+- A locked workspace refuses every change in the store itself (`423`): edits, undo and redo, imports, rollback, and
+  renaming or archiving it. Only unlocking is accepted.
+- Backups hold no accounts, tokens, sessions or webhook secrets ([backup](tools/backup.md)), and restoring never
+  replaces an existing workspace.
+- Settings are read-only through the API (`GET /api/v1/settings`, owner): a token that could change the server's
+  mode or address could open it to the network. Change them in the config files and restart.
 
 ## Releases
 

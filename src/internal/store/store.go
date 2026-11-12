@@ -23,6 +23,8 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrConflict: the change was made on an older state than the workspace now has; reload and try again.
 	ErrConflict = errors.New("the workspace changed since this change was made")
+	// ErrLocked: the workspace is locked (read-only); every change is refused until it is unlocked.
+	ErrLocked = errors.New("the workspace is locked (read-only); unlock it to change it")
 )
 
 // Node is a folder or a bookmark. A folder has Children; a bookmark has a URL.
@@ -145,6 +147,11 @@ type Workspace struct {
 	Name    string    `json:"name"`
 	Created time.Time `json:"created"`
 	Head    int       `json:"head"` // the last entry's sequence number; 0 before the first
+	Notes   string    `json:"notes,omitempty"`
+	// Locked: read-only; Commit refuses every change (ErrLocked) until it is unlocked.
+	Locked bool `json:"locked,omitempty"`
+	// Archived: kept, out of the way; lists show it last and the web interface does not open it by default.
+	Archived bool `json:"archived,omitempty"`
 }
 
 // Entry is one step in a workspace's history.
@@ -181,6 +188,8 @@ type Store interface {
 	CreateWorkspace(ctx context.Context, id, name string, at time.Time) (Workspace, error)
 	Workspaces(ctx context.Context) ([]Workspace, error)
 	Workspace(ctx context.Context, id string) (Workspace, error)
+	// UpdateWorkspace sets a workspace's name, notes, lock and archive flag (not its history).
+	UpdateWorkspace(ctx context.Context, w Workspace) error
 	// Commit appends a change made on `base` (the head the caller saw). A base that is not the head is ErrConflict.
 	Commit(ctx context.Context, wsID string, base int, c Change, at time.Time) (Entry, error)
 	History(ctx context.Context, wsID string) ([]Entry, error)

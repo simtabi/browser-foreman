@@ -224,3 +224,42 @@ func TestPutTreeDiffsAndGuards(t *testing.T) {
 		t.Fatalf("can %+v", got.Can)
 	}
 }
+
+func TestLockedWorkspacesRefuseChanges(t *testing.T) {
+	s := seeded(t)
+	h := s.Handler()
+	send(h, "PATCH", "/api/v1/workspaces/main/nodes/go", `{"title":"Golang"}`)
+	if w := send(h, "PATCH", "/api/v1/workspaces/main", `{"name":"Chrome, cleaned","notes":"before the move","locked":true}`); w.Code != 200 || !strings.Contains(w.Body.String(), `"locked":true`) {
+		t.Fatalf("lock %d %s", w.Code, w.Body)
+	}
+	for _, c := range []struct{ method, path, body string }{
+		{"PATCH", "/api/v1/workspaces/main/nodes/go", `{"title":"x"}`},
+		{"POST", "/api/v1/workspaces/main/undo", ""},
+		{"POST", "/api/v1/workspaces/main/trash", `{"ids":["go"]}`},
+		{"PATCH", "/api/v1/workspaces/main", `{"name":"renamed while locked"}`},
+		{"PATCH", "/api/v1/workspaces/main", `{"archived":true}`},
+	} {
+		if w := send(h, c.method, c.path, c.body); w.Code != 423 {
+			t.Errorf("%s %s %s on a locked workspace: %d", c.method, c.path, c.body, w.Code)
+		}
+	}
+	tr, _ := tree(t, h)
+	body, _ := json.Marshal(tr)
+	if w := send(h, "PUT", "/api/v1/workspaces/main/tree", strings.Replace(string(body), "Golang", "Changed", 1)); w.Code != 423 {
+		t.Fatalf("whole-tree save on a locked workspace: %d", w.Code)
+	}
+	if w := send(h, "PATCH", "/api/v1/workspaces/main", `{"locked":false}`); w.Code != 200 {
+		t.Fatalf("unlock %d", w.Code)
+	}
+	if w := send(h, "PATCH", "/api/v1/workspaces/main", `{"archived":true,"name":" "}`); w.Code != 400 {
+		t.Fatalf("blank name %d", w.Code)
+	}
+	if w := send(h, "POST", "/api/v1/workspaces/main/undo", ""); w.Code != 201 {
+		t.Fatalf("undo after unlock %d", w.Code)
+	}
+	var list struct{ Workspaces []store.Workspace }
+	_ = json.Unmarshal(send(h, "GET", "/api/v1/workspaces", "").Body.Bytes(), &list)
+	if list.Workspaces[0].Name != "Chrome, cleaned" || list.Workspaces[0].Notes != "before the move" {
+		t.Fatalf("%+v", list.Workspaces)
+	}
+}

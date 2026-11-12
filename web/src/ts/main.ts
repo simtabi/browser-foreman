@@ -1,6 +1,7 @@
 // Entry point: registers the Alpine components and gives the page's existing script one small API (window.BF)
 // to open them, then starts Alpine. Built by src/web/build.mjs into assets/js/app.js.
 import "./ws_client.js";  // the workspace store first: the page script reads and writes through window.BM_WS
+import "./v1-ui";  // with the Go server: the workspace menu, History and file handling (window.BM_WS.ui)
 import "./page/page";  // the page script first: everything else builds on what it sets up
 import Alpine from "alpinejs";
 import { browserPicker, closeWithConfirm, historyTools, moveToMode, noteEditor, rechecks, tabCleanup, tabHistory } from "./components";

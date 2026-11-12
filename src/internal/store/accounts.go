@@ -72,4 +72,6 @@ type Accounts interface {
 	CreateSession(ctx context.Context, s Session) error
 	SessionByHash(ctx context.Context, hash string, now time.Time) (Session, error) // expired: ErrNotFound
 	DeleteSession(ctx context.Context, hash string) error
+	// DeleteSessions signs a person out everywhere except the session whose hash is `keep` ("" keeps none).
+	DeleteSessions(ctx context.Context, user, keep string) error
 }

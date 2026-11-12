@@ -94,3 +94,30 @@ func TestMigrateCarriesPeopleNotSessions(t *testing.T) {
 		t.Fatal("sessions must not move")
 	}
 }
+
+func TestDeleteSessionsKeepsOne(t *testing.T) {
+	each(t, func(t *testing.T, s Store) {
+		ctx := context.Background()
+		for _, n := range []string{"ada", "bob"} {
+			if err := s.CreateUser(ctx, User{Name: n, Role: RoleOwner, PasswordHash: "x", Created: t0}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		later := time.Now().Add(time.Hour)
+		for _, x := range []Session{{Hash: "a1", User: "ada"}, {Hash: "a2", User: "ada"}, {Hash: "b1", User: "bob"}} {
+			x.Created, x.Expires = time.Now(), later
+			if err := s.CreateSession(ctx, x); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := s.DeleteSessions(ctx, "ada", "a2"); err != nil {
+			t.Fatal(err)
+		}
+		_, e1 := s.SessionByHash(ctx, "a1", time.Now())
+		_, e2 := s.SessionByHash(ctx, "a2", time.Now())
+		_, e3 := s.SessionByHash(ctx, "b1", time.Now())
+		if !errors.Is(e1, ErrNotFound) || e2 != nil || e3 != nil {
+			t.Fatalf("%v %v %v", e1, e2, e3)
+		}
+	})
+}

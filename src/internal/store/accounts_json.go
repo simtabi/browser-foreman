@@ -256,3 +256,18 @@ func (s *JSONStore) DeleteSession(_ context.Context, hash string) error {
 	delete(m, hash)
 	return writeMap(s.accountsFile("sessions"), m)
 }
+
+func (s *JSONStore) DeleteSessions(_ context.Context, user, keep string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, err := readMap[Session](s.accountsFile("sessions"))
+	if err != nil {
+		return err
+	}
+	for k, x := range m {
+		if x.User == user && k != keep {
+			delete(m, k)
+		}
+	}
+	return writeMap(s.accountsFile("sessions"), m)
+}

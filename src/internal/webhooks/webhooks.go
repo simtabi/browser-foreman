@@ -190,6 +190,7 @@ func (s *Store) Remove(id string) (bool, error) {
 type Delivery struct {
 	Subscription string    `json:"subscription"`
 	Event        uint64    `json:"event"`
+	Type         string    `json:"type"`
 	Attempts     int       `json:"attempts"`
 	Status       int       `json:"status"` // the last HTTP status, 0 when no answer
 	OK           bool      `json:"ok"`
@@ -239,7 +240,7 @@ func (d *Dispatcher) SendOne(ctx context.Context, s Subscription, e events.Event
 }
 
 func (d *Dispatcher) send(ctx context.Context, s Subscription, e events.Event, body []byte) Delivery {
-	rec := Delivery{Subscription: s.ID, Event: e.ID}
+	rec := Delivery{Subscription: s.ID, Event: e.ID, Type: e.Type}
 	wait := d.Backoff
 	for attempt := 1; attempt <= d.Attempts; attempt++ {
 		rec.Attempts = attempt

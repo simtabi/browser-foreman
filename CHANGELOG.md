@@ -50,6 +50,15 @@ ships.
   needs login…), and a changed status publishes `link.checked`. Pages that say "not found", parked domains and bot
   checks are recognised. Connections to private addresses are refused at dial time, and action links are never
   visited.
+- Workspaces can be renamed, given notes, locked (read-only, refused by the store itself: `423`) and archived;
+  the web interface has the workspace menu, a History window with *Go back to this*, import into a new workspace,
+  and downloads through the API.
+- Backup and restore: `browser-foreman backup FILE` / `restore FILE` and `GET /api/v1/backup` / `POST
+  /api/v1/restore`. A backup holds every workspace with its history and the link results, and no accounts or secrets;
+  restoring adds and replaces nothing.
+- The webhook delivery log: the latest 1,000 deliveries, `GET /api/v1/webhooks/deliveries`.
+- A new password signs the person out of their other sessions.
+- `GET /api/v1/settings`: the configuration in force, read-only and without secrets.
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed

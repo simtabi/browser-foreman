@@ -129,7 +129,10 @@ func userCmd() *cobra.Command {
 			if err := s.UpdateUser(context.Background(), u); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "password changed for %s\n", u.Name)
+			if err := s.DeleteSessions(context.Background(), u.Name, ""); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "password changed for %s; signed out everywhere\n", u.Name)
 			return nil
 		},
 	}

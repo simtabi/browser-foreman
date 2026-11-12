@@ -175,3 +175,8 @@ func (s *SQLiteStore) DeleteSession(ctx context.Context, hash string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE hash = ?`, hash)
 	return err
 }
+
+func (s *SQLiteStore) DeleteSessions(ctx context.Context, user, keep string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE user = ? AND hash != ?`, user, keep)
+	return err
+}
