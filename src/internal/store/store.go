@@ -41,9 +41,21 @@ const (
 	KindBookmark = "bookmark"
 )
 
-// Tree is a workspace's bookmarks: an unnamed root folder holding the browser roots (Bookmarks Bar, Other bookmarks…).
+// Tree is a workspace's bookmarks: an unnamed root folder holding the browser roots (Bookmarks Bar, Other bookmarks…),
+// and the Trash: what was removed, with where it came from, so it can go back. An empty Trash is left out of the JSON,
+// so trees stored before the Trash existed keep their content hash.
 type Tree struct {
-	Root *Node `json:"root"`
+	Root  *Node      `json:"root"`
+	Trash []*Trashed `json:"trash,omitempty"`
+}
+
+// Trashed is a node in the Trash (a folder keeps its contents), with the folder and position it left.
+type Trashed struct {
+	Node   *Node  `json:"node"`
+	From   string `json:"from"`  // the parent folder's id
+	Index  int    `json:"index"` // its position there
+	At     int64  `json:"at"`    // Unix seconds
+	Reason string `json:"reason,omitempty"`
 }
 
 // Count returns how many bookmarks and folders the tree holds (the root not included).
@@ -99,7 +111,22 @@ func (t Tree) Validate() error {
 		}
 		return nil
 	}
-	return walk(t.Root, 0)
+	if err := walk(t.Root, 0); err != nil {
+		return err
+	}
+	for _, x := range t.Trash {
+		if x == nil || x.Node == nil || x.Node.ID == "" {
+			return errors.New("a trashed entry needs a node with an id")
+		}
+		if seen[x.Node.ID] {
+			return fmt.Errorf("node id %q appears twice", x.Node.ID)
+		}
+		seen[x.Node.ID] = true
+		if err := walk(&Node{Kind: KindFolder, Children: x.Node.Children}, 1); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Hash is the content address of a tree: SHA-256 of its JSON.

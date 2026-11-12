@@ -37,6 +37,12 @@ ships.
   `/api/v1/users`; `browser-foreman user {add,list,passwd,remove}` and `token {create,list,revoke}`;
   `auth.session_ttl` / `BROFO_SESSION_TTL`.
 
+- Changing bookmarks through the API: add, edit, move, Trash, restore and delete, single or batched as one entry;
+  undo, redo and rollback; import a file into a workspace and export one as bookmarks HTML or Chrome JSON. Every change
+  is an event (`bookmark.moved`, `trash.emptied`, `workspace.committed`…) and so reaches webhooks. `If-Match` refuses
+  a change made on a stale head with `412`. `javascript:` and `data:` URLs are refused.
+- `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
+
 ### Changed
 
 - `GET /api/v1/events` now needs a viewer (a token or a session), like reading bookmarks.

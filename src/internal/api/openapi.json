@@ -1,0 +1,843 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Browser Foreman",
+    "version": "0.1.0",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    },
+    "description": "The local API of Browser Foreman. Every route except health, version, this document and sign-in needs a caller: Authorization: Bearer <token>, or the brofo_session cookie. Writes made with the cookie must send X-CSRF-Token. x-role names the least role a route needs (viewer < editor < owner)."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8765"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "token": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "brofo_session"
+      }
+    }
+  },
+  "security": [
+    {
+      "token": []
+    },
+    {
+      "session": []
+    }
+  ],
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "summary": "Is the server up",
+        "tags": [
+          "Health"
+        ],
+        "x-role": "none",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "security": [],
+        "description": "Body: 200 {ok: true}"
+      }
+    },
+    "/api/v1/version": {
+      "get": {
+        "summary": "The build's version, commit and date",
+        "tags": [
+          "Server"
+        ],
+        "x-role": "none",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/openapi.json": {
+      "get": {
+        "summary": "This document",
+        "tags": [
+          "Server"
+        ],
+        "x-role": "none",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/signin": {
+      "post": {
+        "summary": "Sign in with a name and password; sets the brofo_session cookie and returns the CSRF token",
+        "tags": [
+          "Accounts"
+        ],
+        "x-role": "none",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "security": [],
+        "description": "Body: {username, password}"
+      }
+    },
+    "/api/v1/auth/signout": {
+      "post": {
+        "summary": "End this session",
+        "tags": [
+          "Accounts"
+        ],
+        "x-role": "none",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "summary": "Who is calling, and the CSRF token for a session",
+        "tags": [
+          "Accounts"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "summary": "Server-Sent Events; send Last-Event-ID to replay what you missed",
+        "tags": [
+          "Events"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/tokens": {
+      "get": {
+        "summary": "Your API tokens (?all=1: everyone's, owners only); never the secrets",
+        "tags": [
+          "Accounts"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      },
+      "post": {
+        "summary": "Make an API token; the secret is in this answer only",
+        "tags": [
+          "Accounts"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {name}"
+      }
+    },
+    "/api/v1/tokens/{id}": {
+      "delete": {
+        "summary": "Revoke one of your tokens (owners: anyone's)",
+        "tags": [
+          "Accounts"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "summary": "Everyone who can sign in",
+        "tags": [
+          "Accounts"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      },
+      "post": {
+        "summary": "Add a person",
+        "tags": [
+          "Accounts"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {name, role, password}"
+      }
+    },
+    "/api/v1/users/{name}": {
+      "patch": {
+        "summary": "Change a person's role, password or disabled flag; never leaves no owner",
+        "tags": [
+          "Accounts"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Body: {role?, password?, disabled?}"
+      },
+      "delete": {
+        "summary": "Remove a person with their tokens and sessions; never the last owner",
+        "tags": [
+          "Accounts"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/webhooks": {
+      "get": {
+        "summary": "Subscriptions; secrets are never returned",
+        "tags": [
+          "Webhooks"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      },
+      "post": {
+        "summary": "Subscribe a URL to event types",
+        "tags": [
+          "Webhooks"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {url, events, secret}"
+      }
+    },
+    "/api/v1/webhooks/{id}": {
+      "delete": {
+        "summary": "Remove a subscription",
+        "tags": [
+          "Webhooks"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/webhooks/{id}/test": {
+      "post": {
+        "summary": "Send a webhook.test delivery now",
+        "tags": [
+          "Webhooks"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces": {
+      "get": {
+        "summary": "Every workspace with its head and counts",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      },
+      "post": {
+        "summary": "Make an empty workspace",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {id, name}"
+      }
+    },
+    "/api/v1/workspaces/{id}": {
+      "get": {
+        "summary": "The tree (and Trash) at the head, or ?at=N; ETag is the head",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{id}/history": {
+      "get": {
+        "summary": "Every entry, oldest first",
+        "tags": [
+          "History"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{id}/export": {
+      "get": {
+        "summary": "Download as bookmarks HTML (?format=html) or Chrome JSON (?format=chrome); ?at=N for an earlier state",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{id}/import": {
+      "post": {
+        "summary": "Replace the tree with a bookmarks file sent as the body (Chrome JSON or exported HTML); ?name= labels it",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          }
+        ],
+        "description": "Body: file bytes"
+      }
+    },
+    "/api/v1/workspaces/{id}/changes": {
+      "post": {
+        "summary": "Apply a batch of ops as one entry: create, update, move, trash, restore, purge",
+        "tags": [
+          "Bookmarks"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          }
+        ],
+        "description": "Body: {base?, ops: [...]}"
+      }
+    },
+    "/api/v1/workspaces/{id}/nodes": {
+      "post": {
+        "summary": "Add a bookmark or folder",
+        "tags": [
+          "Bookmarks"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          }
+        ],
+        "description": "Body: {parent, index?, kind, title, url?, note?}"
+      }
+    },
+    "/api/v1/workspaces/{id}/nodes/{node}": {
+      "patch": {
+        "summary": "Change a title, URL or note",
+        "tags": [
+          "Bookmarks"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "node",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          }
+        ],
+        "description": "Body: {title?, url?, note?}"
+      }
+    },
+    "/api/v1/workspaces/{id}/move": {
+      "post": {
+        "summary": "Move bookmarks and folders, in the order given",
+        "tags": [
+          "Bookmarks"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          }
+        ],
+        "description": "Body: {ids, parent, index?}"
+      }
+    },
+    "/api/v1/workspaces/{id}/trash": {
+      "get": {
+        "summary": "What is in the Trash, with where each came from",
+        "tags": [
+          "Trash"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "post": {
+        "summary": "Move to the Trash",
+        "tags": [
+          "Trash"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          }
+        ],
+        "description": "Body: {ids, reason?}"
+      },
+      "delete": {
+        "summary": "Delete for good (?ids=a,b, or everything); undo still brings them back",
+        "tags": [
+          "Trash"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{id}/trash/restore": {
+      "post": {
+        "summary": "Put back where each came from",
+        "tags": [
+          "Trash"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          }
+        ],
+        "description": "Body: {ids}"
+      }
+    },
+    "/api/v1/workspaces/{id}/undo": {
+      "post": {
+        "summary": "Take back the last change, as a new entry",
+        "tags": [
+          "History"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{id}/redo": {
+      "post": {
+        "summary": "Put back the last undone change",
+        "tags": [
+          "History"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{id}/rollback": {
+      "post": {
+        "summary": "Make the state after entry `to` the newest, as a new entry",
+        "tags": [
+          "History"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          }
+        ],
+        "description": "Body: {to}"
+      }
+    }
+  }
+}

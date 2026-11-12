@@ -47,6 +47,7 @@ func (s *Server) Handler() http.Handler {
 	m := http.NewServeMux()
 	m.HandleFunc("GET /api/v1/health", s.health)
 	m.HandleFunc("GET /api/v1/version", s.versionInfo)
+	m.HandleFunc("GET /api/v1/openapi.json", s.openAPI)
 	// Each route names the least role it needs (store.RoleViewer < RoleEditor < RoleOwner).
 	m.HandleFunc("POST /api/v1/auth/signin", s.signIn)
 	m.HandleFunc("POST /api/v1/auth/signout", s.signOut)
@@ -66,6 +67,20 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/workspaces", s.require(store.RoleViewer, s.listWorkspaces))
 	m.HandleFunc("GET /api/v1/workspaces/{id}", s.require(store.RoleViewer, s.getWorkspace))
 	m.HandleFunc("GET /api/v1/workspaces/{id}/history", s.require(store.RoleViewer, s.getHistory))
+	m.HandleFunc("GET /api/v1/workspaces/{id}/trash", s.require(store.RoleViewer, s.getTrash))
+	m.HandleFunc("GET /api/v1/workspaces/{id}/export", s.require(store.RoleViewer, s.exportWorkspace))
+	m.HandleFunc("POST /api/v1/workspaces", s.require(store.RoleEditor, s.createWorkspace))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/import", s.require(store.RoleEditor, s.importInto))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/changes", s.require(store.RoleEditor, s.postChanges))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/nodes", s.require(store.RoleEditor, s.createNode))
+	m.HandleFunc("PATCH /api/v1/workspaces/{id}/nodes/{node}", s.require(store.RoleEditor, s.updateNode))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/move", s.require(store.RoleEditor, s.moveNodes))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/trash", s.require(store.RoleEditor, s.trashNodes))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/trash/restore", s.require(store.RoleEditor, s.restoreNodes))
+	m.HandleFunc("DELETE /api/v1/workspaces/{id}/trash", s.require(store.RoleEditor, s.emptyTrash))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/undo", s.require(store.RoleEditor, s.undoRedo("undo")))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/redo", s.require(store.RoleEditor, s.undoRedo("redo")))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/rollback", s.require(store.RoleEditor, s.rollback))
 	m.HandleFunc("GET /{$}", s.home)
 	return s.guard(m)
 }
@@ -317,6 +332,7 @@ func (s *Server) getWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bm, fo := t.Count()
+	w.Header().Set("ETag", strconv.Quote(strconv.Itoa(x.Head)))
 	writeJSON(w, 200, map[string]any{"workspace": wsOut{x, bm, fo}, "entry": e, "tree": t})
 }
 

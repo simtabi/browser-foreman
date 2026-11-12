@@ -36,10 +36,19 @@ of that buffer, the stream starts with `: some events were missed; reload the st
 | `auth.signed_in` | someone signed in (`{"user"}`) |
 | `user.created` | a person was added (`{"user", "role"}`) |
 | `user.deleted` | a person was removed (`{"user"}`) |
+| `bookmark.created`, `folder.created` | added (`{workspace, seq, id, parent, title, url}`) |
+| `bookmark.updated`, `folder.updated` | title, URL or note changed (the changed fields) |
+| `bookmark.moved`, `folder.moved` | `{from, to, index}` |
+| `bookmark.trashed`, `folder.trashed` | `{from, reason}` |
+| `bookmark.restored`, `folder.restored` | `{to}` |
+| `bookmark.deleted`, `folder.deleted` | deleted from the Trash for good |
+| `trash.emptied` | `{count}` |
+| `workspace.created` | `{workspace, name}` |
+| `workspace.committed` | after any change above: `{workspace, seq, op, summary}` |
+| `workspace.imported`, `workspace.undone`, `workspace.redone`, `workspace.rolled_back` | the same fields |
+| `workspace.exported` | `{workspace, format, at}` |
 
-Phase 4 adds a type for every change: `bookmark.created`, `bookmark.updated`, `bookmark.moved`, `bookmark.trashed`,
-`bookmark.restored`, `bookmark.deleted`, `folder.*`, `workspace.committed`, `workspace.undone`, `trash.emptied`,
-`link.checked`, `tabs.snapshot.saved`, `tabs.closed`.
+Still to come in phase 4: `link.checked`, `tabs.snapshot.saved`, `tabs.closed`.
 
 ---
 [← Docs index](../../README.md#documentation)
