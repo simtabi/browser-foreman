@@ -1,0 +1,22 @@
+{
+  "name": "@simtabi/browser-foreman-web",
+  "version": "0.1.0",
+  "description": "Browser Foreman's web interface (TypeScript + Alpine), embedded in the browser-foreman binary.",
+  "scripts": {
+    "build:web": "node src/build.mjs",
+    "check:web": "node node_modules/typescript/bin/tsc -p src",
+    "test:web": "node src/tests/tree.test.mjs && node src/tests/tree-rules.test.mjs && node src/tests/commands.test.mjs && node src/tests/tabs.test.mjs && node src/tests/link-panel.test.mjs && node src/tests/trash.test.mjs && node src/tests/keys-export.test.mjs && node src/tests/ctxmenu.test.mjs"
+  },
+  "keywords": [],
+  "author": "Simtabi LLC",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "alpinejs": "^3.17.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  },
+  "private": true
+}

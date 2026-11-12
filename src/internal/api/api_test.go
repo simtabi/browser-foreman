@@ -1,0 +1,109 @@
+package api
+
+import (
+	"bufio"
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/simtabi/browser-foreman/src/internal/config"
+	"github.com/simtabi/browser-foreman/src/internal/events"
+	"github.com/simtabi/browser-foreman/src/internal/webhooks"
+)
+
+func newServer(t *testing.T, token string) *Server {
+	t.Helper()
+	c := config.Defaults()
+	c.APIToken = token
+	st := webhooks.NewStore(t.TempDir())
+	return &Server{Cfg: c, Bus: events.New(100, time.Now), Hooks: st, Now: time.Now,
+		Dispatch: &webhooks.Dispatcher{Store: st, Client: http.DefaultClient, Attempts: 1, Backoff: time.Millisecond, Now: time.Now}}
+}
+
+func do(h http.Handler, method, url, body, host, origin, token string) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(method, url, strings.NewReader(body))
+	r.Host = host
+	if origin != "" {
+		r.Header.Set("Origin", origin)
+	}
+	if token != "" {
+		r.Header.Set("Authorization", "Bearer "+token)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	return w
+}
+
+func TestHealthAndHostOriginGuard(t *testing.T) {
+	h := newServer(t, "tok").Handler()
+	if w := do(h, "GET", "/api/v1/health", "", "127.0.0.1:8765", "", ""); w.Code != 200 || w.Header().Get("X-Frame-Options") != "DENY" {
+		t.Fatalf("health %d", w.Code)
+	}
+	if w := do(h, "GET", "/api/v1/health", "", "evil.example:8765", "", ""); w.Code != 403 {
+		t.Fatalf("rebinding host allowed: %d", w.Code)
+	}
+	if w := do(h, "GET", "/api/v1/version", "", "localhost:8765", "https://evil.example", ""); w.Code != 403 {
+		t.Fatalf("cross-site origin allowed: %d", w.Code)
+	}
+	if w := do(h, "GET", "/api/v1/version", "", "localhost:8765", "http://localhost:8765", ""); w.Code != 200 {
+		t.Fatalf("same origin refused: %d", w.Code)
+	}
+}
+
+func TestWritesNeedTheToken(t *testing.T) {
+	h := newServer(t, "tok").Handler()
+	body := `{"url":"https://hooks.example.com/x","events":["*"],"secret":"0123456789abcdef"}`
+	if w := do(h, "POST", "/api/v1/webhooks", body, "127.0.0.1:8765", "", ""); w.Code != 401 {
+		t.Fatalf("no token: %d", w.Code)
+	}
+	if w := do(h, "POST", "/api/v1/webhooks", body, "127.0.0.1:8765", "", "nope"); w.Code != 401 {
+		t.Fatalf("wrong token: %d", w.Code)
+	}
+	w := do(h, "POST", "/api/v1/webhooks", body, "127.0.0.1:8765", "", "tok")
+	if w.Code != 201 || strings.Contains(w.Body.String(), "0123456789abcdef") {
+		t.Fatalf("create %d %s (the secret must never be echoed)", w.Code, w.Body)
+	}
+	if w := do(h, "GET", "/api/v1/webhooks", "", "127.0.0.1:8765", "", "tok"); !strings.Contains(w.Body.String(), "hooks.example.com") || strings.Contains(w.Body.String(), "0123456789abcdef") {
+		t.Fatalf("list %s", w.Body)
+	}
+	if w := do(h, "POST", "/api/v1/webhooks", `{"url":"http://169.254.169.254/","events":["*"],"secret":"0123456789abcdef"}`, "127.0.0.1:8765", "", "tok"); w.Code != 400 {
+		t.Fatalf("metadata target: %d", w.Code)
+	}
+	if w := do(newServer(t, "").Handler(), "GET", "/api/v1/webhooks", "", "127.0.0.1:8765", "", "x"); w.Code != 503 {
+		t.Fatalf("no token configured: %d", w.Code)
+	}
+}
+
+func TestEventsStreamReplaysAndStreams(t *testing.T) {
+	s := newServer(t, "tok")
+	_, _ = s.Bus.Publish("a.one", nil)
+	_, _ = s.Bus.Publish("a.two", nil)
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", ts.URL+"/api/v1/events", nil)
+	req.Header.Set("Last-Event-ID", "1")
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if ct := resp.Header.Get("Content-Type"); ct != "text/event-stream" {
+		t.Fatalf("content type %q", ct)
+	}
+	go func() { time.Sleep(100 * time.Millisecond); _, _ = s.Bus.Publish("a.three", nil) }()
+	sc := bufio.NewScanner(resp.Body)
+	var got []string
+	for sc.Scan() && len(got) < 2 {
+		if v, ok := strings.CutPrefix(sc.Text(), "event: "); ok {
+			got = append(got, v)
+		}
+	}
+	if strings.Join(got, ",") != "a.two,a.three" {
+		t.Fatalf("got %v: want the replayed a.two, then the live a.three", got)
+	}
+}

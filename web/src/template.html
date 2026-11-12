@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Browser Foreman</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23066fd1'/%3E%3Cpath d='M22 14h20a4 4 0 0 1 4 4v32l-14-9-14 9V18a4 4 0 0 1 4-4z' fill='%23fff'/%3E%3C/svg%3E">
+<!-- Local copies (src/pipeline/vendor_assets.py) load first; the CDN copies never block the page if the network is slow. -->
+<link rel="stylesheet" href="assets/css/tabler.min.css">
+<link rel="stylesheet" href="assets/css/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.7.3/dist/css/tabler.min.css" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.50.0/dist/tabler-icons.min.css" media="print" onload="this.media='all'">
+<style>
+/* Layout: the app fills the window; the tree and the detail pane scroll on their own. */
+html, body { height: 100%; }
+body { display: flex; flex-direction: column; overflow: hidden; }
+.ti { font-size: 1.1em; line-height: 1; vertical-align: -0.125em; }
+.app-main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(360px, 38%) 1fr; gap: 1rem; padding: 0 1rem .75rem; }
+/* Header: five groups, left to right: context · find · act on links · get them out · more. */
+.app-head { padding: .5rem 0; border-bottom: 1px solid var(--tblr-border-color); background: var(--tblr-bg-surface); }
+.app-head > .container-fluid { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.hdr-group { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.hdr-context { flex: none; gap: .75rem; }
+.hdr-brand { display: flex; align-items: center; gap: .5rem; margin: 0; padding: 0; font-weight: 700; }
+.hdr-logo { width: 2rem; height: 2rem; border-radius: 9px; background: var(--tblr-primary); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+.hdr-title { font-size: 1.05rem; }
+/* Header: brand · views · search · browsers and menu. The views are pills here, not a second bar. */
+.hdr-views .app-nav-tabs { gap: .15rem; padding: .2rem; border-radius: var(--tblr-border-radius-lg); background: var(--tblr-bg-surface-secondary); }
+.hdr-views .app-nav-tab { border: 0; border-radius: var(--tblr-border-radius); padding: .35rem .7rem; white-space: nowrap; }
+.hdr-views .app-nav-tab.active { background: var(--tblr-bg-surface); color: var(--tblr-primary); box-shadow: 0 1px 2px rgba(0,0,0,.08); border-bottom: 0; }
+@media (max-width: 1250px) { .hdr-views .app-nav-tab .ti + * { } .hdr-title { display: none; } }
+/* Bookmarks bar: the workspace on the left, its actions on the right. */
+.tb-head { justify-content: space-between; }
+.tb-ws { display: flex; flex-direction: column; justify-content: center; min-width: 0; line-height: 1.15; }
+.tb-ws #wsMenu > .btn { border: 0; box-shadow: none; background: transparent; padding: 0; height: auto; font-weight: 600; font-size: .95rem; }
+.tb-ws #wsMenu > .btn:hover { color: var(--tblr-primary); }
+.tb-ws #edited { font-size: .72rem; color: var(--tblr-secondary) !important; }
+.tb-acts { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-left: auto; }
+#chips .chip-n { font-size: .7rem; font-weight: 600; margin-left: .4rem; padding: 0 .35rem; border-radius: 999px; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); }
+#chips .btn-primary .chip-n { background: rgba(255,255,255,.2); color: inherit; }
+#footTabs .nav-autosave { cursor: pointer; }
+.hdr-find { flex: 1 1 220px; max-width: 560px; }
+.hdr-search { flex-wrap: nowrap; }
+.hdr-search .input-group-text { background: var(--tblr-bg-surface); color: var(--tblr-secondary); }
+.hdr-search .hdr-kbd { font-size: .7rem; font-family: var(--tblr-font-monospace); padding: 0 .55rem; }
+.hdr-search #paletteBtn { white-space: nowrap; }
+.hdr-search #paletteBtn kbd { background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); border: 1px solid var(--tblr-border-color); box-shadow: none; font-size: .7rem; }
+.hdr-actions { flex: none; margin-left: auto; gap: .5rem; }
+/* Download split button: Tabler joins buttons only when they are direct children of .btn-group, and the arrow sits in
+   a .dropdown wrapper, so join the two by hand: square inner corners, one shared border. */
+#ioGroup { display: inline-flex; }
+#ioGroup > #download { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+#ioGroup > .dropdown > .btn { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: -1px; padding-left: .55rem; padding-right: .55rem;
+  border-left-color: color-mix(in srgb, #fff 35%, var(--tblr-primary)); }
+#ioGroup > .dropdown > .btn:focus-visible, #ioGroup > #download:focus-visible { position: relative; z-index: 1; }
+.hdr-actions #updateCount:empty, .hdr-actions #updateCount[hidden] { display: none; }
+#q::placeholder { color: var(--tblr-secondary); }
+@media (min-width: 1100px) { .app-head > .container-fluid { flex-wrap: nowrap; } }
+@media (max-width: 1100px) { .hide-narrow { display: none; } .hdr-search .hdr-kbd { display: none; } }
+@media (max-width: 1100px) { .hdr-actions .btn .ti { margin: 0 !important; } }
+.hdr-actions .btn { gap: 0; } .hdr-actions .btn .ti { font-size: 1.05rem; }
+/* Trash window rows: compact, one line of title and one of detail; icons, badges and buttons never shrink or clip. */
+#trashList .trash-row { padding: .35rem .5rem; gap: .5rem !important; line-height: 1.3; }
+#trashList .trash-row > .ti, #trashList .trash-row > .badge, #trashList .trash-row > .btn, #trashList .trash-row > input { flex: none; }
+#trashList .trash-row > .ti { width: 1rem; text-align: center; }
+#trashList .trash-row .small { font-size: .75rem; }
+#trashList .trash-row .btn-icon { width: 1.75rem; height: 1.75rem; min-height: 0; padding: 0; }
+.trash-why { flex: none; max-width: 45%; }
+.trash-why .badge, .trash-group > .badge { white-space: nowrap; }
+.trash-group { background: var(--tblr-bg-surface-secondary); }
+.trash-child { padding-left: 2.25rem !important; position: relative; }
+.trash-child::before { content: ""; position: absolute; left: 1.05rem; top: 0; bottom: 50%; width: .7rem; border-left: 1px dashed var(--tblr-border-color); border-bottom: 1px dashed var(--tblr-border-color); }
+.trash-intro { font-size: .8rem; margin-bottom: .6rem; }
+.trash-chip { padding: .15rem .5rem .15rem .2rem; font-size: .8rem; border-radius: 999px; line-height: 1.4; min-height: 0; }
+.trash-chip .badge { font-size: .7rem; padding: .15rem .4rem; border-radius: 999px; }
+.trash-why-inline .badge { font-size: .7rem; }
+.trash-chip.active { border-color: var(--tblr-primary); color: var(--tblr-primary); }
+.theme-toggle .theme-to-light, [data-bs-theme="dark"] .theme-toggle .theme-to-dark { display: none; }
+[data-bs-theme="dark"] .theme-toggle .theme-to-light { display: inline-block; }
+.hdr-undo .btn.disabled, .hdr-undo .btn:disabled { pointer-events: auto; }
+.head-tags { display: inline-flex; flex-wrap: wrap; gap: .3rem; margin-left: .5rem; vertical-align: middle; }
+.head-tags .badge { font-size: .7rem; }
+/* Timeline view */
+.timeline-view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 1rem; padding: 1rem 1rem .75rem; }
+.timeline-view[hidden] { display: none; }
+.tl-top { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.tl-kinds { display: flex; gap: .35rem; flex-wrap: wrap; }
+.tl-kind.active { border-color: var(--tblr-primary); color: var(--tblr-primary); background: var(--tblr-primary-lt, rgba(32,107,196,.08)); }
+#tlRange .btn.active { background: var(--tblr-primary); color: #fff; border-color: var(--tblr-primary); }
+.tl-search { width: 240px; }
+.tl-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; flex: none; }
+.tl-charts .card { margin: 0; }
+.tl-chart { width: 100%; height: 150px; display: block; }
+.tl-grid { stroke: var(--tblr-border-color); stroke-width: 1; }
+.tl-axis { fill: var(--tblr-secondary); font-size: 10px; }
+.tl-line { fill: none; stroke: var(--tblr-primary); stroke-width: 2; } .tl-line.inc { stroke: var(--inc); stroke-dasharray: 4 3; }
+.tl-pt { fill: var(--tblr-bg-surface); stroke: var(--tblr-primary); stroke-width: 2; cursor: pointer; } .tl-pt:hover, .tl-pt:focus { fill: var(--tblr-primary); outline: none; }
+.tl-bar { fill: color-mix(in srgb, var(--tblr-primary) 70%, transparent); cursor: pointer; } .tl-bar:hover, .tl-bar:focus { fill: var(--tblr-primary); outline: none; }
+.tl-feed-card { flex: 1; min-height: 0; display: flex; flex-direction: column; margin: 0; }
+.tl-feed-day { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tblr-secondary); margin: 1rem 0 .4rem; }
+.tl-feed-day:first-child { margin-top: 0; }
+.tl-feed-list { border-left: 2px solid var(--tblr-border-color); margin-left: .9rem; padding-left: 1.1rem; display: flex; flex-direction: column; gap: .6rem; }
+.tl-ev { position: relative; display: flex; gap: .75rem; align-items: flex-start; }
+.tl-ev-dot { position: absolute; left: -2.2rem; top: .1rem; width: 1.75rem; height: 1.75rem; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--tblr-bg-surface); border: 1px solid var(--tblr-border-color); color: var(--tblr-secondary); font-size: .95rem; }
+.tl-tabs .tl-ev-dot { color: var(--tblr-primary); } .tl-edits .tl-ev-dot { color: var(--tblr-orange, #f76707); } .tl-added .tl-ev-dot { color: var(--tblr-green); }
+.tl-ev-body { flex: 1; padding-left: .25rem; }
+.tl-ev-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; font-size: .875rem; }
+.tl-ev-head .text-secondary { font-size: .78rem; }
+.tl-ev-diff { display: flex; gap: .75rem; font-size: .8rem; margin-top: .15rem; font-variant-numeric: tabular-nums; }
+.tl-plus { color: var(--tblr-green); } .tl-minus { color: var(--tblr-red); }
+.tl-ev-det { margin-top: .25rem; font-size: .8rem; } .tl-ev-det summary { cursor: pointer; color: var(--tblr-secondary); }
+.tl-ev-list { display: flex; flex-direction: column; gap: .15rem; margin: .3rem 0 .2rem .75rem; }
+.tl-ev-li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 14rem); gap: .75rem; } .tl-ev-li.inc { color: var(--inc); }
+.tl-ev-go { flex: none; }
+@media (max-width: 900px) { .tl-charts { grid-template-columns: 1fr; } }
+/* View switch: Bookmarks / Open tabs, with the tab-autosave line on the right. */
+.app-nav { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0 1rem; border-bottom: 1px solid var(--tblr-border-color); background: var(--tblr-bg-surface); flex: none; }
+.app-nav-tabs { display: flex; gap: .25rem; }
+.app-nav-tab { display: inline-flex; align-items: center; gap: .45rem; border: 0; background: transparent; padding: .6rem .8rem; color: var(--tblr-secondary); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.app-nav-tab:hover { color: var(--tblr-body-color); }
+.app-nav-tab.active { color: var(--tblr-primary); border-bottom-color: var(--tblr-primary); }
+.app-nav-count { font-size: .7rem; font-weight: 600; padding: .05rem .4rem; border-radius: 999px; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); }
+.app-nav-count:empty { display: none; }
+.app-nav-tab.active .app-nav-count { background: var(--tblr-primary-lt, rgba(32,107,196,.1)); color: var(--tblr-primary); }
+.nav-autosave { display: inline-flex; align-items: center; gap: .4rem; font-size: .75rem; color: var(--tblr-secondary); cursor: pointer; }
+/* Open tabs view: timeline on the left, windows on the right. */
+.tabs-view { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(260px, 22%) 1fr; gap: 1rem; padding: 1rem 1rem .75rem; }
+.tabs-view[hidden] { display: none; }
+.tabs-view > .card { min-height: 0; display: flex; flex-direction: column; margin: 0; }
+.tabs-settings { padding: .65rem 1rem; border-bottom: 1px solid var(--tblr-border-color); display: flex; flex-direction: column; gap: .5rem; font-size: .85rem; }
+.tabs-timeline { padding: .35rem; }
+.tl-day { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tblr-secondary); padding: .7rem .6rem .25rem; }
+.tl-item { display: flex; gap: .6rem; align-items: flex-start; width: 100%; text-align: left; border: 0; background: transparent; padding: .45rem .6rem; border-radius: var(--tblr-border-radius); color: var(--tblr-body-color); }
+.tl-item:hover { background: var(--tblr-bg-surface-secondary); }
+.tl-item.active { background: var(--tblr-primary-lt, rgba(32,107,196,.1)); }
+.tl-item .ti { color: var(--tblr-secondary); margin-top: .1rem; } .tl-item.active .ti { color: var(--tblr-primary); }
+.tl-text { display: flex; flex-direction: column; min-width: 0; }
+.tl-title { font-weight: 500; font-size: .85rem; } .tl-sub { font-size: .75rem; color: var(--tblr-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tabs-search { width: 200px; }
+.tabs-settings { gap: .35rem; max-height: 46%; overflow-y: auto; }
+.tabs-set-title { font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tblr-secondary); }
+/* One grid for every settings row: the label on the left, the control on the right edge, every select the same
+   width, so rows line up whatever their text. A row with one child spans both columns.
+   Narrow (the usual sidebar), the label sits above a full-width control instead, so nothing is squeezed. */
+.tabs-settings { container-type: inline-size; }
+.tabs-settings > * { flex-shrink: 0; }  /* a flex column with a max height would otherwise squash rows onto each other */
+.tabs-set-row { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: .25rem .75rem; min-height: 2rem; }
+.tabs-set-row > :only-child { grid-column: 1 / -1; }
+.tabs-set-row > .tabs-switch { min-width: 0; }
+.tabs-settings .form-select { width: 100% !important; }
+@container (min-width: 21rem) {
+  .tabs-set-row { grid-template-columns: minmax(0, 1fr) 10.5rem; }
+}
+.tabs-purge > .btn { flex: 1 1 0; justify-content: center; white-space: nowrap; min-width: 0; }
+.tabs-strip { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+.tabs-chip { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .65rem; border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius); font-size: .8rem; }
+.tabs-chip .ti { color: var(--tblr-secondary); }
+.tabs-chip.inc { border-color: color-mix(in srgb, var(--tblr-dark, #182433) 35%, var(--tblr-border-color)); }
+.tabs-chip.warn { border-color: var(--tblr-warning); } .tabs-chip.warn .ti { color: var(--tblr-warning); }
+.tabs-sec + .tabs-sec { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px dashed var(--tblr-border-color); }
+.tabs-sec-head { display: flex; align-items: center; gap: .5rem; font-weight: 600; margin-bottom: .75rem; }
+.tabs-sec-head .text-secondary { font-weight: 400; font-size: .85rem; }
+.tabs-sec.inc .tabs-sec-head .ti { color: var(--tblr-body-color); }
+/* Incognito is unmistakable: a dark card with a violet edge and a pill, everywhere it appears. */
+:root { --inc: #6d28d9; --inc-bg: #1e1b2e; --inc-fg: #ede9fe; }
+.tab-win.incognito { border-color: color-mix(in srgb, var(--inc) 55%, var(--tblr-border-color)) !important; overflow: hidden; }
+.tab-win.incognito .tab-win-head { background: var(--inc-bg) !important; color: var(--inc-fg); border-bottom-color: #2e2a44; }
+.tab-win.incognito .tab-win-head .tab-win-meta, .tab-win.incognito .tab-win-head .btn-ghost-secondary { color: #c4b5fd; }
+.tab-win.incognito .tab-win-icon { background: var(--inc); color: #fff; }
+.tab-win.incognito .tab-win-head .btn:not(.btn-warning) { background: transparent; border-color: #3b3659; color: var(--inc-fg); }
+.tab-row.inc { background: transparent; }
+.tabs-inc-pill, .tabs-norm-pill { display: inline-flex; align-items: center; gap: .3rem; padding: .1rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 600; }
+.tabs-inc-pill { background: var(--inc); color: #fff; }
+.tabs-norm-pill { background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); }
+.tabs-sec-head .tabs-inc-pill, .tabs-sec-head .tabs-norm-pill { padding: .2rem; }
+.tabs-chip.inc { border-color: var(--inc); } .tabs-chip.inc .ti { color: var(--inc); }
+.tab-win-meta { font-size: .78rem; color: var(--tblr-secondary); display: flex; align-items: center; flex-wrap: wrap; gap: .25rem; }
+.tab-fold { margin-left: -.35rem; }
+.tab-win.folded .tab-win-head { border-bottom: 0; }
+/* Selection */
+.tabs-check { flex: none; cursor: pointer; }
+.tab-row { cursor: default; }
+/* Pager: Tabler's card-footer + .pagination (src/web/ts/pager.ts); only the footer's padding follows the tab rows. */
+.tab-win > .card-footer { padding: .5rem .85rem; }
+.tab-row .tabs-check { opacity: .35; } .tab-row:hover .tabs-check, .tab-row.picked .tabs-check, .tabs-has-pick .tab-row .tabs-check { opacity: 1; }
+.tab-row.picked { background: color-mix(in srgb, var(--tblr-primary) 9%, transparent) !important; }
+.tabs-selbar { position: sticky; top: -1rem; z-index: 5; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; padding: .5rem .75rem; margin: -.25rem 0 1rem;
+  border: 1px solid var(--tblr-primary); border-radius: var(--tblr-border-radius-lg); background: var(--tblr-bg-surface); box-shadow: var(--tblr-shadow-dropdown, 0 4px 12px rgba(0,0,0,.08)); }
+/* Compact rows: one line each, no address line */
+.tabs-compact .tab-row { padding-top: .2rem; padding-bottom: .2rem; }
+.tabs-compact .tab-url { display: none; }
+.tabs-compact .tab-row .fvd { width: 14px; height: 14px; font-size: 9px; }
+.pop-menu { z-index: 1090; min-width: 15rem; }
+.tabs-sub-head { font-size: .75rem; font-weight: 600; color: var(--tblr-secondary); margin: .25rem 0 .5rem; }
+.tab-win { margin-bottom: 1rem; }
+.tab-win.incognito { border-color: color-mix(in srgb, var(--tblr-dark, #182433) 40%, var(--tblr-border-color)); }
+.tab-win.incognito .tab-win-head { background: color-mix(in srgb, var(--tblr-dark, #182433) 8%, transparent); }
+.tab-win-head { display: flex; align-items: center; gap: .65rem; padding: .6rem .85rem; }
+.tab-win-icon { width: 2rem; height: 2rem; border-radius: var(--tblr-border-radius); background: var(--tblr-bg-surface-secondary); display: inline-flex; align-items: center; justify-content: center; flex: none; font-size: 1.1rem; color: var(--tblr-secondary); }
+.tab-win-title { font-weight: 600; }
+.tab-row { display: flex; align-items: center; gap: .6rem; padding: .4rem .85rem; }
+.tab-row .fvd { margin-top: 0; }
+.tab-row.active-tab { background: color-mix(in srgb, var(--tblr-primary) 5%, transparent); }
+.tab-row.missing .tab-title { color: var(--tblr-warning); }
+.tab-title { font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-url { font-size: .72rem; color: var(--tblr-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) { .tabs-view { grid-template-columns: 1fr; } }
+.app-foot { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .35rem 1.25rem;
+  padding: .4rem 1rem; border-top: 1px solid var(--tblr-border-color); background: var(--tblr-bg-surface); font-size: .75rem; color: var(--tblr-secondary); }
+.foot-left, .foot-links { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem 1rem; min-width: 0; }
+.foot-brand { display: inline-flex; align-items: center; gap: .35rem; color: var(--tblr-body-color); }
+.foot-brand .ti { color: var(--tblr-primary); }
+.foot-item { display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap; }
+.foot-item .ti { font-size: .9rem; }
+.foot-links a { color: var(--tblr-secondary); text-decoration: none; } .foot-links a:hover { color: var(--tblr-primary); }
+.status-dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--tblr-secondary); flex: none; }
+.status-dot.on { background: var(--tblr-green); } .status-dot.off { background: var(--tblr-red); }
+.app-main > .card { min-height: 0; display: flex; flex-direction: column; margin: 0; }
+.pane-scroll { flex: 1; min-height: 0; overflow: auto; }
+#list { outline: none; padding: .25rem 0 3rem; }
+#list:focus-visible { box-shadow: inset 0 0 0 2px var(--tblr-primary); }
+/* Narrow: the page scrolls as a whole, so it grows with its content instead of holding the window's height (a fixed
+   height let the content run under the footer). */
+@media (max-width: 900px) { html, body { height: auto; } body { overflow: auto; min-height: 100vh; } .app-main { grid-template-columns: 1fr; flex: none; }
+  .app-main > .card { height: 70vh; } .tabs-view, .timeline-view { flex: none; } }
+
+/* Tree rows: padded, text wraps instead of being cut off. */
+/* Rows are inset: indented by margin and rounded, so a highlight starts at the row's level and stops short of the edge. */
+.bm-row { display: flex; gap: .55rem; align-items: flex-start; padding: .4rem .6rem; margin: 1px .5rem 1px 0; border-radius: var(--tblr-border-radius); cursor: default; position: relative; }
+.bm-row.folder { align-items: center; padding-top: .3rem; padding-bottom: .3rem; }
+.bm-row.folder .tw, .bm-row.folder .fi { margin-top: 0; }
+.bm-line { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .45rem; }
+.bm-row:hover { background: var(--tblr-bg-surface-secondary); }
+.bm-row.marked { background: color-mix(in srgb, var(--tblr-yellow) 16%, transparent); }
+.bm-row.sel { background: color-mix(in srgb, var(--tblr-primary) 12%, transparent); }
+/* Loose bookmarks after a folder's subfolders: a quiet label and rule, at the bookmarks' own indent. */
+.bm-sep { display: flex; align-items: center; gap: .35rem; margin: .9rem .5rem .35rem 0; padding: .65rem .6rem 0; border-top: 1px dashed var(--tblr-border-color);
+  font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tblr-secondary); }
+.bm-sep .ti { font-size: .85rem; }
+.bm-sep-n { margin-left: auto; font-weight: 500; letter-spacing: 0; }
+.bm-row.drop-into { outline: 2px dashed var(--tblr-primary); outline-offset: -2px; }
+.bm-row.drop-before { box-shadow: inset 0 2px 0 var(--tblr-primary); }
+.bm-row.drop-after { box-shadow: inset 0 -2px 0 var(--tblr-primary); }
+/* one level out: the line starts left of the row, where the parent folder's own rows begin */
+.bm-row.drop-after-out { position: relative; }
+.bm-row.drop-after-out::after { content: ""; position: absolute; left: -18px; right: 0; bottom: 0; height: 2px; background: var(--tblr-primary); }
+.bm-row .tw { color: var(--tblr-secondary); cursor: pointer; flex: none; width: 1rem; text-align: center; margin-top: .15rem; }
+.bm-row .fi { color: var(--tblr-primary); flex: none; margin-top: .15rem; }
+.bm-row.trash .fi { color: var(--tblr-danger); }
+.bm-body { flex: 1; min-width: 0; }
+.bm-title { font-weight: 500; overflow-wrap: anywhere; word-break: break-word; line-height: 1.35; }
+.bm-row.folder .bm-title { font-weight: 600; }
+.bm-sub, .tile-url { color: var(--tblr-secondary); font-size: .78rem; line-height: 1.35; margin-top: .1rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.bm-desc { color: var(--tblr-secondary); font-size: .8rem; line-height: 1.35; margin-top: .2rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* Bookmark rows: snapshot with the site icon in its corner · title line (status, date on the right) · site and path · one
+   line of description. */
+.bm-row.link { align-items: center; gap: .75rem; padding-top: .45rem; padding-bottom: .45rem; }
+.bm-vis { position: relative; flex: none; display: block; }
+.bm-vis .th { width: 72px; height: 46px; display: flex; }
+.bm-fav { position: absolute; left: -5px; bottom: -5px; display: inline-flex; padding: 2px; border-radius: 7px; background: var(--tblr-bg-surface); box-shadow: 0 0 0 1px var(--tblr-border-color); line-height: 0; }
+.bm-fav > * { width: 16px !important; height: 16px !important; margin: 0 !important; border-radius: 4px; font-size: .6rem; line-height: 16px; }
+body.no-tree-thumbs .bm-fav { position: static; padding: 0; box-shadow: none; background: transparent; }
+.bm-top { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.bm-top .bm-title { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bm-aside { flex: none; display: flex; align-items: center; gap: .35rem; }
+.bm-aside .badge { font-size: .66rem; padding: .12rem .4rem; font-weight: 500; }
+.bm-date { font-size: .72rem; color: var(--tblr-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bm-row.link .bm-sub { margin-top: .05rem; }
+.bm-host { color: var(--tblr-body-color); opacity: .75; }
+.bm-path { color: var(--tblr-secondary); opacity: .8; }
+.bm-row.link .bm-desc { -webkit-line-clamp: 1; margin-top: .1rem; }
+.bm-line .badge { font-size: .68rem; padding: .15rem .4rem; font-weight: 500; }
+.bm-count { flex: none; font-size: .72rem; font-weight: 500; padding: .12rem .45rem; border-radius: 999px; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); }
+.bm-row.sel .bm-count { background: color-mix(in srgb, var(--tblr-primary) 15%, transparent); color: var(--tblr-primary); }
+.th { width: 64px; height: 40px; flex: none; border-radius: var(--tblr-border-radius); object-fit: cover; object-position: top; border: 1px solid var(--tblr-border-color); background: var(--tblr-bg-surface-secondary); }
+.ph { display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; }
+.ph.fav { background: var(--tblr-bg-surface-secondary) !important; flex-direction: column; gap: .3rem; color: var(--tblr-secondary); font-size: .75rem; font-weight: 500; }
+.ph.fav img { width: 22px; height: 22px; object-fit: contain; }
+.th.ph.fav span, .th.ph.letter span { display: none; }
+.ph.letter { flex-direction: column; gap: .25rem; }
+.tile .img.ph { display: flex; }
+.ph.letter b { font-size: 1.6rem; line-height: 1; }
+.ph.letter span { font-size: .75rem; font-weight: 500; opacity: .8; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.th.ph.letter b { font-size: .95rem; }
+.fv { width: 16px; height: 16px; flex: none; object-fit: contain; border-radius: 3px; margin-top: .15rem; }
+.fvd { width: 16px; height: 16px; flex: none; border-radius: 4px; color: #fff; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-top: .15rem; }
+
+/* Status colours. */
+.st-dead { color: var(--tblr-danger); } .st-moved { color: var(--tblr-warning); } .st-moved-elsewhere { color: var(--tblr-purple); }
+.st-unverified { color: var(--tblr-secondary); } .st-needs-login { color: var(--tblr-info); } .st-ok { color: var(--tblr-success); }
+
+/* Detail pane. */
+/* The page snapshot sits inset on a soft surface, so it reads as a picture of the page rather than part of the app. */
+#shot { display: block; width: 100%; max-width: 1100px; margin: 0 auto; padding: 1rem; border-radius: var(--tblr-card-border-radius, var(--tblr-border-radius-lg));
+  border: 1px solid var(--tblr-border-color); background: var(--tblr-bg-surface-secondary); box-shadow: none; }
+#frame { width: 100%; height: 100%; min-height: 70vh; border: 0; background: #fff; border-radius: var(--tblr-border-radius); }
+#grid > .subheader { margin: 0 0 .5rem; }
+#grid > .subheader:not(:first-child) { margin-top: 1.25rem; }
+.tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .85rem; }
+.folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .6rem; }
+.fsum { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); border: 1px solid var(--tblr-border-color);
+  border-radius: var(--tblr-card-border-radius, var(--tblr-border-radius-lg)); background: var(--tblr-bg-surface); }
+.fsum-main, .fsum-side { padding: 1rem 1.1rem; min-width: 0; }
+.fsum-side { border-left: 1px solid var(--tblr-border-color); }
+.fsum-head { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tblr-secondary); margin-bottom: .6rem; }
+.fsum-bar { height: .5rem; margin-bottom: .8rem; }
+.fsum-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .15rem .9rem; }
+.fsum-stat { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 2.6rem; align-items: center; gap: .5rem; padding: .3rem .4rem;
+  border: 0; background: transparent; border-radius: var(--tblr-border-radius); text-align: left; font-size: .85rem; color: var(--tblr-body-color); width: 100%; }
+.fsum-stat.clickable { cursor: pointer; } .fsum-stat.clickable:hover { background: var(--tblr-bg-surface-secondary); }
+.fsum-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fsum-num { font-weight: 600; font-variant-numeric: tabular-nums; }
+.fsum-pct { color: var(--tblr-secondary); font-size: .75rem; text-align: right; font-variant-numeric: tabular-nums; }
+.fsum-facts { display: flex; flex-direction: column; gap: .4rem; font-size: .85rem; }
+.fsum-fact { display: grid; grid-template-columns: 1.1rem 6rem minmax(0, 1fr); align-items: baseline; gap: .4rem; }
+.fsum-fact .ti { color: var(--tblr-secondary); }
+.fsum-fact b { font-weight: 500; }
+.fsum-from { display: flex; flex-direction: column; font-size: .85rem; }
+.fsum-fromrow { display: flex; justify-content: space-between; gap: .75rem; padding: .25rem 0; font-variant-numeric: tabular-nums; }
+.fsum-fromrow + .fsum-fromrow { border-top: 1px solid var(--tblr-border-color-translucent, var(--tblr-border-color)); }
+.fsum-more { color: var(--tblr-primary); font-size: .8rem; padding-top: .3rem !important; text-align: left; text-decoration: none; }
+.fsum-all { font-size: .75rem; text-transform: none; letter-spacing: 0; font-weight: 500; text-decoration: none; }
+.bm-panel { width: min(520px, 100vw) !important; }
+.bm-panel .offcanvas-header { border-bottom: 1px solid var(--tblr-border-color); }
+.bm-panel-sec + .bm-panel-sec { margin-top: 1.4rem; }
+.bm-panel-table td { padding: .35rem .4rem; }
+.bm-panel-table td:first-child { max-width: 0; width: 100%; }
+.bm-panel-table tr.clickable { cursor: pointer; } .bm-panel-table tr.clickable:hover td { background: var(--tblr-bg-surface-secondary); }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bm-years { display: flex; flex-direction: column; gap: .3rem; font-size: .85rem; }
+.bm-year { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr) 3.5rem; align-items: center; gap: .6rem; }
+.bm-year-track { height: .5rem; background: var(--tblr-bg-surface-secondary); border-radius: 999px; overflow: hidden; }
+.bm-year-bar { height: 100%; background: var(--tblr-primary); border-radius: 999px; }
+@media (max-width: 1100px) { .fsum { grid-template-columns: 1fr; } .fsum-side { border-left: 0; border-top: 1px solid var(--tblr-border-color); } }
+.folder-card { cursor: pointer; margin: 0; box-shadow: none; background: var(--tblr-bg-surface-secondary); border-color: transparent; transition: border-color .15s, background .15s; }
+.folder-card:hover { background: var(--tblr-bg-surface); }
+/* The folder icon sits in its own even tile: Tabler's avatar ring (a box-shadow) showed as a half circle once its
+   size was changed, so the ring is removed and the tile sized explicitly. */
+.folder-card .avatar { width: 2rem; height: 2rem; border-radius: var(--tblr-border-radius); border: 0; box-shadow: none !important;
+  background: var(--tblr-primary-lt, rgba(32,107,196,.1)) !important; color: var(--tblr-primary); font-size: 1.1rem; }
+.folder-card .avatar .ti { color: var(--tblr-primary) !important; }
+.folder-card:hover .avatar { background: color-mix(in srgb, var(--tblr-primary) 20%, transparent) !important; }
+.folder-card:hover { border-color: var(--tblr-primary) !important; }
+.folder-card .card-body { padding: .5rem .7rem; display: flex; align-items: center; gap: .55rem; }
+.folder-card .text-secondary.small { font-size: .75rem; }
+.folder-card .name { font-weight: 500; overflow-wrap: anywhere; line-height: 1.3; }
+.tile { cursor: pointer; margin: 0; overflow: hidden; }
+.tile:hover { border-color: var(--tblr-primary); }
+.tile .img { aspect-ratio: 16 / 10; width: 100%; object-fit: cover; object-position: top; display: block; border-bottom: 1px solid var(--tblr-border-color); border-radius: 0; }
+.tile { display: flex; flex-direction: column; }
+.tile .card-body { padding: .6rem .75rem .7rem; flex: 1 1 auto; display: flex; flex-direction: column; }
+.tile .img { aspect-ratio: 16 / 9 !important; }
+.tile-title > span:last-child { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tile-url { margin-top: auto !important; padding-top: .3rem; }
+.tile-title { font-weight: 500; overflow-wrap: anywhere; word-break: break-word; line-height: 1.35; display: flex; gap: .45rem; align-items: flex-start; }
+.tile-url { margin-top: .25rem; }
+.datagrid-content { overflow-wrap: anywhere; word-break: break-word; }
+/* One spacing rule for the right pane: every block gets the card's padding; when the summary (#info) is shown, the
+   content below it continues at the same rhythm instead of each block guessing its own top padding. */
+#info, #body { border-top: 0 !important; }
+.nav-browsers { height: 1.75rem; padding: 0 .6rem; font-size: .78rem; }
+.br-table { border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-lg); overflow: hidden; }
+.br-table th { white-space: nowrap; }
+.br-foot { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; padding: .6rem .85rem; border-top: 1px solid var(--tblr-border-color); background: var(--tblr-bg-surface-secondary); }
+.cl-groups { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .75rem; }
+.cl-group { display: inline-flex; align-items: center; gap: .4rem; border: 1px solid var(--tblr-border-color); background: transparent; border-radius: 999px; padding: .3rem .7rem; font-size: .8rem; color: var(--tblr-body-color); }
+.cl-group.active { border-color: var(--tblr-primary); color: var(--tblr-primary); background: var(--tblr-primary-lt, rgba(32,107,196,.08)); }
+.cl-list { border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-lg); overflow: hidden; }
+.cl-row { display: flex; align-items: center; gap: .6rem; padding: .45rem .75rem; margin: 0; cursor: pointer; }
+.cl-row + .cl-row { border-top: 1px solid var(--tblr-border-color-translucent, var(--tblr-border-color)); }
+.cl-row.cl-all { background: var(--tblr-bg-surface-secondary); font-size: .85rem; }
+.cl-foot { display: flex; gap: .5rem; align-items: center; padding: .75rem 1rem; border-top: 1px solid var(--tblr-border-color); }
+.cl-panel { display: flex; flex-direction: column; } .cl-panel .offcanvas-body { flex: 1; overflow-y: auto; }
+.bf-modal { display: block; }
+.tab-tags { display: inline-flex; gap: .25rem; flex-wrap: wrap; } .tab-tags .badge { font-size: .65rem; }
+.tl-recheck { flex: none; margin: 0; }
+.rc-icon { width: 2rem; height: 2rem; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: var(--tblr-bg-surface-secondary); color: var(--tblr-primary); flex: none; }
+#tourShade { position: fixed; z-index: 1100; border-radius: var(--tblr-border-radius-lg); box-shadow: 0 0 0 9999px rgba(15, 23, 42, .55); pointer-events: none; transition: all .2s ease; outline: 2px solid var(--tblr-primary); }
+#tourCard { position: fixed; z-index: 1101; width: min(360px, calc(100vw - 24px)); margin: 0; }
+@media (prefers-reduced-motion: reduce) { #tourShade { transition: none; } }
+.help-index td { padding: .4rem .5rem; font-size: .85rem; vertical-align: top; }
+.help-index td:first-child { width: 48%; }
+.feature-guide .list-group-item { display: flex; gap: .75rem; align-items: center; padding: .55rem .25rem; }
+/* Modals whose content changes (search results, tabs, lists) hang from a fixed top edge instead of being centred,
+   so typing or switching tabs never makes them jump; only their bottom edge moves. Fixed dialogs stay centred. */
+.modal-dialog-top { margin-top: clamp(1rem, 9vh, 6rem); margin-bottom: 1rem; }
+.modal-dialog-top.modal-dialog-scrollable { height: auto; max-height: calc(100% - clamp(1rem, 9vh, 6rem) - 1rem); }
+.modal-dialog-top.modal-dialog-scrollable .modal-content { max-height: calc(100vh - clamp(1rem, 9vh, 6rem) - 2rem); }
+#moveList { height: min(50vh, 420px); overflow-y: auto; }
+#settingsBody { max-height: min(62vh, 600px); overflow-y: auto; }
+.about-modal { overflow: hidden; }
+.about-hero { position: relative; padding: 1.5rem 1.5rem 0; background: var(--tblr-bg-surface); border-bottom: 1px solid var(--tblr-border-color); }
+.about-close { position: absolute; top: 1rem; right: 1rem; }
+.about-hero-row { display: flex; align-items: center; gap: 1rem; }
+.about-logo { width: 3rem; height: 3rem; border-radius: var(--tblr-border-radius-lg); background: var(--tblr-primary-lt, rgba(32,107,196,.1)); color: var(--tblr-primary); display: inline-flex; align-items: center; justify-content: center; font-size: 1.6rem; flex: none; }
+.about-name { font-size: 1.35rem; font-weight: 700; line-height: 1.2; display: flex; align-items: center; gap: .5rem; }
+.about-ver { font-size: .7rem; font-weight: 600; padding: .15rem .45rem; border-radius: 999px; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); }
+.about-tag { color: var(--tblr-secondary); font-size: .9rem; margin-top: .15rem; }
+.about-tabs { display: flex; gap: .25rem; margin-top: 1.25rem; overflow-x: auto; }
+.about-tab { display: inline-flex; align-items: center; gap: .4rem; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--tblr-secondary); padding: .55rem .25rem; margin-right: 1rem; font-size: .85rem; font-weight: 500; white-space: nowrap; }
+.about-tab:hover { color: var(--tblr-body-color); }
+.about-tab.active { color: var(--tblr-primary); border-bottom-color: var(--tblr-primary); }
+.about-body { padding: 1.5rem; height: min(58vh, 540px); overflow-y: auto; }
+.about-lead { font-size: .95rem; line-height: 1.6; margin-bottom: 1.25rem; }
+.about-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
+.about-tile { border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-lg); padding: .75rem .9rem; }
+.about-tile-label { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tblr-secondary); }
+.about-tile-value { font-size: 1.15rem; font-weight: 600; margin-top: .15rem; font-variant-numeric: tabular-nums; }
+.about-tile-sub { font-size: .75rem; color: var(--tblr-secondary); }
+.about-card { border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-lg); overflow: hidden; }
+.about-maker { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: .9rem 1rem; background: var(--tblr-bg-surface-secondary); border-bottom: 1px solid var(--tblr-border-color); }
+.about-maker-logo { width: 2.5rem; height: 2.5rem; border-radius: 10px; background: var(--tblr-dark, #182433); color: #fff; font-weight: 800; font-size: 1.15rem; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.about-maker-name { font-weight: 600; }
+.about-maker-links { display: flex; flex-wrap: wrap; gap: .35rem; }
+.about-contacts { padding: .35rem 1rem; }
+.about-contact { display: grid; grid-template-columns: 1.25rem 9rem minmax(0, 1fr); align-items: baseline; gap: .5rem; padding: .5rem 0; font-size: .875rem; }
+.about-contact + .about-contact { border-top: 1px solid var(--tblr-border-color-translucent, var(--tblr-border-color)); }
+.about-contact .ti { color: var(--tblr-secondary); }
+.about-contact-label { color: var(--tblr-secondary); }
+.about-contact-note { grid-column: 3; font-size: .75rem; color: var(--tblr-secondary); margin-top: -.25rem; }
+.about-foot { padding: .65rem 1.5rem; border-top: 1px solid var(--tblr-border-color); font-size: .75rem; color: var(--tblr-secondary); background: var(--tblr-bg-surface-secondary); }
+@media (max-width: 600px) { .about-tiles { grid-template-columns: 1fr; } .about-contact { grid-template-columns: 1.25rem 1fr; } .about-contact-value, .about-contact-note { grid-column: 2; } }
+.about-h { margin: 1.1rem 0 .35rem; font-size: .95rem; }
+#aboutBody .about-h:first-child { margin-top: 0; }
+.about-licence { white-space: pre-wrap; font-size: .75rem; background: var(--tblr-bg-surface-secondary); border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius); padding: .75rem; max-height: 14rem; overflow: auto; }
+#aboutTabs .nav-link { padding: .4rem .7rem; }
+.set-group { padding: .9rem 1.25rem; }
+.set-group + .set-group { border-top: 1px solid var(--tblr-border-color); }
+.set-title { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tblr-secondary); margin-bottom: .35rem; }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; padding: .55rem 0; margin: 0; cursor: default; }
+.set-row + .set-row { border-top: 1px solid var(--tblr-border-color-translucent, var(--tblr-border-color)); }
+.set-label { font-weight: 500; }
+.set-help { font-size: .8rem; color: var(--tblr-secondary); }
+.set-row > :last-child { flex: none; }
+.set-danger .set-title { color: var(--tblr-danger); }
+body.no-tree-thumbs #list .th { display: none !important; }
+body.no-tree-desc #list .bm-desc { display: none !important; }
+body.no-tree-dates #list .bm-date { display: none !important; }
+/* Focus, app-wide. Chrome makes every scroll container keyboard-focusable and Tabler gives focus an inset shadow, which
+   row hover backgrounds then paint over: the "broken border" on hover. So scroll areas and the tree draw no focus of
+   their own; the card around them shows one balanced ring, outside the border, only for keyboard focus. */
+#list:focus, #list:focus-visible, .pane-scroll:focus, .pane-scroll:focus-visible,
+.offcanvas-body:focus, .offcanvas-body:focus-visible, .modal-body:focus, .modal-body:focus-visible { outline: none !important; box-shadow: none !important; }
+.card:has(> .pane-scroll:focus-visible), .card:has(#list:focus-visible), .app-main > .card:has(:focus-visible.bm-row) {
+  border-color: var(--tblr-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tblr-primary) 18%, transparent); }
+/* Hover never changes a size or a border width: only colour and background, inside the element's own box. */
+.bm-row, .tab-row, .tl-item, .fsum-stat, .folder-card, .tile, .stat, .cl-row, .legend-item { transition: background-color .12s, border-color .12s, color .12s; }
+[x-cloak] { display: none !important; }
+.pane-note { display: flex; align-items: center; gap: .6rem; padding: .85rem 1rem; border: 1px dashed var(--tblr-border-color); border-radius: var(--tblr-card-border-radius, var(--tblr-border-radius-lg)); color: var(--tblr-secondary); font-size: .875rem; background: var(--tblr-bg-surface-secondary); }
+.pane-note[hidden] { display: none; }
+.pane-note .ti { font-size: 1.15rem; flex: none; }
+#info { padding-bottom: 0; }
+#info:empty { display: none; }
+#info > :last-child { margin-bottom: 0 !important; }
+#info:not(:empty) + #body { padding-top: 1.25rem; }
+#body:not(:has(> :not([hidden]))) { display: none; }
+.lead-text { font-size: .95rem; line-height: 1.5; }
+.legend-dot { width: .6rem; height: .6rem; border-radius: 50%; flex: none; }
+.legend-item { padding: .25rem .4rem; border-radius: var(--tblr-border-radius); }
+.legend-item.clickable { cursor: pointer; } .legend-item.clickable:hover { background: var(--tblr-bg-surface-secondary); }
+.legend-pct { width: 2.6rem; text-align: right; }
+.from-table td { padding: .3rem .25rem; border-color: var(--tblr-border-color-translucent); }
+.from-table td:first-child { max-width: 0; width: 100%; }
+.progress-separated .progress-bar { cursor: help; }
+.alert .alert-icon { font-size: 1.25rem; margin-top: .1rem; }
+.tip { position: fixed; z-index: 1100; pointer-events: none; max-width: 320px; margin: 0; }
+.pop { position: fixed; z-index: 1100; max-width: 340px; margin: 0; }
+
+/* Menus, palette. */
+#ctx { position: fixed; z-index: 1080; width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow-y: auto; overflow-x: hidden; padding: 0 0 .35rem; }
+#ctx .dropdown-item { display: flex; align-items: center; gap: .25rem; padding-top: .4rem; padding-bottom: .4rem; }
+.dropdown-menu.dd-placed { overflow: visible; z-index: 1080; }
+.dd-subwrap { position: static; }
+.dropdown-menu.dd-sub { display: none; z-index: 1085; min-width: 13rem; margin: 0; }
+.dropdown-menu.dd-sub.show { display: block; }
+.dropdown-item.dd-has-sub { display: flex; align-items: center; }
+.dropdown-menu .dropdown-item { display: flex; align-items: center; gap: 0; }
+.dd-chev { font-size: .8em; opacity: .7; }
+.dropdown-menu.dd-placed[style*="max-height"] { overflow-y: auto; }
+.dropdown-menu.dd-placed::before, .dropdown-menu.dd-placed::after { content: ""; position: absolute; left: var(--caret-x, 20px); width: 0; height: 0;
+  border: 7px solid transparent; transform: translateX(-50%); pointer-events: none; }
+.dropdown-menu.dd-placed[data-side="bottom"]::before { bottom: 100%; border-bottom-color: var(--tblr-border-color); }
+.dropdown-menu.dd-placed[data-side="bottom"]::after { bottom: calc(100% - 1px); border-bottom-color: var(--tblr-bg-surface, #fff); }
+.dropdown-menu.dd-placed[data-side="top"]::before { top: 100%; border-top-color: var(--tblr-border-color); }
+.dropdown-menu.dd-placed[data-side="top"]::after { top: calc(100% - 1px); border-top-color: var(--tblr-bg-surface, #fff); }
+#ctx .dropdown-item kbd, .dropdown-menu .dropdown-item kbd { margin-left: auto; font-size: .7rem; }
+#ctx .dropdown-header { padding-top: .35rem; padding-bottom: .15rem; }
+#ctx .dropdown-item:focus, #ctx .dropdown-item:hover, #ctx .dd-sub .dropdown-item:focus { background: var(--tblr-active-bg, rgba(32,107,196,.08)); color: var(--tblr-primary); outline: none; }
+#ctx .dd-has-sub .ti-chevron-right { margin-left: auto; }
+/* Browsers' own app icons (api/tabs/browser-icon): sized like a Tabler icon wherever they stand in for one. */
+.browser-ico { width: 1.1em; height: 1.1em; object-fit: contain; vertical-align: -.2em; flex: none; }
+.dropdown-item > .browser-ico.me-2, .dropdown-item > .browser-ico { margin-right: .5rem; }
+.tab-win-icon .browser-ico { width: 1.25rem; height: 1.25rem; }
+.tab-win-icon.has-badge { position: relative; }
+.tab-win-icon .tab-win-badge { position: absolute; right: -4px; bottom: -4px; width: .8rem; height: .8rem; }
+#ctx .dropdown-item.active kbd { background: rgba(255,255,255,.2); color: inherit; border-color: transparent; }
+#ctx .dropdown-item.active .text-secondary, #palList .active .text-secondary { color: inherit !important; }
+#palList { max-height: min(60vh, 520px); overflow-y: auto; }
+#palList .pal-item { display: flex; align-items: center; gap: .65rem; padding: .45rem .75rem; text-decoration: none !important; border: 0; text-align: left; width: 100%; }
+#palList .pal-item .ti { width: 1.1rem; text-align: center; color: var(--tblr-secondary); }
+#palList .pal-item.active { background: var(--tblr-primary-lt, rgba(32,107,196,.08)); color: var(--tblr-body-color); }
+#palList .pal-item.active .ti { color: var(--tblr-primary); }
+#palList .pal-item kbd, .pal-foot kbd { background: var(--tblr-bg-surface-secondary, #f1f5f9); color: var(--tblr-body-color); border: 1px solid var(--tblr-border-color); box-shadow: none; font-size: .72rem; padding: .05rem .35rem; min-width: 1.5rem; text-align: center; }
+.pal-foot { gap: 1rem; justify-content: flex-start; font-size: .8rem; padding: .5rem .9rem; }
+.cmd-list { max-height: 55vh; overflow: auto; }
+.cmd-list .list-group-item { display: flex; gap: .75rem; align-items: center; cursor: pointer; }
+.cmd-list .list-group-item.active kbd { background: rgba(255,255,255,.2); color: #fff; border-color: transparent; }
+.flex-none { flex: 0 0 auto !important; }
+.menu-target { border-color: var(--tblr-primary) !important; box-shadow: 0 0 0 1px var(--tblr-primary); }
+.min-w-0 { min-width: 0 !important; }
+.avatar { flex-shrink: 0; border-radius: 9px; box-shadow: none; }
+/* One shape and one height for every pane header, so the panes line up. */
+.app-main > .card > .card-header, .tabs-view > .card > .card-header { min-height: 3.75rem; padding-top: .5rem; padding-bottom: .5rem; }
+.stat .card-body > .min-w-0 { flex: 1 1 auto; }
+.stat .text-secondary.small { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; line-height: 1.3; }
+.stat { cursor: pointer; transition: border-color .15s; }
+.stat:hover, .stat.active { border-color: var(--tblr-primary); }
+.toolbar { padding: .6rem .9rem; display: flex; flex-direction: column; gap: .55rem; }
+.toolbar .form-select, .toolbar .form-control { width: auto; }
+.tb-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; min-width: 0; }
+.tb-row + .tb-row { padding-top: .55rem; border-top: 1px solid var(--tblr-border-color-translucent, var(--tblr-border-color)); }
+.tb-label { width: 3rem; flex: none; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tblr-secondary); }
+.tb-fields { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; }
+.tb-field { display: inline-flex; align-items: center; gap: .4rem; margin: 0; font-size: .8rem; color: var(--tblr-secondary); white-space: nowrap; }
+.tb-sep { width: 1px; align-self: stretch; background: var(--tblr-border-color); }
+@media (max-width: 991px) { .tb-sep { display: none; } .tb-label { width: 100%; } }
+#jobPanel { position: fixed; right: 1rem; bottom: 1rem; width: 380px; z-index: 1085; }
+#toastBox { position: fixed; bottom: 1rem; right: 1rem; z-index: 1090; display: flex; flex-direction: column; gap: .5rem; width: min(380px, calc(100vw - 2rem)); pointer-events: none; }
+#toastBox .bm-toast { pointer-events: auto; width: 100%; animation: toastIn .18s ease-out; }
+/* A toast's kind shows in its icon's colour, not in a stripe. */
+#toastBox .bm-toast.hiding { opacity: 0; transform: translateX(12px); transition: opacity .18s, transform .18s; }
+#toastBox .toast-body { font-size: .85rem; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { #toastBox .bm-toast { animation: none; } }
+.spin { display: inline-block; animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- Text wrapping, everywhere ----------
+   Long words and addresses break instead of pushing a box wider than its parent; labels wrap instead of running out of
+   menus. Only what is deliberately one line (.text-truncate, *-url, *-title rows with an ellipsis, buttons, kbd,
+   badges, numbers) stays on one line. */
+body { overflow-wrap: break-word; }
+:where(p, li, td, th, dd, dt, label, summary, h1, h2, h3, h4, h5, h6, .card-title, .card-body, .modal-title, .modal-body,
+  .toast, .toast-body, .pane-note, .set-help, .set-label, .tl-ev-body, .tabs-chip, .empty-subtitle, .dropdown-header, .alert,
+  .text-break) { overflow-wrap: anywhere; word-break: normal; }
+.dropdown-menu { max-width: min(420px, calc(100vw - 16px)); }
+.dropdown-item { white-space: normal; overflow-wrap: anywhere; align-items: flex-start !important; line-height: 1.35; }
+.dropdown-item > .ti:first-child { flex: none; margin-top: .1rem; }
+.dropdown-item > span, .dropdown-item > .flex-fill { flex: 1 1 auto; min-width: 0; }
+.dropdown-item kbd, .dropdown-item .badge { flex: none; }
+.dropdown-header { white-space: normal; }
+.btn, kbd, .badge, .num, .app-nav-tab, .page-link, .text-truncate, .text-nowrap { overflow-wrap: normal; }
+/* Flex and grid children may shrink below their content, so long text wraps inside them rather than overflowing. */
+:where(.d-flex, .card-header, .card-body, .tb-row, .tabs-set-row, .set-row, .tab-row, .tl-ev, .modal-header) > * { min-width: 0; }
+
+/* Menus: a shortcut key sits at the right edge, never touching its label. */
+.dropdown-item > kbd { margin-left: auto; padding-left: .35rem; flex: none; }
+.dropdown-item > .flex-fill + kbd { margin-left: 1rem; }
+.dropdown-item .dd-note { margin-left: auto; padding-left: 1rem; text-align: right; white-space: nowrap; }
+/* A menu button's chevron points up while its menu is open (aria-expanded, set by src/web/ts/menu.ts). */
+[data-dd] .ti-chevron-down, [aria-expanded] > .ti-chevron-down { transition: transform .15s ease; }
+[data-dd][aria-expanded="true"] .ti-chevron-down, .btn[aria-expanded="true"] > .ti-chevron-down { transform: rotate(180deg); }
+</style>
+</head>
+<body>
+<header class="navbar app-head d-print-none">
+  <div class="container-fluid">
+    <!-- 1. What you are working on -->
+    <div class="hdr-group hdr-context">
+      <a class="navbar-brand hdr-brand" href="#" onclick="return false" aria-label="Browser Foreman">
+        <span class="hdr-logo"><i class="ti ti-browser-check"></i></span>
+        <span class="hdr-title">Browser Foreman</span>
+      </a>
+    </div>
+    <!-- 2. Where you are: the three views -->
+    <nav class="hdr-group hdr-views" aria-label="Views">
+  <div class="app-nav-tabs" role="tablist">
+    <button class="app-nav-tab active" role="tab" data-brofo-view="bookmarks" aria-selected="true"><i class="ti ti-bookmarks"></i>Bookmarks<span class="app-nav-count" id="navBmCount"></span></button>
+    <button class="app-nav-tab" role="tab" data-brofo-view="tabs" aria-selected="false"><i class="ti ti-browser"></i>Open tabs<span class="app-nav-count" id="navTabCount"></span></button>
+    <button class="app-nav-tab" role="tab" data-brofo-view="timeline" aria-selected="false"><i class="ti ti-timeline"></i>Timeline</button>
+  </div>
+    </nav>
+    <!-- 3. Finding things: one search for the view you are in -->
+    <div class="hdr-group hdr-find">
+      <div class="input-group hdr-search">
+        <span class="input-group-text"><i class="ti ti-search"></i></span>
+        <input type="search" id="hq" class="form-control" placeholder="Search bookmarks…" aria-label="Search bookmarks">
+        <span class="input-group-text hdr-kbd" aria-hidden="true">/</span>
+        <button class="btn" id="paletteBtn" data-tip="Every command, by name"><span class="hide-narrow me-2">Commands</span><kbd>⌘K</kbd></button>
+      </div>
+    </div>
+    <!-- 4. Which browsers, and everything else -->
+    <div class="hdr-group hdr-actions">
+    <!-- Browsers: installed, tracked, and which ones open links (Alpine: browserPicker) -->
+      <div id="bkBrowsers" x-data="browserPicker" @keydown.escape.window="open && hide()">
+        <!-- The visible control is the Browsers menu (page.ts paintScope); this button stays for the dialog's own use. -->
+        <button type="button" class="btn btn-sm nav-browsers d-none" @click="show()" :data-tip="'Tracking: ' + ([...tracked].join(', ') || 'none') + ' · links open in ' + (openWith || 'the default browser')">
+          <i class="ti ti-world me-1"></i><span x-text="tracked.size ? [...tracked].length + ' browser' + (tracked.size === 1 ? '' : 's') : 'Browsers'"></span>
+          <span class="text-secondary ms-1" x-show="openWith" x-text="'· opens in ' + openWith"></span><i class="ti ti-chevron-down ms-1"></i></button>
+        <div class="modal modal-blur show bf-modal" x-show="open" x-cloak role="dialog" aria-labelledby="bkBrowsersTitle" @mousedown.self="hide()">
+          <div class="modal-dialog modal-dialog-top modal-lg" role="document"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title" id="bkBrowsersTitle"><i class="ti ti-world me-2"></i><span x-text="onboarding ? 'Which browsers should Browser Foreman look after?' : 'Browsers'"></span></h5>
+              <button type="button" class="btn-close" @click="hide()" aria-label="Close"></button></div>
+            <div class="modal-body">
+              <p class="text-secondary small" x-show="onboarding">These are the browsers installed on this Mac. Tick the ones whose open tabs should be saved, and choose which ones open links: one, some, or all at once. You can change this any time from the Browsers button.</p>
+              <div class="pane-note" x-show="loading"><span class="spinner-border spinner-border-sm"></span><span>Looking for installed browsers…</span></div>
+              <div class="pane-note text-danger" x-show="error" x-text="error"></div>
+              <!-- One row per browser; one column per thing Browser Foreman does with it. -->
+              <div class="table-responsive br-table" x-show="!loading">
+                <table class="table table-vcenter card-table mb-0">
+                  <thead><tr><th>Browser</th><th class="text-center" data-tip="Save this browser's open tabs">Track tabs</th><th class="text-center" data-tip="Links you open from here open in every ticked browser at once">Opens links</th><th>Bookmarks</th><th>History</th></tr></thead>
+                  <tbody>
+                    <template x-for="b in installed" :key="b.name">
+                      <tr :class="!b.scriptable && 'text-secondary'">
+                        <td><div class="fw-medium d-flex align-items-center gap-2"><img class="browser-ico" :src="'api/tabs/browser-icon?name=' + encodeURIComponent(b.name)" alt="" width="20" height="20" @error="$el.style.visibility = 'hidden'"><span x-text="b.name"></span></div><div class="text-secondary small" x-text="can(b)"></div></td>
+                        <td class="text-center"><label class="form-check form-switch d-inline-block m-0" :data-tip="b.scriptable ? 'Save this browser\'s open tabs' : 'macOS gives no way to read this browser\'s tabs'">
+                          <input type="checkbox" class="form-check-input" :checked="isTracked(b.name)" :disabled="!b.scriptable" @change="toggle(b)" :aria-label="'Track tabs in ' + b.name"></label></td>
+                        <td class="text-center"><input type="checkbox" class="form-check-input" :checked="opensIn(b.name)" @change="toggleOpen(b.name); $event.target.checked = opensIn(b.name)" :aria-label="b.name + ' opens links'"></td>
+                        <td><span class="small" :class="bookmarks(b.name).cls" :data-tip="bookmarks(b.name).tip" x-text="bookmarks(b.name).label"></span></td>
+                        <td><span class="small" :class="history(b.name).cls" x-text="history(b.name).label"></span></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+                <div class="text-secondary small p-3" x-show="!installed.length">No supported browser was found in Applications.</div>
+                <div class="br-foot" x-show="installed.length">
+                  <label class="m-0 d-inline-flex align-items-center gap-2" data-tip="Links open wherever macOS opens web links (System Settings › Desktop &amp; Dock › Default web browser)"><input type="checkbox" class="form-check-input m-0" :checked="useSystem" @change="setUseSystem($event.target.checked)"><span class="small" x-text="'Use the ' + systemLabel.replace('System default', 'system default browser')"></span></label>
+                  <label class="m-0 d-inline-flex align-items-center gap-2" x-show="installed.length > 1"><input type="checkbox" class="form-check-input m-0" :checked="allOpen" @change="openInAll($event.target.checked)"><span class="small">Open links in every browser at once</span></label>
+                  <span class="ms-auto d-inline-flex gap-2">
+                    <button type="button" class="btn btn-sm" @click="importBookmarks()"><i class="ti ti-file-import me-1"></i>Import bookmarks…</button>
+                    <button type="button" class="btn btn-sm" x-show="Object.values(historyOf).includes('blocked') || profiles.some(p => !p.readable)" @click="fixHistory()" data-tip="macOS keeps browser bookmark and history files behind Full Disk Access"><i class="ti ti-shield-lock me-1"></i>Allow reading (Full Disk Access)…</button>
+                  </span>
+                </div>
+              </div>
+              <p class="text-secondary small mt-3 mb-0">Reading tabs uses macOS Automation; the first read of each browser makes macOS ask you once. Firefox and similar browsers can't be read this way yet; the browser extension will cover them.</p>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn" @click="hide()" x-text="onboarding ? 'Later' : 'Cancel'"></button><button type="button" class="btn btn-primary" @click="save()">Save</button></div>
+          </div></div>
+        </div>
+        <div class="modal-backdrop fade show" x-show="open" x-cloak></div>
+      </div>
+      <!-- Undo and redo for the view you are in (UndoCenter paints them), and the theme toggle. -->
+      <div class="btn-group hdr-undo" role="group" aria-label="Undo and redo" data-brofo-undo="current">
+        <button type="button" class="btn btn-icon" id="undo" data-brofo-action="undo" aria-label="Undo"><i class="ti ti-arrow-back-up"></i></button>
+        <button type="button" class="btn btn-icon" id="redo" data-brofo-action="redo" aria-label="Redo"><i class="ti ti-arrow-forward-up"></i></button>
+      </div>
+      <!-- Shows the theme it switches to, as Tabler's own toggle does: a moon in light mode, a sun in dark. -->
+      <button type="button" class="btn btn-icon theme-toggle" id="themeBtn" aria-label="Switch dark / light">
+        <i class="ti ti-moon theme-to-dark" data-tip="Switch to dark"></i><i class="ti ti-sun theme-to-light" data-tip="Switch to light"></i>
+      </button>
+      <div class="dropdown">
+        <button class="btn btn-icon" data-dd aria-label="More" data-tip="View, settings, help"><i class="ti ti-dots-vertical"></i></button>
+        <div class="dropdown-menu dropdown-menu-end">
+          <!-- The app menu: view, help, then Settings. Undo, redo and the theme sit in the top bar; resets, deletes and assistant access live in Settings. -->
+          <!-- View holds Bookmarks-only items, so the header and its divider hide with them in other views. -->
+          <h6 class="dropdown-header bm-only">View</h6>
+          <a class="dropdown-item bm-only" href="#" id="expandAll"><i class="ti ti-chevrons-down me-2"></i><span class="flex-fill">Expand all folders</span></a>
+          <a class="dropdown-item bm-only" href="#" id="collapseAll"><i class="ti ti-chevrons-up me-2"></i><span class="flex-fill">Collapse all folders</span><kbd>-</kbd></a>
+          <div class="dropdown-divider bm-only"></div>
+          <h6 class="dropdown-header">Help</h6>
+          <a class="dropdown-item" href="#" id="helpBtn"><i class="ti ti-help-circle me-2"></i><span class="flex-fill">Help</span><kbd>F1</kbd></a>
+          <a class="dropdown-item" href="#" id="shortcutsBtn"><i class="ti ti-keyboard me-2"></i><span class="flex-fill">Keyboard shortcuts</span><kbd>?</kbd></a>
+          <a class="dropdown-item" href="#" id="tourBtn"><i class="ti ti-route me-2"></i><span class="flex-fill">Guided tour</span></a>
+          <a class="dropdown-item" href="#" id="aboutBtn"><i class="ti ti-info-circle me-2"></i><span class="flex-fill">About</span></a>
+          <div class="dropdown-divider"></div>
+          <a class="dropdown-item" href="#" id="settingsBtn"><i class="ti ti-settings me-2"></i><span class="flex-fill">Settings…</span><kbd>,</kbd></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="container-fluid pt-3 pb-2 bm-only">
+  <div class="row g-2 mb-2 d-none" id="stats" aria-hidden="true"></div><!-- counts now sit on the Show chips -->
+  <div class="card mb-0">
+    <div class="card-body toolbar">
+      <div class="tb-row tb-head">
+      <div class="tb-ws" id="wsSlot"><span id="edited" class="small"></span></div>
+        <div class="tb-acts">
+      <span id="job" class="text-primary small" hidden></span>
+      <div class="btn-group" role="group" aria-label="Links">
+        <button class="btn" id="updateAll" data-tip="Switch every same-site moved link to its new address"><i class="ti ti-arrow-forward-up"></i><span class="hide-narrow ms-1">Update moved</span><span class="badge bg-yellow-lt ms-2" id="updateCount"></span></button>
+        <button class="btn" id="refreshAll" data-tip="Re-check every link and retake every snapshot"><i class="ti ti-refresh"></i><span class="hide-narrow ms-1">Refresh all</span></button>
+      </div>
+      <button class="btn" id="trashBtn" data-tip="Everything in the Trash: put back, or delete permanently"><i class="ti ti-trash"></i><span class="hide-narrow ms-1">Trash</span><span class="badge bg-secondary-lt ms-2" id="trashBadge"></span></button>
+      <div class="btn-group" id="ioGroup">
+        <button class="btn btn-primary" id="download" data-tip="A bookmarks file any browser imports (Trash left out)"><i class="ti ti-download me-1"></i>Download</button>
+        <div class="dropdown">
+          <button class="btn btn-primary dropdown-toggle-split" data-dd aria-label="Import and export" data-tip="Import, export, history"><i class="ti ti-chevron-down"></i></button>
+          <div class="dropdown-menu dropdown-menu-end" id="ioMenu"></div>
+        </div>
+      </div>
+        </div>
+      </div>
+      <div class="tb-row">
+        <span class="tb-label">Show</span>
+        <div class="btn-group flex-wrap" role="group" aria-label="Show" id="chips"></div>
+        <input type="search" id="q" class="d-none" aria-hidden="true" tabindex="-1"><!-- the bookmark query; typed in the header search -->
+      </div>
+      <div class="tb-row">
+        <span class="tb-label">View</span>
+        <div class="tb-fields" id="view"></div>
+        <div class="tb-sep"></div>
+        <div class="tb-fields" id="dates">
+          <label class="tb-field"><span>Added from</span><input type="datetime-local" class="form-control form-control-sm" id="dFrom"></label>
+          <label class="tb-field"><span>to</span><input type="datetime-local" class="form-control form-control-sm" id="dTo"></label>
+          <div class="dropdown">
+            <button class="btn btn-sm" data-dd><i class="ti ti-calendar-time me-1"></i>Presets<i class="ti ti-chevron-down ms-1"></i></button>
+            <div class="dropdown-menu" id="datePresets"><h6 class="dropdown-header">Bookmarks added…</h6></div>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-ghost-secondary ms-auto" id="clearFilters"><i class="ti ti-filter-off me-1"></i>Clear filters</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section id="timelineView" class="timeline-view" hidden aria-label="Timeline">
+  <div class="tl-top">
+    <div class="btn-group" role="group" aria-label="Range" id="tlRange" data-brofo-timeline="range">
+      <button class="btn btn-sm" data-days="1">24 hours</button><button class="btn btn-sm" data-days="7">7 days</button>
+      <button class="btn btn-sm" data-days="30">30 days</button><button class="btn btn-sm" data-days="365">A year</button><button class="btn btn-sm" data-days="0">All</button>
+    </div>
+    <div class="tl-kinds" id="tlKinds" data-brofo-timeline="kinds"></div>
+    <div class="input-icon ms-auto tl-search d-none"><span class="input-icon-addon"><i class="ti ti-search"></i></span>
+      <input type="search" class="form-control form-control-sm" id="tlQ" data-brofo-timeline="query" placeholder="Search the timeline…" aria-label="Search the timeline"></div>
+  </div>
+  <div class="tl-charts">
+    <div class="card"><div class="card-header py-2"><h3 class="card-title">Open tabs over time</h3><div class="card-actions text-secondary small" id="tlTabsNote" data-brofo-timeline="tabs-note"></div></div><div class="card-body p-2" id="tlTabsChart" data-brofo-timeline="tabs-chart"></div></div>
+    <div class="card"><div class="card-header py-2"><h3 class="card-title">Bookmarks added</h3><div class="card-actions text-secondary small" id="tlBmNote" data-brofo-timeline="bm-note"></div></div><div class="card-body p-2" id="tlBmChart" data-brofo-timeline="bm-chart"></div></div>
+  </div>
+  <div class="card tl-recheck" x-data="rechecks">
+    <div class="card-body d-flex flex-wrap align-items-center gap-3 py-2">
+      <span class="rc-icon"><i class="ti ti-heartbeat"></i></span>
+      <div class="min-w-0 flex-fill">
+        <div class="fw-semibold">Link re-checks</div>
+        <div class="text-secondary small" x-show="current" x-text="current ? 'Checking… ' + current.checked.toLocaleString() + ' of ' + current.total.toLocaleString() + ' (' + pct(current) + '%)' : ''"></div>
+        <div class="text-secondary small" x-show="!current && last" x-text="last ? 'Last run ' + when(last.finished || last.started) + ' · ' + last.newly_broken + ' newly broken · ' + last.fixed + ' working again' + (last.state === 'cancelled' ? ' (stopped)' : '') : ''"></div>
+        <div class="text-secondary small" x-show="!current && !last">Not run yet. Every bookmarked link is visited again on a schedule, and what broke is listed here.</div>
+      </div>
+      <label class="tb-field">Every
+        <select class="form-select form-select-sm w-auto" :value="status ? String(status.recheck_days) : '7'" @change="setDays($event.target.value)">
+          <option value="0">never (off)</option><option value="1">day</option><option value="7">week</option><option value="14">2 weeks</option><option value="30">month</option></select></label>
+      <button type="button" class="btn btn-sm" x-show="!current" @click="runNow()"><i class="ti ti-player-play me-1"></i>Run now</button>
+      <button type="button" class="btn btn-sm btn-ghost-danger" x-show="current" x-cloak @click="stop()"><i class="ti ti-player-stop me-1"></i>Stop</button>
+    </div>
+    <template x-if="report && (report.newly_broken.length || report.fixed.length)">
+      <details class="card-footer py-2"><summary class="small" x-text="report.newly_broken.length + ' newly broken, ' + report.fixed.length + ' working again'"></summary>
+        <div class="tl-ev-list"><template x-for="r in report.newly_broken.slice(0, 200)" :key="r.url"><div class="tl-ev-li"><span class="text-danger text-truncate" x-text="short(r.url)"></span><span class="text-secondary small text-truncate" x-text="r.note || ('was ' + (r.before || 'unknown'))"></span></div></template></div>
+      </details>
+    </template>
+  </div>
+  <div class="card tl-feed-card"><div class="pane-scroll"><div class="card-body" id="tlFeed" data-brofo-timeline="feed"></div></div></div>
+</section>
+
+<section id="tabsView" class="tabs-view" hidden aria-label="Open tabs">
+  <aside class="card tabs-side">
+    <div class="card-header py-2">
+      <h3 class="card-title">Snapshots</h3>
+      <div class="card-actions"><button class="btn btn-sm btn-primary" id="tabsSnap"><i class="ti ti-camera me-1"></i>Save now</button></div>
+    </div>
+    <div class="tabs-settings" id="tabsSettings"></div>
+    <div class="pane-scroll"><div id="tabsTimeline" class="tabs-timeline" role="listbox" aria-label="Snapshots"></div></div>
+  </aside>
+  <section class="card tabs-main">
+    <div class="card-header py-2 flex-wrap gap-2">
+      <div class="min-w-0 flex-fill" id="tabsHead"></div>
+      <label class="tb-field">Group by <select class="form-select form-select-sm w-auto" id="tabsGroup"><option value="window">Window</option><option value="browser">Browser</option><option value="site">Site</option></select></label>
+      <div class="input-icon tabs-search d-none"><span class="input-icon-addon"><i class="ti ti-search"></i></span>
+        <input type="search" class="form-control form-control-sm" id="tabsQ" placeholder="Filter tabs…" aria-label="Filter tabs"></div>
+      <div class="btn-list" id="tabsActs"></div>
+    </div>
+    <div class="pane-scroll"><div class="card-body" id="tabsBody"></div></div>
+  </section>
+</section>
+
+<main class="app-main bm-only">
+  <section class="card">
+    <div class="card-header py-2">
+      <h3 class="card-title" id="treeTitle">Bookmarks</h3>
+      <div class="card-actions text-secondary small" id="treeHint">→ open · ← close · Space select · . menu</div>
+    </div>
+    <div class="pane-scroll"><div id="list" tabindex="0" role="tree" aria-label="Bookmarks" aria-multiselectable="true"></div></div>
+  </section>
+  <section class="card" aria-live="polite">
+    <div class="card-header py-2 flex-wrap gap-2">
+      <div class="flex-fill min-w-0" id="infoHead"></div>
+      <div class="btn-list" id="infoActs"></div>
+    </div>
+    <div class="pane-scroll">
+      <div class="card-body" id="info"></div>
+      <div class="card-body" id="body">
+        <div id="msg" class="pane-note" hidden><i class="ti ti-photo-off"></i><span id="msgText"></span></div>
+        <div id="grid" hidden></div>
+        <img id="shot" alt="" hidden>
+        <iframe id="frame" hidden title="Live page" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="app-foot" role="contentinfo">
+  <div class="foot-left">
+    <span class="foot-brand"><i class="ti ti-bookmarks"></i><b id="footName"></b><span class="text-secondary" id="footVer"></span></span>
+    <span class="foot-item" id="footServer" data-tip=""><span class="status-dot"></span><span></span></span>
+    <span class="foot-item" id="footTabs"><span id="navSide"></span></span>
+    <span class="foot-item text-secondary" id="footBuilt"></span>
+  </div>
+  <nav class="foot-links" aria-label="About this tool">
+    <a href="#" data-about="help">Help</a><a href="#" data-about="privacy">Privacy</a><a href="#" data-about="legal">Licence</a><a href="#" data-about="about">About</a>
+    <a href="#" id="footKeys">Shortcuts</a>
+    <span class="text-secondary" id="footCopy"></span>
+  </nav>
+</footer>
+
+<!-- Context menu (Tabler dropdown) -->
+<div id="ctx" class="dropdown-menu" role="menu" tabindex="-1"></div>
+
+<!-- Command palette -->
+<div class="modal modal-blur" id="palModal" tabindex="-1" role="dialog" aria-label="Command palette">
+  <div class="modal-dialog modal-lg modal-dialog-top" role="document"><div class="modal-content">
+    <div class="modal-body p-2">
+      <div class="input-icon mb-2"><span class="input-icon-addon"><i class="ti ti-command"></i></span>
+        <input id="palIn" class="form-control form-control-lg" placeholder="Type a command…" aria-label="Search commands"></div>
+      <div class="list-group list-group-flush cmd-list" id="palList" role="listbox"></div>
+    </div>
+    <div class="modal-footer pal-foot">
+      <span><kbd>↑</kbd> <kbd>↓</kbd> choose</span><span><kbd>Enter</kbd> run</span><span><kbd>Esc</kbd> close</span>
+      <span class="ms-auto text-secondary" id="palCount"></span>
+    </div>
+  </div></div>
+</div>
+
+<!-- Folder details: a slide-in panel with everything the summary leaves out -->
+<div class="offcanvas offcanvas-end bm-panel" id="detailPanel" tabindex="-1" aria-labelledby="detailTitle" role="dialog">
+  <div class="offcanvas-header">
+    <div class="min-w-0"><h2 class="offcanvas-title text-truncate" id="detailTitle">Details</h2><div class="text-secondary small" id="detailSub"></div></div>
+    <button type="button" class="btn-close" id="detailClose" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body" id="detailBody"></div>
+</div>
+
+<!-- About, help, privacy and licences -->
+<div class="modal modal-blur" id="aboutModal" tabindex="-1" role="dialog" aria-label="About">
+  <div class="modal-dialog modal-lg modal-dialog-top modal-dialog-scrollable" role="document"><div class="modal-content about-modal">
+    <div class="about-hero">
+      <button type="button" class="btn-close about-close" data-close aria-label="Close"></button>
+      <div class="about-hero-row">
+        <span class="about-logo"><i class="ti ti-browser-check"></i></span>
+        <div class="min-w-0">
+          <div class="about-name"><span id="aboutName"></span><span class="about-ver" id="aboutVer"></span></div>
+          <div class="about-tag" id="aboutTag"></div>
+        </div>
+      </div>
+      <div class="about-tabs" id="aboutTabs" role="tablist"></div>
+    </div>
+    <div class="modal-body about-body" id="aboutBody"></div>
+    <div class="about-foot"><span id="aboutFoot"></span></div>
+  </div></div>
+</div>
+
+<!-- Guided tour: a spotlight on one part of the screen and a card that explains it -->
+<div id="tourShade" hidden></div>
+<div id="tourCard" class="card shadow-lg" role="dialog" aria-live="polite" hidden>
+  <div class="card-body">
+    <div class="d-flex align-items-center gap-2 mb-1"><span class="badge bg-primary-lt" id="tourStep"></span><span class="ms-auto"></span>
+      <button class="btn-close" id="tourClose" aria-label="End the tour"></button></div>
+    <h3 class="card-title mb-1" id="tourTitle"></h3>
+    <div class="text-secondary" id="tourText"></div>
+    <div class="d-flex gap-2 mt-3"><button class="btn btn-sm btn-ghost-secondary" id="tourSkip">Skip tour</button><span class="ms-auto"></span>
+      <button class="btn btn-sm" id="tourBack"><i class="ti ti-arrow-left me-1"></i>Back</button>
+      <button class="btn btn-sm btn-primary" id="tourNext">Next<i class="ti ti-arrow-right ms-1"></i></button></div>
+  </div>
+</div>
+
+<!-- Tab clean-up: duplicates, stale, already bookmarked, incognito (Alpine: tabCleanup, src/web/ts/components.ts) -->
+<div id="bkCleanup" x-data="tabCleanup" @keydown.escape.window="open && hide()">
+  <div class="offcanvas offcanvas-end bm-panel cl-panel" :class="open && 'show'" :style="open ? 'visibility: visible' : 'visibility: hidden'" role="dialog" aria-labelledby="bkCleanupTitle">
+    <div class="offcanvas-header">
+      <div class="min-w-0"><h2 class="offcanvas-title" id="bkCleanupTitle">Clean up tabs</h2>
+        <div class="text-secondary small">A snapshot of every window is saved before anything closes, so Undo reopens it.</div></div>
+      <button type="button" class="btn-close" @click="hide()" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+      <div class="cl-groups" role="tablist">
+        <template x-for="g in groups" :key="g.id">
+          <button type="button" class="cl-group" :class="group === g.id && 'active'" @click="choose(g.id)" role="tab" :aria-selected="group === g.id">
+            <span x-text="g.label"></span><span class="app-nav-count" x-text="count(g.id)"></span></button>
+        </template>
+      </div>
+      <p class="text-secondary small mb-2" x-text="(groups.find(g => g.id === group) || {}).help"></p>
+      <label class="tb-field mb-2" x-show="group === 'stale'">Open for more than
+        <select class="form-select form-select-sm w-auto" x-model.number="staleDays" @change="load()">
+          <option value="1">1 day</option><option value="3">3 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option></select></label>
+      <div class="pane-note" x-show="loading"><span class="spinner-border spinner-border-sm"></span><span>Reading your browsers…</span></div>
+      <div class="pane-note text-danger" x-show="error" x-text="error" x-cloak></div>
+      <div class="pane-note" x-show="!loading && !error && !rows.length" x-cloak><i class="ti ti-circle-check"></i><span>Nothing to clean up here.</span></div>
+      <div class="cl-list" x-show="!loading && rows.length" x-cloak>
+        <label class="cl-row cl-all"><input type="checkbox" class="form-check-input" :checked="allPicked()" @change="toggleAll()"><span>Select all</span>
+          <span class="text-secondary ms-auto small" x-text="picked.size + ' of ' + rows.length + ' selected'"></span></label>
+        <template x-for="t in rows" :key="key(t)">
+          <label class="cl-row" :class="t.mode === 'incognito' && 'inc'">
+            <input type="checkbox" class="form-check-input" :checked="isPicked(t)" @change="toggle(t)">
+            <div class="min-w-0 flex-fill"><div class="tab-title" x-text="t.title || t.url"></div><div class="tab-url" x-text="short(t.url)"></div></div>
+            <span class="badge bg-secondary-lt" x-show="t.since" x-text="age(t.since)"></span>
+            <span class="tabs-inc-pill" x-show="t.mode === 'incognito'">incognito</span>
+          </label>
+        </template>
+      </div>
+    </div>
+    <div class="cl-foot">
+      <button type="button" class="btn" x-show="lastClosed.length" @click="undo()" x-cloak><i class="ti ti-arrow-back-up me-1"></i>Undo · reopen <span x-text="lastClosed.length"></span></button>
+      <span class="ms-auto"></span>
+      <button type="button" class="btn btn-danger" :disabled="!picked.size" @click="closePicked()"><i class="ti ti-x me-1"></i>Close <span x-text="picked.size"></span></button>
+    </div>
+  </div>
+  <div class="offcanvas-backdrop fade show" x-show="open" @click="hide()" x-cloak></div>
+</div>
+
+<!-- Clear tab history (Alpine: historyTools) -->
+<div id="bkHistory" x-data="historyTools" @keydown.escape.window="open && hide()">
+  <div class="modal modal-blur show bf-modal" x-show="open" x-cloak role="dialog" aria-labelledby="bkHistoryTitle" @mousedown.self="hide()">
+    <div class="modal-dialog modal-dialog-top" role="document"><div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title" id="bkHistoryTitle"><i class="ti ti-history-off me-2"></i>Clear tab history</h5><button type="button" class="btn-close" @click="hide()" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <div class="form-selectgroup form-selectgroup-boxes d-flex flex-column gap-2">
+          <label class="form-selectgroup-item"><input type="radio" class="form-selectgroup-input" value="one" x-model="how">
+            <span class="form-selectgroup-label d-flex flex-column align-items-start gap-2"><b>One snapshot</b>
+              <select class="form-select form-select-sm" x-model="chosen" :disabled="how !== 'one'"><template x-for="sn in snapshots" :key="sn.id"><option :value="sn.id" x-text="label(sn)"></option></template></select></span></label>
+          <label class="form-selectgroup-item"><input type="radio" class="form-selectgroup-input" value="before" x-model="how">
+            <span class="form-selectgroup-label d-flex flex-column align-items-start gap-2"><b>Everything before a date</b>
+              <input type="date" class="form-control form-control-sm w-auto" x-model="before" :disabled="how !== 'before'"></span></label>
+          <label class="form-selectgroup-item"><input type="radio" class="form-selectgroup-input" value="all" x-model="how">
+            <span class="form-selectgroup-label d-flex flex-column align-items-start gap-2"><b class="text-danger">All tab history</b>
+              <span class="small text-secondary">Type <code>DELETE ALL</code> to confirm.</span>
+              <input type="text" class="form-control form-control-sm" x-model="typed" :disabled="how !== 'all'" autocomplete="off" spellcheck="false"></span></label>
+        </div>
+        <div class="alert alert-warning mt-3 mb-0"><b>This cannot be undone.</b> <span x-text="affected + ' snapshot' + (affected === 1 ? '' : 's') + ' will be deleted for good.'"></span> Bookmarks, notes and settings are not touched.</div>
+        <div class="text-danger small mt-2" x-show="error" x-text="error"></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn" @click="hide()">Keep everything</button>
+        <button type="button" class="btn btn-danger" :disabled="!canDelete || busy" @click="run()"><i class="ti ti-trash me-1"></i>Delete for good</button></div>
+    </div></div>
+  </div>
+  <div class="modal-backdrop fade show" x-show="open" x-cloak></div>
+</div>
+
+<!-- Note and tags on a tab, window or snapshot (Alpine: noteEditor) -->
+<div id="bkNote" x-data="noteEditor" @keydown.escape.window="open && hide()">
+  <div class="modal modal-blur show bf-modal" x-show="open" x-cloak role="dialog" aria-labelledby="bkNoteTitle" @mousedown.self="hide()">
+    <div class="modal-dialog modal-dialog-top" role="document"><div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title text-truncate" id="bkNoteTitle"><i class="ti ti-tag me-2"></i><span x-text="'Note and tags · ' + label"></span></h5><button type="button" class="btn-close" @click="hide()" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <label class="form-label">Note</label><textarea class="form-control" rows="4" maxlength="2000" x-model="note" placeholder="Why it is open, what to do with it…"></textarea>
+        <label class="form-label mt-3">Tags</label><input type="text" class="form-control" x-model="tags" placeholder="work, read later, research" autocomplete="off">
+        <div class="form-hint">Separate with commas. Up to 20 tags of 40 characters. Notes and tags are searchable in the timeline.</div>
+        <div class="text-danger small mt-2" x-show="error" x-text="error"></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn" @click="hide()">Cancel</button><button type="button" class="btn btn-primary" @click="save()">Save</button></div>
+    </div></div>
+  </div>
+  <div class="modal-backdrop fade show" x-show="open" x-cloak></div>
+</div>
+
+<!-- Settings -->
+<div class="modal modal-blur" id="settingsModal" tabindex="-1" role="dialog" aria-label="Settings">
+  <div class="modal-dialog modal-lg modal-dialog-top modal-dialog-scrollable" role="document"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title"><i class="ti ti-settings me-2"></i>Settings</h5><button type="button" class="btn-close" data-close aria-label="Close"></button></div>
+    <div class="modal-body p-0" id="settingsBody"></div>
+    <div class="modal-footer">
+      <span class="text-secondary small me-auto">Saved as you change them, in this browser only.</span>
+      <button class="btn" id="settingsDefaults"><i class="ti ti-arrow-back-up me-1"></i>Restore default settings</button>
+      <button class="btn btn-primary" data-close>Done</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- Keyboard shortcuts -->
+<div class="modal modal-blur" id="keysModal" tabindex="-1" role="dialog" aria-label="Keyboard shortcuts">
+  <div class="modal-dialog modal-lg modal-dialog-top modal-dialog-scrollable" role="document"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title"><i class="ti ti-keyboard me-2"></i>Keyboard shortcuts</h5><button type="button" class="btn-close" data-close></button></div>
+    <div class="modal-body"><div class="row" id="keysBody"></div></div>
+  </div></div>
+</div>
+
+<!-- Trash: every item in it, with Put back and Delete permanently (views/trash.ts) -->
+<div class="modal modal-blur" id="trashModal" tabindex="-1" role="dialog" aria-label="Trash">
+  <div class="modal-dialog modal-lg modal-dialog-top modal-dialog-scrollable" role="document"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title"><i class="ti ti-trash me-2"></i>Trash</h5><span class="text-secondary small ms-3" id="trashCount"></span><button type="button" class="btn-close" data-close></button></div>
+    <div class="modal-body">
+      <p class="text-secondary trash-intro">The Trash is left out of the import file. Put back returns each item to the folder it came from; Delete permanently removes it from this workspace (History can still bring it back).</p>
+      <div class="d-flex flex-wrap gap-1 mb-2" id="trashWhy" role="group" aria-label="Why items are in the Trash: click one to show only those"></div>
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <input type="checkbox" class="form-check-input m-0" id="trashAll" aria-label="Select every item shown">
+        <input type="search" class="form-control form-control-sm" id="trashQ" placeholder="Filter the Trash…" aria-label="Filter the Trash">
+      </div>
+      <div class="list-group list-group-flush" id="trashList"></div>
+      <div class="mt-2" id="trashPager"></div>
+    </div>
+    <div class="modal-footer">
+      <span class="text-secondary small me-auto" id="trashSel"></span>
+      <button type="button" class="btn" id="trashRestore"><i class="ti ti-restore me-1"></i>Put back</button>
+      <button type="button" class="btn btn-ghost-danger" id="trashPurge"><i class="ti ti-trash-x me-1"></i>Delete permanently</button>
+      <div class="vr mx-1"></div>
+      <button type="button" class="btn" id="trashRestoreAll">Put back all</button>
+      <button type="button" class="btn btn-danger" id="trashEmpty"><i class="ti ti-alert-triangle me-1"></i>Empty Trash…</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- Move to… -->
+<div class="modal modal-blur" id="moveModal" tabindex="-1" role="dialog" aria-label="Move to">
+  <div class="modal-dialog modal-dialog-top" role="document"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="moveTitle"></h5><button type="button" class="btn-close" data-close></button></div>
+    <div class="modal-body">
+      <input id="moveIn" class="form-control mb-2" placeholder="Type to find a folder">
+      <div class="list-group list-group-flush cmd-list" id="moveList"></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- Edit text (rename, new folder, description) -->
+<div class="modal modal-blur" id="textModal" tabindex="-1" role="dialog" aria-label="Edit">
+  <div class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="textTitle"></h5><button type="button" class="btn-close" data-close></button></div>
+    <div class="modal-body">
+      <label class="form-label" id="textLabel"></label>
+      <input id="textIn" class="form-control">
+      <textarea id="textArea" class="form-control" rows="5" hidden></textarea>
+      <div class="form-hint" id="textHint"></div>
+    </div>
+    <div class="modal-footer"><button class="btn" data-close>Cancel</button><button class="btn btn-primary" id="textOk">Save</button></div>
+  </div></div>
+</div>
+
+<!-- Confirm: every destructive or irreversible action asks here first -->
+<div class="modal modal-blur" id="confirmModal" tabindex="-1" role="alertdialog" aria-label="Confirm">
+  <div class="modal-dialog modal-sm modal-dialog-centered" role="document"><div class="modal-content">
+    <div class="modal-status" id="confirmBar"></div>
+    <div class="modal-body text-center py-4">
+      <i class="ti mb-2" id="confirmIcon" style="font-size: 2.5rem"></i>
+      <h3 id="confirmTitle"></h3>
+      <div class="text-secondary" id="confirmBody"></div>
+    </div>
+    <div class="modal-footer"><div class="w-100"><div class="row g-2">
+      <div class="col"><button class="btn w-100" id="confirmNo">Cancel</button></div>
+      <div class="col"><button class="btn w-100" id="confirmYes"></button></div>
+    </div></div></div>
+  </div></div>
+</div>
+
+<div id="toastBox"></div>
+
+<!-- Activity: progress, ETA, pause / resume / cancel -->
+<div class="card shadow" id="jobPanel" hidden>
+  <div class="card-body">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <span class="spinner-border spinner-border-sm text-primary" id="jobSpin" role="status"></span>
+      <strong class="flex-fill" id="jobTitle">Refreshing</strong>
+      <span class="text-secondary small" id="jobPct">0%</span>
+    </div>
+    <div class="progress progress-sm mb-2"><div class="progress-bar" id="jobBar" style="width: 0%" role="progressbar"></div></div>
+    <div class="d-flex align-items-center gap-2">
+      <span class="text-secondary small flex-fill" id="jobDetail"></span>
+      <button class="btn btn-sm" id="jobPause"><i class="ti ti-player-pause me-1"></i>Pause</button>
+      <button class="btn btn-sm btn-ghost-danger" id="jobCancel"><i class="ti ti-player-stop me-1"></i>Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = /*DATA*/null;
+window.BF_DATA = DATA;
+</script>
+<script type="module" src="assets/js/app.js"></script>
+</body>
+</html>

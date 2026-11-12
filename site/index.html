@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Browser Foreman: clean bookmarks, safe tabs</title>
+<meta name="description" content="Browser Foreman keeps your browsers' bookmarks tidy and your open tabs safe from a crash. One local binary, a web interface, an API, events and webhooks. Open source, MIT.">
+<style>
+:root { --bg: #f7f8fa; --surface: #fff; --text: #1b2330; --muted: #5c6878; --line: #e3e7ee; --accent: #2563eb; --accent-soft: #e8efff; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0f141b; --surface: #161d27; --text: #e7ebf1; --muted: #9aa6b6; --line: #253041; --accent: #6b9bff; --accent-soft: #1b2740; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: var(--accent); }
+.wrap { max-width: 68rem; margin: 0 auto; padding: 0 1rem; }
+header { display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 0; }
+.brand { font-weight: 700; display: flex; gap: .6rem; align-items: center; color: var(--text); text-decoration: none; }
+.mark { width: 2rem; height: 2rem; border-radius: .55rem; background: var(--accent); display: grid; place-items: center; color: #fff; font-weight: 800; }
+nav a { margin-left: 1.25rem; color: var(--muted); text-decoration: none; }
+.hero { padding: 4rem 0 3rem; display: grid; gap: 2rem; grid-template-columns: 1.1fr .9fr; align-items: center; }
+h1 { font-size: clamp(2rem, 4vw, 3.1rem); line-height: 1.12; margin: 0 0 1rem; letter-spacing: -.02em; }
+.lead { color: var(--muted); font-size: 1.15rem; max-width: 34rem; }
+.cta { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.5rem; }
+.btn { display: inline-block; padding: .7rem 1.1rem; border-radius: .55rem; text-decoration: none; font-weight: 600; border: 1px solid var(--line); color: var(--text); background: var(--surface); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+pre { background: var(--surface); border: 1px solid var(--line); border-radius: .7rem; padding: 1rem 1.1rem; overflow-x: auto; font-size: .9rem; margin: 0; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; padding: 1rem 0 3rem; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: .8rem; padding: 1.25rem; }
+.card h3 { margin: 0 0 .4rem; font-size: 1.05rem; }
+.card p { margin: 0; color: var(--muted); font-size: .95rem; }
+.tag { display: inline-block; font-size: .75rem; font-weight: 600; padding: .1rem .5rem; border-radius: 1rem; background: var(--accent-soft); color: var(--accent); margin-bottom: .5rem; }
+h2 { font-size: 1.6rem; margin: 2.5rem 0 .5rem; }
+footer { border-top: 1px solid var(--line); color: var(--muted); padding: 1.5rem 0 2.5rem; font-size: .9rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }
+@media (max-width: 820px) { .hero { grid-template-columns: 1fr; padding-top: 2rem; } .grid { grid-template-columns: 1fr; } nav a:not(:last-child) { display: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="#"><span class="mark">B</span>Browser Foreman</a>
+    <nav><a href="#features">Features</a><a href="#developers">Developers</a><a href="https://github.com/simtabi/browser-foreman">GitHub</a></nav>
+  </header>
+
+  <section class="hero">
+    <div>
+      <h1>Clean bookmarks.<br>Safe tabs.</h1>
+      <p class="lead">Browser Foreman keeps every browser's bookmarks tidy and your open tabs safe from a crash. One small program on your own computer, with a web interface, an API and webhooks.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/simtabi/browser-foreman#install">Build it from source</a>
+        <a class="btn" href="https://opensource.simtabi.com/documentation/simtabi/browser-foreman/">Read the docs</a>
+      </div>
+    </div>
+    <pre><code>$ browser-foreman config init
+$ browser-foreman serve
+Browser Foreman on http://127.0.0.1:8765
+
+$ curl -N localhost:8765/api/v1/events
+event: bookmark.created
+data: {"id":42,"type":"bookmark.created",…}</code></pre>
+  </section>
+
+  <h2 id="features">What it does</h2>
+  <div class="grid">
+    <div class="card"><span class="tag">Bookmarks</span><h3>One clean tree</h3><p>Duplicates merged, dead and moved links found, everything sorted into folders you can drag around, with every change undoable.</p></div>
+    <div class="card"><span class="tag">Tabs</span><h3>Never lose a session</h3><p>Open tabs saved as they change, across Chrome, Brave, Edge, Safari and more. Reopen everything after a crash, incognito kept private.</p></div>
+    <div class="card"><span class="tag">Browsers</span><h3>Any browser, all at once</h3><p>Open links in your system default, in one browser or in several together. Browser plugins edit bookmarks and tabs in place.</p></div>
+    <div class="card"><span class="tag">Storage</span><h3>Your data, your choice</h3><p>SQLite by default, or plain JSON files you can read and sync. Everything stays on your computer.</p></div>
+    <div class="card"><span class="tag">Accounts</span><h3>Just you, or a team</h3><p>Local mode for one person with no sign-in. Accounts mode adds users, sign-in, roles and per-user tokens.</p></div>
+    <div class="card"><span class="tag">Security</span><h3>Private by design</h3><p>Localhost only by default, rebinding and cross-site requests refused, secrets kept out of config files, every webhook signed.</p></div>
+  </div>
+
+  <h2 id="developers">Built for developers</h2>
+  <div class="grid">
+    <div class="card"><h3>REST API</h3><p>Every capability under <code>/api/v1</code>, with an OpenAPI document.</p></div>
+    <div class="card"><h3>Events</h3><p>Every change as a Server-Sent Event, replayable after a reconnect.</p></div>
+    <div class="card"><h3>Webhooks</h3><p>Callbacks for the events you choose, HMAC-signed and retried.</p></div>
+  </div>
+
+  <footer>
+    <span>Browser Foreman is open source under the MIT license. © 2026 Simtabi LLC.</span>
+    <span><a href="https://opensource.simtabi.com">Simtabi open source</a> · <a href="https://github.com/simtabi/browser-foreman/blob/main/SECURITY.md">Security</a></span>
+  </footer>
+</div>
+</body>
+</html>

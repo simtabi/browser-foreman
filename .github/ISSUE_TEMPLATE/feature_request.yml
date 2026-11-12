@@ -1,0 +1,22 @@
+name: Feature request
+description: Something Browser Foreman should do.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: Check docs/roadmap.md first; it may already be planned.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
