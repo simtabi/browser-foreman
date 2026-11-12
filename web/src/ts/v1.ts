@@ -8,9 +8,21 @@ import { TRASH, type SavedFolder, type BookmarkId } from "./tree";
 export interface V1Node { id: string; kind: "folder" | "bookmark"; title: string; url?: string; note?: string; added?: number; children?: V1Node[] }
 export interface V1Trashed { node: V1Node; from: string; index: number; at: number; reason?: string }
 export interface V1Tree { root: V1Node; trash?: V1Trashed[] }
+/** The last link check of an address (store.LinkResult). */
+export interface V1Link { url: string; status: string; code?: number; final?: string; note?: string; kind?: string; checked: string }
 
-/** s: the link check's status ("unchecked" until one runs); g: the folder it is in; o: the folder it came from. */
-export interface PageItem { id: BookmarkId; u: string; t: string; a?: number; s: string; g: string; o: string }
+/** s: the link check's status ("unchecked" until one runs), n its note, dk "page" or "host" for a dead link, nu the
+ *  address a moved link now answers at; g: the folder it is in; o: the folder it came from. */
+export interface PageItem { id: BookmarkId; u: string; t: string; a?: number; s: string; g: string; o: string; n?: string; dk?: string; nu?: string }
+
+/** The page's fields for one check result. */
+export function linkFields(l: V1Link): Pick<PageItem, "s" | "n" | "dk" | "nu"> {
+  const f: Pick<PageItem, "s" | "n" | "dk" | "nu"> = { s: l.status };
+  if (l.note) f.n = l.note;
+  if (l.kind) f.dk = l.kind;
+  if (l.status === "moved" && l.final) f.nu = l.final;
+  return f;
+}
 export interface From { path: string; index: number }
 export interface PageState {
   root: SavedFolder;
@@ -31,13 +43,15 @@ export interface Page {
 const seg = (title: string): string => title.replaceAll("/", "∕");
 const unseg = (name: string): string => name.replaceAll("∕", "/");
 
-export function toPage(t: V1Tree, built = ""): Page {
+export function toPage(t: V1Tree, built = "", links: Record<string, V1Link> = {}): Page {
   const keep: PageItem[] = [], ids: string[] = [], folders: string[] = [], pathOf = new Map<string, string>();
   const trashed: Page["trashed"] = {};
   const state: PageState = { root: { n: "", c: [], k: t.root.id }, titles: {}, notes: {}, gone: [], trashFrom: {} };
   const bookmark = (b: V1Node, path: string): BookmarkId => {
     const id = keep.length + 1;
     const item: PageItem = { id, u: b.url ?? "", t: b.title, s: "unchecked", g: path, o: path };
+    const l = links[item.u];
+    if (l) Object.assign(item, linkFields(l));
     if (b.added) item.a = b.added;
     keep.push(item); ids.push(b.id);
     if (b.note) state.notes[id] = b.note;

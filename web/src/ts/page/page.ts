@@ -1516,12 +1516,17 @@ async function refresh(all = false) {
   if (!ids.length) return toast("Nothing to refresh here");
   if (all && !(await askConfirm({title: `Refresh all ${ids.length.toLocaleString()} links?`, ok: "Start refreshing", danger: false,
     body: "Every link is checked again and every snapshot retaken. Sites are visited politely, a few at a time, so this takes a while. You can pause or cancel it, and keep working meanwhile."}))) return;
-  let res;
-  try {
-    res = await fetch("api/refresh", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({items: ids.map(id => ({id, u: ITEM.get(id).u}))})});
-    if (!res.ok) throw new Error(res.status);
-  } catch { return toast("Start it with src/server/serve.py, then try again.", "danger", "The preview server isn't answering"); }
-  const {job, total} = await res.json();
+  let job, total;
+  if (WS?.refresh) {
+    try { ({job, total} = await WS.refresh(ids)); } catch (e) { return toast(String(e?.message || e), "danger", "The link check could not start"); }
+  } else {
+    let res;
+    try {
+      res = await fetch("api/refresh", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({items: ids.map(id => ({id, u: ITEM.get(id).u}))})});
+      if (!res.ok) throw new Error(res.status);
+    } catch { return toast("Start it with src/server/serve.py, then try again.", "danger", "The preview server isn't answering"); }
+    ({job, total} = await res.json());
+  }
   jobRunning = true;
   trackJob(job, total);
   toast(`Progress shows bottom right; you can keep working, pause or stop it.`, "info", `Refreshing ${total.toLocaleString()} link${total === 1 ? "" : "s"}`);
@@ -1531,7 +1536,7 @@ async function refresh(all = false) {
 const fmtDur = s => s < 60 ? `${Math.max(1, Math.round(s))}s` : s < 3600 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`;
 function trackJob(job, total) {
   const panel = $("#jobPanel"); panel.hidden = false;
-  const ctl = async verb => { try { await fetch(`api/job/${job}/${verb}`, {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"}); } catch {} tick(); };
+  const ctl = async verb => { try { if (WS?.ctl) await WS.ctl(job, verb); else await fetch(`api/job/${job}/${verb}`, {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"}); } catch {} tick(); };
   $("#jobPause").onclick = () => ctl($("#jobPause").dataset.state === "paused" ? "resume" : "pause");
   $("#jobPause").disabled = $("#jobCancel").disabled = false;
   $("#jobCancel").onclick = async () => {
@@ -1542,7 +1547,7 @@ function trackJob(job, total) {
   };
   let misses = 0;
   const tick = async () => {
-    let j; try { const r = await fetch("api/job/" + job); if (r.status === 404) j = {done: true, state: "lost", results: {}, rendered: 0}; else j = await r.json(); }
+    let j; try { if (WS?.job) j = await WS.job(job); else { const r = await fetch("api/job/" + job); if (r.status === 404) j = {done: true, state: "lost", results: {}, rendered: 0}; else j = await r.json(); } }
     catch { if (++misses > 15) { finish({done: true, state: "lost", results: {}, rendered: 0}); return; } setTimeout(tick, 2000); return; }
     misses = 0;
     // Checking is about 60% of the work, snapshots the rest.
@@ -1569,18 +1574,20 @@ function trackJob(job, total) {
     for (const [id, r] of Object.entries(j.results)) {
       const i = ITEM.get(+id); if (!i) continue;
       // A timeout or a blocked check says nothing new: keep what was known rather than downgrade a link to "could not verify".
-      if (r.s === "unverified" && i.s !== "unverified") { kept0++; if (r.h) { i.h = r.h; thumbVer.set(r.h, now); } continue; }
+      if (r.s === "unverified" && i.s !== "unverified" && i.s !== "unchecked") { kept0++; if (r.h) { i.h = r.h; thumbVer.set(r.h, now); } continue; }
       if (i.s !== r.s) changed++;
       i.s = r.s; i.n = r.n; if (r.h) { i.h = r.h; thumbVer.set(r.h, now); }
-      kept[id] = {s: i.s, n: i.n, h: i.h};
+      if ("dk" in r) i.dk = r.dk; else delete i.dk;
+      if ("nu" in r) i.nu = r.nu; else delete i.nu;
+      kept[id] = {s: i.s, n: i.n, h: i.h, dk: i.dk, nu: i.nu};
     }
     store.set("refreshed", kept);
     jobRunning = false; panel.hidden = true; $("#job").hidden = true; summary(); build();
-    const got = Object.keys(j.results).length, what = `${got.toLocaleString()} of ${total.toLocaleString()} checked · ${changed} changed status · ${j.rendered} new snapshot${j.rendered === 1 ? "" : "s"}` +
+    const got = j.checked ?? Object.keys(j.results).length, what = `${got.toLocaleString()} of ${total.toLocaleString()} checked · ${changed} changed status · ${j.rendered} new snapshot${j.rendered === 1 ? "" : "s"}` +
       (kept0 ? ` · ${kept0} could not be reached this time, so their earlier status is kept` : "");
     if (j.state === "cancelled") toast(what + ". Results so far are applied.", "warning", "Refresh stopped");
     else if (j.state === "failed") toast((j.error || "The refresh failed") + ". Results so far are applied.", "danger", "Refresh failed");
-    else if (j.state === "lost") toast("The preview server stopped answering, or was restarted. Start the refresh again.", "danger", "Refresh interrupted");
+    else if (j.state === "lost") toast("The server stopped answering, or was restarted. Start the refresh again.", "danger", "Refresh interrupted");
     else toast(what, "success", "Refresh finished");
   };
   tick();

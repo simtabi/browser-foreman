@@ -107,13 +107,18 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
+	links, err := s.Data.Links(r.Context(), webURLs(t, nil))
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
 	built := x.Created
 	if n := len(h); n > 0 {
 		built = h[n-1].At
 	}
 	boot, err := json.Marshal(map[string]any{ // json.Marshal escapes <, >, &, U+2028 and U+2029: safe inside <script>
 		"workspace": map[string]any{"id": x.ID, "name": x.Name, "head": x.Head},
-		"tree":      t, "built": built.UTC().Format(time.RFC3339), "can": canUndo(h), "auth": auth,
+		"tree":      t, "built": built.UTC().Format(time.RFC3339), "can": canUndo(h), "auth": auth, "links": links,
 	})
 	if err != nil {
 		writeErr(w, 500, err.Error())

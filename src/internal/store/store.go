@@ -192,6 +192,7 @@ type Store interface {
 	TabSnapshot(ctx context.Context, id string) (TabSnapshot, error)
 
 	Accounts
+	Links
 
 	Close() error
 }

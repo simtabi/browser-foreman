@@ -2,7 +2,7 @@
 // into the page's data (window.BF_PAGE, read by the page as DATA) and installs window.BM_WS, the workspace hooks the
 // page already uses: the page's saves become PUT /api/v1/workspaces/{id}/tree, undo and redo go to the server.
 
-import { toPage, fromPage, type V1Tree, type PageState } from "./v1";
+import { toPage, fromPage, linkFields, type V1Tree, type V1Link, type PageState } from "./v1";
 
 interface Boot {
   workspace: { id: string; name: string; head: number };
@@ -10,13 +10,15 @@ interface Boot {
   built: string;
   can: { undo: string | null; redo: string | null };
   auth: { token?: string; csrf?: string };
+  links: Record<string, V1Link>;
 }
+interface CheckView { id: string; state: string; total: number; checked: number; started: string; done: boolean }
 
 declare global { interface Window { BF_V1?: Boot; BF_PAGE?: unknown; BM_WS?: unknown } }
 
 const boot = window.BF_V1;
 if (boot) {
-  const page = toPage(boot.tree, boot.built);
+  const page = toPage(boot.tree, boot.built, boot.links ?? {});
   window.BF_PAGE = page.data;
   let state: PageState = page.state, urls: Record<string, string> = {}, head = boot.workspace.head;
   const base = `api/v1/workspaces/${encodeURIComponent(boot.workspace.id)}`;
@@ -73,13 +75,45 @@ if (boot) {
     banner(j.error ?? `The server answered ${r.status}`, "danger");
   };
 
+  const call = async <T>(method: string, path: string, body?: unknown): Promise<T> => {
+    const r = await fetch(`api/v1/${path}`, { method, headers: headers(), body: body === undefined ? undefined : JSON.stringify(body) });
+    const j = await r.json().catch(() => ({})) as T & { error?: string };
+    if (!r.ok) throw new Error(j.error ?? `the server answered ${r.status}`);
+    return j;
+  };
+  // Link checks, in the shape the page's activity panel reads (it was written for the Python server's jobs).
+  const pageIdsByURL = new Map<string, number[]>();
+  for (const i of page.data.keep) pageIdsByURL.set(i.u, [...(pageIdsByURL.get(i.u) ?? []), i.id]);
+  const refresh = async (ids: number[]): Promise<{ job: string; total: number }> => {
+    const nodes = ids.map(id => page.ids[id - 1]).filter((x): x is string => !!x);
+    const { job } = await call<{ job: CheckView }>("POST", "linkchecks", { workspace: boot.workspace.id, nodes });
+    return { job: job.id, total: job.total };
+  };
+  const job = async (id: string): Promise<Record<string, unknown>> => {
+    let j: { job: CheckView; results?: Record<string, V1Link> };
+    try { j = await call("GET", `linkchecks/${encodeURIComponent(id)}`); } catch { return { done: true, state: "lost", results: {}, rendered: 0 }; }
+    const v = j.job;
+    const results: Record<string, unknown> = {};
+    if (v.done) {
+      j = await call("GET", `linkchecks/${encodeURIComponent(id)}?results=1`);
+      for (const [url, l] of Object.entries(j.results ?? {})) for (const pid of pageIdsByURL.get(url) ?? []) results[pid] = linkFields(l);
+    }
+    return { state: v.state === "done" ? "done" : v.state, phase: "checking", checked: v.checked, total: v.total, done: v.done,
+      started: Date.parse(v.started) / 1000, results, rendered: 0, render_total: 0 };
+  };
+  const ctl = (id: string, verb: string): Promise<unknown> => call("POST", `linkchecks/${encodeURIComponent(id)}/${verb}`).catch(() => null);
+
   const ws = {
+    refresh, job, ctl,
     v1: true,
     id: boot.workspace.id,
     can: boot.can,
-    owns: (k: string): boolean => k === "urls" || k.startsWith("tree-"),
+    // "refreshed" (link results the page kept itself) is claimed and ignored: the server keeps results by address and
+    // sends them with the page, while the page's numbers for bookmarks change from one load to the next.
+    owns: (k: string): boolean => k === "urls" || k === "refreshed" || k.startsWith("tree-"),
     get: (k: string): unknown => k === "urls" ? urls : k.startsWith("tree-") ? state : null,
     set: (k: string, v: unknown): void => {
+      if (k === "refreshed") return;
       if (k === "urls") urls = (v as Record<string, string>) ?? {};
       else if (k.startsWith("tree-")) state = (v as PageState) ?? page.state;
       else return;

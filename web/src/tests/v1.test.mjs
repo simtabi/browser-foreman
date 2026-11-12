@@ -60,4 +60,12 @@ t2.trashFrom[goId] = { path: "Bookmarks Bar", index: 0 };
 const out2 = V.fromPage(t2, {}, page, newId, 1800000000);
 assert.deepEqual(out2.trash.map(x => [x.node.id, x.from, x.at]), [["old", "dev", 1600000000], ["go", "bar", 1800000000]]);
 assert.equal(out2.trash[0].reason, "dead", "the reason survives a save");
-console.log("v1: 17 checks passed");
+// Stored link results reach the page's fields; a moved link offers its new address.
+const linked = V.toPage(tree(), "", {
+  "https://go.dev/": { url: "https://go.dev/", status: "moved", final: "https://go.dev/home", note: "redirects", checked: "2026-11-12T00:00:00Z" },
+  "https://github.com/": { url: "https://github.com/", status: "dead", kind: "host", note: "the domain does not exist", checked: "2026-11-12T00:00:00Z" },
+});
+assert.deepEqual([linked.data.keep[0].s, linked.data.keep[0].nu, linked.data.keep[0].n], ["moved", "https://go.dev/home", "redirects"]);
+assert.deepEqual([linked.data.keep[1].s, linked.data.keep[1].dk, linked.data.keep[1].nu], ["dead", "host", undefined]);
+assert.equal(linked.data.keep[2].s, "unchecked");
+console.log("v1: 20 checks passed");

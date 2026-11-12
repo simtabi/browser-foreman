@@ -1,6 +1,6 @@
 # REST API
 
-36 endpoints, all under `/api/v1`, all JSON. `GET /api/v1/openapi.json` describes every one (OpenAPI 3.1, with the
+42 endpoints, all under `/api/v1`, all JSON. `GET /api/v1/openapi.json` describes every one (OpenAPI 3.1, with the
 role each needs in `x-role`); a test fails if a route and the document ever disagree.
 
 ## Rules for every request
@@ -57,6 +57,10 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `DELETE` | `/api/v1/workspaces/{id}/trash` | editor | `?ids=a,b`, or everything; history still holds them, so undo brings them back |
 | `POST` | `/api/v1/workspaces/{id}/undo` | editor | takes back the last change as a new entry; `409` when there is none |
 | `POST` | `/api/v1/workspaces/{id}/redo` | editor | puts back the last undone change |
+| `GET` | `/api/v1/workspaces/{id}/links` | viewer | `200 {"links": {url: result}}`: what the last checks found for this workspace's links |
+| `POST` | `/api/v1/linkchecks` | editor | body `{workspace, nodes?}`: check the links (under `nodes`, or all) in the background; `202 {"job"}`, `409` while another runs. See [link checks](link-checks.md) |
+| `GET` | `/api/v1/linkchecks/{id}` | viewer | progress; `?results=1` adds every result so far |
+| `POST` | `/api/v1/linkchecks/{id}/pause`, `/resume`, `/cancel` | editor | `200`, or `409` when the check is not in a state to do that |
 | `POST` | `/api/v1/workspaces/{id}/rollback` | editor | body `{to}`: the state after entry `to` becomes the newest, as an entry you can undo |
 
 Every change answers `201 {"entry", "events"}` with the new head as its `ETag`.

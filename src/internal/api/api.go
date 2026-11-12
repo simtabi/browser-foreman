@@ -23,6 +23,7 @@ import (
 	"github.com/simtabi/browser-foreman/src/internal/auth"
 	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/events"
+	"github.com/simtabi/browser-foreman/src/internal/linkcheck"
 	"github.com/simtabi/browser-foreman/src/internal/store"
 	"github.com/simtabi/browser-foreman/src/internal/version"
 	"github.com/simtabi/browser-foreman/src/internal/webhooks"
@@ -38,6 +39,8 @@ type Server struct {
 	Limit    *auth.Limiter // failed sign-ins
 	Now      func() time.Time
 	UI       fs.FS // the web interface's files; nil: the ones embedded in the binary
+	Checker  *linkcheck.Checker
+	checks   checkRunner
 }
 
 func contextWith(r *http.Request, p Principal) context.Context {
@@ -84,6 +87,12 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/workspaces/{id}/undo", s.require(store.RoleEditor, s.undoRedo("undo")))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/redo", s.require(store.RoleEditor, s.undoRedo("redo")))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/rollback", s.require(store.RoleEditor, s.rollback))
+	m.HandleFunc("GET /api/v1/workspaces/{id}/links", s.require(store.RoleViewer, s.getLinks))
+	m.HandleFunc("POST /api/v1/linkchecks", s.require(store.RoleEditor, s.startCheck))
+	m.HandleFunc("GET /api/v1/linkchecks/{id}", s.require(store.RoleViewer, s.getCheck))
+	m.HandleFunc("POST /api/v1/linkchecks/{id}/pause", s.require(store.RoleEditor, s.controlCheck("pause")))
+	m.HandleFunc("POST /api/v1/linkchecks/{id}/resume", s.require(store.RoleEditor, s.controlCheck("resume")))
+	m.HandleFunc("POST /api/v1/linkchecks/{id}/cancel", s.require(store.RoleEditor, s.controlCheck("cancel")))
 	m.HandleFunc("GET /{$}", s.page)
 	m.Handle("GET /assets/", s.assets())
 	return s.guard(m)

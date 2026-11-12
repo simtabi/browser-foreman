@@ -19,6 +19,7 @@ import (
 	"github.com/simtabi/browser-foreman/src/internal/auth"
 	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/events"
+	"github.com/simtabi/browser-foreman/src/internal/linkcheck"
 	"github.com/simtabi/browser-foreman/src/internal/store"
 	"github.com/simtabi/browser-foreman/src/internal/version"
 	"github.com/simtabi/browser-foreman/src/internal/webhooks"
@@ -71,7 +72,8 @@ func serveCmd() *cobra.Command {
 			defer data.Close()
 			hooks := webhooks.NewStore(c.Storage.Path)
 			srv := &api.Server{Cfg: c, Bus: bus, Hooks: hooks, Data: data, Now: time.Now,
-				Limit: auth.NewLimiter(5, 15*time.Minute, 15*time.Minute),
+				Limit:   auth.NewLimiter(5, 15*time.Minute, 15*time.Minute),
+				Checker: linkcheck.New(15 * time.Second),
 				Dispatch: &webhooks.Dispatcher{
 					Store: hooks, Client: &http.Client{Timeout: c.Webhooks.Timeout.Duration}, Attempts: c.Webhooks.Attempts,
 					Backoff: 2 * time.Second, Now: time.Now,

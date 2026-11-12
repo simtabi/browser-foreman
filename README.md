@@ -84,6 +84,7 @@ Hosted at <https://opensource.simtabi.com/documentation/simtabi/browser-foreman/
 - [Events](docs/tools/events.md) — the event stream and every event type
 - [Webhooks](docs/tools/webhooks.md) — subscriptions, signatures, retries
 - [Storage](docs/tools/storage.md) — the sqlite and json drivers, history, undo and redo, migrating
+- [Link checks](docs/tools/link-checks.md) — what a check finds, politeness, safety, running one
 - [Web interface](docs/tools/web-interface.md) — the bookmark and tab views
 
 ### Recipes

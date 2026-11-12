@@ -45,6 +45,11 @@ ships.
   tree (`PUT /api/v1/workspaces/{id}/tree`, which publishes what changed), with undo and redo through the history and a
   refused save when the bookmarks changed elsewhere. A sign-in page in `accounts` mode. The page loads nothing from
   other hosts and runs only its own scripts (a per-response CSP nonce).
+- Link checks: `POST /api/v1/linkchecks` checks a workspace's links (or a folder's) in the background, politely per
+  site, with pause, resume and cancel; results are kept per address and shown by the web interface (dead, moved,
+  needs login…), and a changed status publishes `link.checked`. Pages that say "not found", parked domains and bot
+  checks are recognised. Connections to private addresses are refused at dial time, and action links are never
+  visited.
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed

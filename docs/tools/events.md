@@ -48,7 +48,11 @@ of that buffer, the stream starts with `: some events were missed; reload the st
 | `workspace.imported`, `workspace.undone`, `workspace.redone`, `workspace.rolled_back` | the same fields |
 | `workspace.exported` | `{workspace, format, at}` |
 
-Still to come in phase 4: `link.checked`, `tabs.snapshot.saved`, `tabs.closed`.
+| `linkcheck.started` | `{id, workspace, total}` |
+| `link.checked` | an address's status changed: `{url, status, previous, final, note}` |
+| `linkcheck.finished` | `{id, workspace, state, checked, total, changed, dead}` |
+
+Still to come: `tabs.snapshot.saved`, `tabs.closed` (phase 5).
 
 ---
 [← Docs index](../../README.md#documentation)

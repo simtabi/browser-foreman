@@ -47,7 +47,8 @@ pull request, with tests and docs.
 - Done: the web interface embedded and served at `/`, with a sign-in page; bookmarks, folders, the Trash, history
   (undo, redo, rollback), import and export, all as `/api/v1` routes with an event for every change; the OpenAPI
   document.
-- Next in this phase: link checks and refreshes, the webhook delivery log, settings, backups and restore, the
+- Done: link checks (`/api/v1/linkchecks`), shown in the web interface.
+- Next in this phase: the webhook delivery log, settings, backups and restore, the
   workspace menu (rename, lock, archive), ending a person's other sessions when their password changes.
 - The web interface (in `web/`) embedded in the binary and served at `/`.
 - Every capability under `/api/v1`: bookmarks and folders, workspaces and history (undo, redo, rollback), link checks

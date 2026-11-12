@@ -14,7 +14,7 @@ first. The first visit shows a welcome and a short tour; Help › Tour replays i
 
 ## What the binary serves today
 
-The Bookmarks view works in full against the server: the tree, search and filters, editing titles, addresses and
+The Bookmarks view works in full against the server, link health included ([link checks](link-checks.md)): the tree, search and filters, editing titles, addresses and
 notes, new folders, drag and drop, the Trash (put back, delete permanently), Undo and Redo, and Download. Every edit is
 saved as one history entry through `PUT /api/v1/workspaces/{id}/tree`, and the server publishes what changed as events.
 If the bookmarks changed somewhere else since the page loaded, the save is refused and the page offers to reload, so
@@ -24,7 +24,6 @@ Still to come, so their parts of the page stay empty or show the server as not a
 
 | Part | Arrives in |
 |---|---|
-| Link health (*Refresh all*, *Update moved*, dead links): every bookmark shows *Not checked yet* | phase 4, link checks |
 | The workspace menu (rename, lock, archive, history window) and Settings › Backup | phase 4 |
 | Open tabs, the Timeline's tab snapshots, the Browsers menu | phase 5 |
 

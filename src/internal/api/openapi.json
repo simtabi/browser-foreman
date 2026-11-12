@@ -872,6 +872,141 @@
           }
         ]
       }
+    },
+    "/api/v1/workspaces/{id}/links": {
+      "get": {
+        "summary": "What the last checks found for this workspace's links, by URL",
+        "tags": [
+          "Link checks"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/linkchecks": {
+      "post": {
+        "summary": "Check a workspace's links (or those under `nodes`) in the background; one check runs at a time (409)",
+        "tags": [
+          "Link checks"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {workspace, nodes?}"
+      }
+    },
+    "/api/v1/linkchecks/{id}": {
+      "get": {
+        "summary": "Progress; ?results=1 adds every result so far, by URL",
+        "tags": [
+          "Link checks"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/linkchecks/{id}/pause": {
+      "post": {
+        "summary": "Stop starting new checks",
+        "tags": [
+          "Link checks"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/linkchecks/{id}/resume": {
+      "post": {
+        "summary": "Carry on after a pause",
+        "tags": [
+          "Link checks"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/linkchecks/{id}/cancel": {
+      "post": {
+        "summary": "Stop; what was checked is kept",
+        "tags": [
+          "Link checks"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
     }
   }
 }

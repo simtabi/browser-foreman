@@ -12,6 +12,7 @@ import (
 	"github.com/simtabi/browser-foreman/src/internal/auth"
 	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/events"
+	"github.com/simtabi/browser-foreman/src/internal/linkcheck"
 	"github.com/simtabi/browser-foreman/src/internal/store"
 	"github.com/simtabi/browser-foreman/src/internal/webhooks"
 )
@@ -25,7 +26,10 @@ func newServer(t *testing.T, token string) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Server{Cfg: c, Bus: events.New(100, time.Now), Hooks: st, Data: data, Now: time.Now,
+	checker := linkcheck.New(5 * time.Second)
+	checker.AllowPrivate = true // tests check httptest servers on loopback
+	checker.Limiter.Default = linkcheck.Rule{Concurrent: 4}
+	return &Server{Cfg: c, Bus: events.New(1000, time.Now), Hooks: st, Data: data, Now: time.Now, Checker: checker,
 		Limit:    auth.NewLimiter(5, 15*time.Minute, 15*time.Minute),
 		Dispatch: &webhooks.Dispatcher{Store: st, Client: http.DefaultClient, Attempts: 1, Backoff: time.Millisecond, Now: time.Now}}
 }
