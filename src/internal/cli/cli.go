@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/simtabi/browser-foreman/src/internal/api"
+	"github.com/simtabi/browser-foreman/src/internal/auth"
 	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/events"
 	"github.com/simtabi/browser-foreman/src/internal/store"
@@ -40,7 +41,7 @@ func Root() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd())
+	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd(), userCmd(), tokenCmd())
 	return root
 }
 
@@ -69,20 +70,27 @@ func serveCmd() *cobra.Command {
 			}
 			defer data.Close()
 			hooks := webhooks.NewStore(c.Storage.Path)
-			srv := &api.Server{Cfg: c, Bus: bus, Hooks: hooks, Data: data, Now: time.Now, Dispatch: &webhooks.Dispatcher{
-				Store: hooks, Client: &http.Client{Timeout: c.Webhooks.Timeout.Duration}, Attempts: c.Webhooks.Attempts,
-				Backoff: 2 * time.Second, Now: time.Now,
-				Log: func(d webhooks.Delivery) {
-					if !d.OK {
-						fmt.Fprintf(os.Stderr, "webhook %s: event %d failed after %d attempts: %s\n", d.Subscription, d.Event, d.Attempts, d.Error)
-					}
-				},
-			}}
+			srv := &api.Server{Cfg: c, Bus: bus, Hooks: hooks, Data: data, Now: time.Now,
+				Limit: auth.NewLimiter(5, 15*time.Minute, 15*time.Minute),
+				Dispatch: &webhooks.Dispatcher{
+					Store: hooks, Client: &http.Client{Timeout: c.Webhooks.Timeout.Duration}, Attempts: c.Webhooks.Attempts,
+					Backoff: 2 * time.Second, Now: time.Now,
+					Log: func(d webhooks.Delivery) {
+						if !d.OK {
+							fmt.Fprintf(os.Stderr, "webhook %s: event %d failed after %d attempts: %s\n", d.Subscription, d.Event, d.Attempts, d.Error)
+						}
+					},
+				}}
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			fmt.Fprintf(cmd.OutOrStdout(), "Browser Foreman %s on http://%s (config %s, state %s)\n", version.Version, c.Server.Addr, p.Config, c.Storage.Path)
-			if c.APIToken == "" {
-				fmt.Fprintln(cmd.OutOrStdout(), "No API token: changes through the API are refused until you run `browser-foreman config init`.")
+			if c.Server.Mode == config.ModeLocal && c.APIToken == "" {
+				fmt.Fprintln(cmd.OutOrStdout(), "No API token: the API is closed until you run `browser-foreman config init`.")
+			}
+			if c.Server.Mode == config.ModeAccounts {
+				if users, err := data.Users(cmd.Context()); err == nil && len(users) == 0 {
+					fmt.Fprintln(cmd.OutOrStdout(), "Accounts mode with no users: nobody can sign in until you run `browser-foreman user add NAME --role owner`.")
+				}
 			}
 			return srv.Run(ctx)
 		},

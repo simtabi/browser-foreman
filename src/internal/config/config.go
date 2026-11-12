@@ -4,7 +4,7 @@
 // too): every *.json there, merged in name order (so 10-server.json overrides 00-defaults.json), then .env
 // (KEY=VALUE lines), then the process environment. Environment variables win. Every key has a BROFO_ variable:
 // BROFO_SERVER_ADDR, BROFO_SERVER_MODE, BROFO_STORAGE_DRIVER, BROFO_STORAGE_PATH, BROFO_WEBHOOK_TIMEOUT,
-// BROFO_WEBHOOK_ATTEMPTS, BROFO_API_TOKEN.
+// BROFO_WEBHOOK_ATTEMPTS, BROFO_SESSION_TTL, BROFO_API_TOKEN.
 //
 // Mutable state (the database, tokens, logs) lives in the state directory: $XDG_STATE_HOME/browser-foreman, else
 // ~/.local/state/browser-foreman.
@@ -49,12 +49,18 @@ type Webhooks struct {
 	Attempts int      `json:"attempts"` // tries before a delivery is marked failed
 }
 
+// Auth settings: how long a sign-in lasts.
+type Auth struct {
+	SessionTTL Duration `json:"session_ttl"`
+}
+
 // Config is the whole configuration. APIToken is never read from a JSON file: secrets come from .env or the
 // environment, so a config file can be shared without one.
 type Config struct {
 	Server   Server   `json:"server"`
 	Storage  Storage  `json:"storage"`
 	Webhooks Webhooks `json:"webhooks"`
+	Auth     Auth     `json:"auth"`
 	APIToken string   `json:"-"`
 	// Sources lists what was read, in order, for `browser-foreman config show`.
 	Sources []string `json:"-"`
@@ -89,6 +95,7 @@ func Defaults() Config {
 		Server:   Server{Addr: "127.0.0.1:8765", Mode: ModeLocal},
 		Storage:  Storage{Driver: "sqlite"},
 		Webhooks: Webhooks{Timeout: Duration{10 * time.Second}, Attempts: 5},
+		Auth:     Auth{SessionTTL: Duration{24 * time.Hour}},
 	}
 }
 
@@ -157,6 +164,11 @@ func apply(c *Config, get func(string) string) error {
 		"BROFO_STORAGE_PATH":     func(v string) error { c.Storage.Path = v; return nil },
 		"BROFO_API_TOKEN":        func(v string) error { c.APIToken = v; return nil },
 		"BROFO_WEBHOOK_ATTEMPTS": func(v string) error { n, err := strconv.Atoi(v); c.Webhooks.Attempts = n; return err },
+		"BROFO_SESSION_TTL": func(v string) error {
+			d, err := time.ParseDuration(v)
+			c.Auth.SessionTTL = Duration{d}
+			return err
+		},
 		"BROFO_WEBHOOK_TIMEOUT": func(v string) error {
 			d, err := time.ParseDuration(v)
 			c.Webhooks.Timeout = Duration{d}
@@ -202,6 +214,9 @@ func (c Config) Validate() error {
 	}
 	if c.Webhooks.Attempts < 1 || c.Webhooks.Attempts > 20 {
 		return fmt.Errorf("webhooks.attempts %d: use 1-20", c.Webhooks.Attempts)
+	}
+	if c.Auth.SessionTTL.Duration < 5*time.Minute || c.Auth.SessionTTL.Duration > 30*24*time.Hour {
+		return fmt.Errorf("auth.session_ttl %s: use 5m-720h", c.Auth.SessionTTL)
 	}
 	if c.Webhooks.Timeout.Duration < time.Second || c.Webhooks.Timeout.Duration > 2*time.Minute {
 		return fmt.Errorf("webhooks.timeout %s: use 1s-2m", c.Webhooks.Timeout)
@@ -250,7 +265,8 @@ func Init(p Paths, token string) ([]string, error) {
 		Server   Server   `json:"server"`
 		Storage  Storage  `json:"storage"`
 		Webhooks Webhooks `json:"webhooks"`
-	}{d.Server, d.Storage, d.Webhooks}, "", "  ")
+		Auth     Auth     `json:"auth"`
+	}{d.Server, d.Storage, d.Webhooks, d.Auth}, "", "  ")
 	files := map[string][]byte{
 		"config.json": append(body, '\n'),
 		".env":        []byte("# Secrets for Browser Foreman. Keep this file private (it is created 0600).\nBROFO_API_TOKEN=" + token + "\n"),

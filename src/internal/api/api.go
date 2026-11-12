@@ -1,27 +1,15 @@
 // Package api is Browser Foreman's HTTP server: the REST API under /api/v1, the event stream, and (from phase 4 of
-// the roadmap) the web interface.
+// the roadmap) the web interface. Every route and the role it needs is declared in Handler; docs/tools/rest-api.md
+// lists them.
 //
-//	GET    /api/v1/health                  liveness: {"ok": true}
-//	GET    /api/v1/version                 version, commit, build date
-//	GET    /api/v1/events                  Server-Sent Events; send Last-Event-ID to replay what you missed
-//	GET    /api/v1/webhooks                subscriptions (secrets hidden)                      token
-//	POST   /api/v1/webhooks                {url, events[], secret}                             token
-//	DELETE /api/v1/webhooks/{id}                                                               token
-//	POST   /api/v1/webhooks/{id}/test      sends a webhook.test event to that subscription     token
-//	GET    /api/v1/workspaces              workspaces with their size                          token
-//	GET    /api/v1/workspaces/{id}         one workspace and its tree (?at=N for an older one) token
-//	GET    /api/v1/workspaces/{id}/history every change, oldest first                          token
-//
-// Reading bookmarks needs the token too: they are private.
-//
-// Every request must come to a local Host (local mode) and, from a browser, from this server's own Origin. Requests
-// that change something need "Authorization: Bearer <token>" (BROFO_API_TOKEN).
+// Who is asking: a person's API token (Authorization: Bearer brofo_…), a signed-in browser (the brofo_session cookie,
+// with X-CSRF-Token on every change), or in local mode the configured BROFO_API_TOKEN, which acts as the owner. Every
+// request must also come to a local Host (local mode) and, from a browser, from this server's own Origin.
 package api
 
 import (
 	"context"
 	"crypto/rand"
-	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -31,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/simtabi/browser-foreman/src/internal/auth"
 	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/events"
 	"github.com/simtabi/browser-foreman/src/internal/store"
@@ -45,7 +34,12 @@ type Server struct {
 	Hooks    *webhooks.Store
 	Dispatch *webhooks.Dispatcher
 	Data     store.Store
+	Limit    *auth.Limiter // failed sign-ins
 	Now      func() time.Time
+}
+
+func contextWith(r *http.Request, p Principal) context.Context {
+	return context.WithValue(r.Context(), ctxKey{}, p)
 }
 
 // Handler is the whole HTTP surface, wrapped in the security checks.
@@ -53,14 +47,25 @@ func (s *Server) Handler() http.Handler {
 	m := http.NewServeMux()
 	m.HandleFunc("GET /api/v1/health", s.health)
 	m.HandleFunc("GET /api/v1/version", s.versionInfo)
-	m.HandleFunc("GET /api/v1/events", s.stream)
-	m.HandleFunc("GET /api/v1/webhooks", s.auth(s.listHooks))
-	m.HandleFunc("POST /api/v1/webhooks", s.auth(s.addHook))
-	m.HandleFunc("DELETE /api/v1/webhooks/{id}", s.auth(s.removeHook))
-	m.HandleFunc("POST /api/v1/webhooks/{id}/test", s.auth(s.testHook))
-	m.HandleFunc("GET /api/v1/workspaces", s.auth(s.listWorkspaces))
-	m.HandleFunc("GET /api/v1/workspaces/{id}", s.auth(s.getWorkspace))
-	m.HandleFunc("GET /api/v1/workspaces/{id}/history", s.auth(s.getHistory))
+	// Each route names the least role it needs (store.RoleViewer < RoleEditor < RoleOwner).
+	m.HandleFunc("POST /api/v1/auth/signin", s.signIn)
+	m.HandleFunc("POST /api/v1/auth/signout", s.signOut)
+	m.HandleFunc("GET /api/v1/auth/me", s.require(store.RoleViewer, s.me))
+	m.HandleFunc("GET /api/v1/events", s.require(store.RoleViewer, s.stream))
+	m.HandleFunc("GET /api/v1/tokens", s.require(store.RoleViewer, s.listTokens))
+	m.HandleFunc("POST /api/v1/tokens", s.require(store.RoleViewer, s.createToken))
+	m.HandleFunc("DELETE /api/v1/tokens/{id}", s.require(store.RoleViewer, s.revokeToken))
+	m.HandleFunc("GET /api/v1/users", s.require(store.RoleOwner, s.listUsers))
+	m.HandleFunc("POST /api/v1/users", s.require(store.RoleOwner, s.addUser))
+	m.HandleFunc("PATCH /api/v1/users/{name}", s.require(store.RoleOwner, s.updateUser))
+	m.HandleFunc("DELETE /api/v1/users/{name}", s.require(store.RoleOwner, s.deleteUser))
+	m.HandleFunc("GET /api/v1/webhooks", s.require(store.RoleOwner, s.listHooks))
+	m.HandleFunc("POST /api/v1/webhooks", s.require(store.RoleOwner, s.addHook))
+	m.HandleFunc("DELETE /api/v1/webhooks/{id}", s.require(store.RoleOwner, s.removeHook))
+	m.HandleFunc("POST /api/v1/webhooks/{id}/test", s.require(store.RoleOwner, s.testHook))
+	m.HandleFunc("GET /api/v1/workspaces", s.require(store.RoleViewer, s.listWorkspaces))
+	m.HandleFunc("GET /api/v1/workspaces/{id}", s.require(store.RoleViewer, s.getWorkspace))
+	m.HandleFunc("GET /api/v1/workspaces/{id}/history", s.require(store.RoleViewer, s.getHistory))
 	m.HandleFunc("GET /{$}", s.home)
 	return s.guard(m)
 }
@@ -97,23 +102,6 @@ func localHost(hostport string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
-}
-
-// auth lets a request through only with the configured API token.
-func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if s.Cfg.APIToken == "" {
-			writeErr(w, http.StatusServiceUnavailable, "no API token is set: run `browser-foreman config init` or set BROFO_API_TOKEN")
-			return
-		}
-		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if subtle.ConstantTimeCompare([]byte(got), []byte(s.Cfg.APIToken)) != 1 {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="browser-foreman"`)
-			writeErr(w, http.StatusUnauthorized, "a valid API token is required")
-			return
-		}
-		next(w, r)
-	}
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {

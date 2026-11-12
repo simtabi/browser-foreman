@@ -22,12 +22,13 @@ writes a starting `config.json` and a `.env` with a fresh token, both `0600`, an
 | JSON key | Variable | Default | Meaning |
 |---|---|---|---|
 | `server.addr` | `BROFO_SERVER_ADDR` | `127.0.0.1:8765` | where the server listens |
-| `server.mode` | `BROFO_SERVER_MODE` | `local` | `local`: one owner, loopback only, no sign-in; `accounts`: sign-in required (phase 3) |
+| `server.mode` | `BROFO_SERVER_MODE` | `local` | `local`: one owner, loopback only, no sign-in; `accounts`: people sign in; see [security](security.md#accounts) |
 | `storage.driver` | `BROFO_STORAGE_DRIVER` | `sqlite` | `sqlite` or `json`; see [storage](tools/storage.md) |
 | `storage.path` | `BROFO_STORAGE_PATH` | the state folder | where data is kept |
 | `webhooks.timeout` | `BROFO_WEBHOOK_TIMEOUT` | `10s` | per delivery attempt, `1s`–`2m` |
 | `webhooks.attempts` | `BROFO_WEBHOOK_ATTEMPTS` | `5` | tries before a delivery is marked failed, 1–20 |
-| — | `BROFO_API_TOKEN` | none | the token API writes need; `.env` or the environment only, never JSON |
+| `auth.session_ttl` | `BROFO_SESSION_TTL` | `24h` | how long a sign-in lasts, `5m`–`720h` |
+| — | `BROFO_API_TOKEN` | none | the owner's token in `local` mode; `.env` or the environment only, never JSON |
 
 ## Example
 

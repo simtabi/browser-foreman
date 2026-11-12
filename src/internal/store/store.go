@@ -164,6 +164,8 @@ type Store interface {
 	TabSnapshots(ctx context.Context, limit int) ([]TabSnapshot, error) // newest first, Windows left out
 	TabSnapshot(ctx context.Context, id string) (TabSnapshot, error)
 
+	Accounts
+
 	Close() error
 }
 

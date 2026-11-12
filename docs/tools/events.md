@@ -13,7 +13,7 @@ Every change Browser Foreman makes is published as an event, streamed live at `/
 
 ## The stream
 
-`GET /api/v1/events` answers `text/event-stream`. Each event is one message:
+`GET /api/v1/events` needs a viewer (a token or a signed-in session) and answers `text/event-stream`. Each event is one message:
 
 ```text
 id: 42
@@ -33,6 +33,9 @@ of that buffer, the stream starts with `: some events were missed; reload the st
 | `webhook.created` | a subscription was added |
 | `webhook.deleted` | a subscription was removed |
 | `webhook.test` | sent by the test endpoint, to one subscription only |
+| `auth.signed_in` | someone signed in (`{"user"}`) |
+| `user.created` | a person was added (`{"user", "role"}`) |
+| `user.deleted` | a person was removed (`{"user"}`) |
 
 Phase 4 adds a type for every change: `bookmark.created`, `bookmark.updated`, `bookmark.moved`, `bookmark.trashed`,
 `bookmark.restored`, `bookmark.deleted`, `folder.*`, `workspace.committed`, `workspace.undone`, `trash.emptied`,

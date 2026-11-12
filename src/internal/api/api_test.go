@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/simtabi/browser-foreman/src/internal/auth"
 	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/events"
 	"github.com/simtabi/browser-foreman/src/internal/store"
@@ -25,6 +26,7 @@ func newServer(t *testing.T, token string) *Server {
 		t.Fatal(err)
 	}
 	return &Server{Cfg: c, Bus: events.New(100, time.Now), Hooks: st, Data: data, Now: time.Now,
+		Limit:    auth.NewLimiter(5, 15*time.Minute, 15*time.Minute),
 		Dispatch: &webhooks.Dispatcher{Store: st, Client: http.DefaultClient, Attempts: 1, Backoff: time.Millisecond, Now: time.Now}}
 }
 
@@ -92,6 +94,7 @@ func TestEventsStreamReplaysAndStreams(t *testing.T) {
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", ts.URL+"/api/v1/events", nil)
 	req.Header.Set("Last-Event-ID", "1")
+	req.Header.Set("Authorization", "Bearer tok")
 	resp, err := ts.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)

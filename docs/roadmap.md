@@ -32,16 +32,17 @@ pull request, with tests and docs.
   `/api/v1/workspaces`.
 - Moved to phase 4, where the server starts changing workspaces: link check results and the webhook delivery log.
 
-## Phase 3 — Accounts and sign-in (next)
+## Phase 3 — Accounts and sign-in (done)
 
 - `server.mode: accounts`: users with argon2id-hashed passwords, sign-in with sessions (HttpOnly, SameSite=Strict
   cookies), CSRF tokens, sign-in rate limits and lockout, per-user API tokens (stored hashed, shown once).
 - Roles: owner, editor, viewer. `browser-foreman user {add,list,passwd,remove}` and `token {create,list,revoke}`.
 - `local` mode keeps today's behaviour: one owner on this computer, loopback only, no sign-in.
-- `/api/v1/events` gets the same access rule as reading bookmarks (a session or a token) before any event carries
-  bookmark data in phase 4. Today's events describe only the server and its webhooks.
+- `/api/v1/events` needs a viewer, the same rule as reading bookmarks, so the phase 4 bookmark events are never public.
+- Not in this phase: a sign-in page in the web interface (phase 4, with the rest of the interface), and ending a
+  person's other sessions when their password changes (phase 4).
 
-## Phase 4 — Web interface and REST API parity
+## Phase 4 — Web interface and REST API parity (next)
 
 - The web interface (today in `web/`, served by the Python tool) embedded in the binary and served at `/`.
 - Every capability under `/api/v1`: bookmarks and folders, workspaces and history (undo, redo, rollback), link checks

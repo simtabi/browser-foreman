@@ -15,7 +15,7 @@ ships.
 - Configuration from `~/.config/browser-foreman/`: every `*.json` merged in name order, then `.env`, then `BROFO_*`
   environment variables; validated on load; a `.env` other users can read is refused.
 - HTTP server on `127.0.0.1:8765`: `GET /api/v1/health`, `GET /api/v1/version`; localhost-only Host check, same-origin
-  check, security headers; writes need `Authorization: Bearer <token>`.
+  check, security headers.
 - Event bus and `GET /api/v1/events` (Server-Sent Events) with replay from `Last-Event-ID`.
 - Webhooks: `GET/POST /api/v1/webhooks`, `DELETE /api/v1/webhooks/{id}`, `POST /api/v1/webhooks/{id}/test`;
   HMAC-SHA256 signed deliveries (`X-Brofo-Signature`), retries with exponential backoff, link-local and cloud metadata
@@ -31,3 +31,12 @@ ships.
   Browser Foreman), and `workspace list|history|undo|redo`.
 - `GET /api/v1/workspaces`, `/api/v1/workspaces/{id}` (`?at=N`) and `/api/v1/workspaces/{id}/history`, token
   required.
+- Accounts (`server.mode: accounts`): argon2id passwords, sign-in sessions in HttpOnly SameSite=Strict cookies with
+  CSRF tokens, sign-in rate limits and lockout, roles (viewer, editor, owner), per-person API tokens stored hashed and
+  shown once, and a guard that keeps the last owner. `/api/v1/auth/{signin,signout,me}`, `/api/v1/tokens`,
+  `/api/v1/users`; `browser-foreman user {add,list,passwd,remove}` and `token {create,list,revoke}`;
+  `auth.session_ttl` / `BROFO_SESSION_TTL`.
+
+### Changed
+
+- `GET /api/v1/events` now needs a viewer (a token or a session), like reading bookmarks.

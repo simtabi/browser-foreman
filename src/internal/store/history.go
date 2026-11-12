@@ -69,7 +69,8 @@ func Redo(ctx context.Context, s Store, wsID string, at time.Time) (Entry, error
 	return s.Commit(ctx, wsID, h[len(h)-1].Seq, Change{Op: "redo", Summary: "Redid: " + h[target-1].Summary, Tree: tree, Redone: target}, at)
 }
 
-// Migrate copies every workspace (with its whole history, entry by entry, times and all) and every tab snapshot from
+// Migrate copies every workspace (with its whole history, entry by entry, times and all), every user and API token,
+// and every tab snapshot from
 // src into dst. dst must not already hold any of the workspaces. It returns how many workspaces and entries it copied.
 func Migrate(ctx context.Context, src, dst Store) (workspaces, entries int, err error) {
 	all, err := src.Workspaces(ctx)
@@ -100,6 +101,25 @@ func Migrate(ctx context.Context, src, dst Store) (workspaces, entries int, err 
 			entries++
 		}
 		workspaces++
+	}
+	// People and their API tokens move too; sessions do not (everyone signs in again after a move).
+	users, err := src.Users(ctx)
+	if err != nil {
+		return workspaces, entries, err
+	}
+	for _, u := range users {
+		if err := dst.CreateUser(ctx, u); err != nil {
+			return workspaces, entries, err
+		}
+	}
+	tokens, err := src.Tokens(ctx, "")
+	if err != nil {
+		return workspaces, entries, err
+	}
+	for _, t := range tokens {
+		if err := dst.CreateToken(ctx, t); err != nil {
+			return workspaces, entries, err
+		}
 	}
 	tabs, err := src.TabSnapshots(ctx, 0)
 	if err != nil {
