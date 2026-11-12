@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -384,4 +385,45 @@ func (s *Server) exportWorkspace(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
 	_, _ = s.Bus.Publish("workspace.exported", map[string]any{"workspace": x.ID, "format": r.URL.Query().Get("format"), "at": at})
 	_, _ = w.Write(buf.Bytes())
+}
+
+// putTree saves a whole tree at once, as the web interface does. The server works out what changed (edit.Diff) and
+// publishes those events, so webhooks see the same moves and edits as from the single-change routes. A save that
+// changes nothing records no entry and answers 200.
+func (s *Server) putTree(w http.ResponseWriter, r *http.Request) {
+	x, ok := s.workspace(w, r)
+	if !ok {
+		return
+	}
+	var next store.Tree
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, importer.MaxSize))
+	if err := dec.Decode(&next); err != nil {
+		writeErr(w, 400, "bad JSON body: "+err.Error())
+		return
+	}
+	saw, given, err := base(r, nil)
+	if err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	prev, err := s.head(r, x)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	events, err := edit.Diff(prev, next)
+	if edit.IsRefusal(err) {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	if len(events) == 0 && (!given || saw == x.Head) {
+		w.Header().Set("ETag", strconv.Quote(strconv.Itoa(x.Head)))
+		writeJSON(w, 200, map[string]any{"entry": nil, "events": []edit.Event{}})
+		return
+	}
+	s.commit(w, r, x, saw, given, given, store.Change{Op: "edit", Summary: edit.Summary(events), Tree: next}, events, "committed")
 }

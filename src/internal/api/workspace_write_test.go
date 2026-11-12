@@ -187,3 +187,40 @@ func TestViewersCannotEdit(t *testing.T) {
 		t.Fatalf("viewer edit %d", w.Code)
 	}
 }
+
+func TestPutTreeDiffsAndGuards(t *testing.T) {
+	s := seeded(t)
+	h := s.Handler()
+	tr, etag := tree(t, h)
+	// Unchanged: no entry.
+	body, _ := json.Marshal(tr)
+	if w := send(h, "PUT", "/api/v1/workspaces/main/tree", string(body), "If-Match", etag); w.Code != 200 {
+		t.Fatalf("no-op save %d %s", w.Code, w.Body)
+	}
+	// Move "go" into Dev and rename it, in one save.
+	bar := tr.Root.Children[0]
+	gonode, dev := bar.Children[0], bar.Children[1]
+	bar.Children = bar.Children[1:]
+	gonode.Title = "Golang"
+	dev.Children = append(dev.Children, gonode)
+	body, _ = json.Marshal(tr)
+	w := send(h, "PUT", "/api/v1/workspaces/main/tree", string(body), "If-Match", etag)
+	if w.Code != 201 || !strings.Contains(w.Body.String(), "bookmark.moved") || !strings.Contains(w.Body.String(), "bookmark.updated") {
+		t.Fatalf("save %d %s", w.Code, w.Body)
+	}
+	if w := send(h, "PUT", "/api/v1/workspaces/main/tree", string(body), "If-Match", etag); w.Code != 412 {
+		t.Fatalf("stale save %d", w.Code)
+	}
+	gonode.URL = "javascript:alert(1)"
+	body, _ = json.Marshal(tr)
+	if w := send(h, "PUT", "/api/v1/workspaces/main/tree", string(body)); w.Code != 400 {
+		t.Fatalf("javascript: URL through a whole-tree save: %d", w.Code)
+	}
+	var got struct {
+		Can struct{ Undo, Redo *string }
+	}
+	_ = json.Unmarshal(send(h, "GET", "/api/v1/workspaces/main", "").Body.Bytes(), &got)
+	if got.Can.Undo == nil || *got.Can.Undo != "Moved 1, Edited 1" || got.Can.Redo != nil {
+		t.Fatalf("can %+v", got.Can)
+	}
+}

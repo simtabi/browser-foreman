@@ -42,9 +42,14 @@ pull request, with tests and docs.
 - Not in this phase: a sign-in page in the web interface (phase 4, with the rest of the interface), and ending a
   person's other sessions when their password changes (phase 4).
 
-## Phase 4 — Web interface and REST API parity (next)
+## Phase 4 — Web interface and REST API parity (in progress)
 
-- The web interface (today in `web/`, served by the Python tool) embedded in the binary and served at `/`.
+- Done: the web interface embedded and served at `/`, with a sign-in page; bookmarks, folders, the Trash, history
+  (undo, redo, rollback), import and export, all as `/api/v1` routes with an event for every change; the OpenAPI
+  document.
+- Next in this phase: link checks and refreshes, the webhook delivery log, settings, backups and restore, the
+  workspace menu (rename, lock, archive), ending a person's other sessions when their password changes.
+- The web interface (in `web/`) embedded in the binary and served at `/`.
 - Every capability under `/api/v1`: bookmarks and folders, workspaces and history (undo, redo, rollback), link checks
   and refreshes, the Trash, import and export (Netscape HTML, Chrome JSON), backups and restore, settings.
 - Every change published as an event (`bookmark.created`, `bookmark.moved`, `workspace.committed`, `trash.emptied`,

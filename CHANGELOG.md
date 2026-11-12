@@ -41,6 +41,10 @@ ships.
   undo, redo and rollback; import a file into a workspace and export one as bookmarks HTML or Chrome JSON. Every change
   is an event (`bookmark.moved`, `trash.emptied`, `workspace.committed`…) and so reaches webhooks. `If-Match` refuses
   a change made on a stale head with `412`. `javascript:` and `data:` URLs are refused.
+- The web interface is embedded in the binary and served at `/`: the Bookmarks view reads and saves the server's
+  tree (`PUT /api/v1/workspaces/{id}/tree`, which publishes what changed), with undo and redo through the history and a
+  refused save when the bookmarks changed elsewhere. A sign-in page in `accounts` mode. The page loads nothing from
+  other hosts and runs only its own scripts (a per-response CSP nonce).
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed

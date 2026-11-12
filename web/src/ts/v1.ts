@@ -1,0 +1,129 @@
+// The bridge between the server's bookmark tree (/api/v1, the source of truth) and the page's own model: a flat list
+// of bookmarks with numeric ids plus a saved folder tree (see tree.ts). toPage builds what the page reads at start;
+// fromPage turns what the page saves back into a server tree. Folders keep their server id in `k`; bookmarks map
+// through `ids` (ids[n - 1] is bookmark n's server id). Pure: no DOM, no network (the client is in v1-boot.ts).
+
+import { TRASH, type SavedFolder, type BookmarkId } from "./tree";
+
+export interface V1Node { id: string; kind: "folder" | "bookmark"; title: string; url?: string; note?: string; added?: number; children?: V1Node[] }
+export interface V1Trashed { node: V1Node; from: string; index: number; at: number; reason?: string }
+export interface V1Tree { root: V1Node; trash?: V1Trashed[] }
+
+/** s: the link check's status ("unchecked" until one runs); g: the folder it is in; o: the folder it came from. */
+export interface PageItem { id: BookmarkId; u: string; t: string; a?: number; s: string; g: string; o: string }
+export interface From { path: string; index: number }
+export interface PageState {
+  root: SavedFolder;
+  titles: Record<string, string>;
+  notes: Record<string, string>;
+  gone: BookmarkId[];
+  trashFrom: Record<string, From>;
+}
+export interface Page {
+  data: { keep: PageItem[]; dupes: never[]; newMine: never[]; total: number; built: string; folders: string[] };
+  state: PageState;
+  ids: string[];
+  /** When each trashed node (by server id) went to the Trash, and why: the page does not keep these. */
+  trashed: Record<string, { at: number; reason?: string }>;
+}
+
+/** A "/" inside a folder name is stored as "∕" in page paths (tree.ts `nice` shows it back). */
+const seg = (title: string): string => title.replaceAll("/", "∕");
+const unseg = (name: string): string => name.replaceAll("∕", "/");
+
+export function toPage(t: V1Tree, built = ""): Page {
+  const keep: PageItem[] = [], ids: string[] = [], folders: string[] = [], pathOf = new Map<string, string>();
+  const trashed: Page["trashed"] = {};
+  const state: PageState = { root: { n: "", c: [], k: t.root.id }, titles: {}, notes: {}, gone: [], trashFrom: {} };
+  const bookmark = (b: V1Node, path: string): BookmarkId => {
+    const id = keep.length + 1;
+    const item: PageItem = { id, u: b.url ?? "", t: b.title, s: "unchecked", g: path, o: path };
+    if (b.added) item.a = b.added;
+    keep.push(item); ids.push(b.id);
+    if (b.note) state.notes[id] = b.note;
+    return id;
+  };
+  const folder = (f: V1Node, path: string): SavedFolder => {
+    const out: SavedFolder = { n: seg(f.title), c: [], k: f.id };
+    if (f.note) out.d = f.note;
+    fill(out, f, path);
+    return out;
+  };
+  const fill = (into: SavedFolder, f: V1Node, path: string): void => {
+    for (const c of f.children ?? []) {
+      if (c.kind === "bookmark") { into.c.push(bookmark(c, path)); continue; }
+      const p = path ? `${path}/${seg(c.title)}` : seg(c.title);
+      folders.push(p); pathOf.set(c.id, p);
+      into.c.push(folder(c, p));
+    }
+  };
+  fill(state.root, t.root, "");
+  const total = keep.length;
+  if (t.trash?.length) {
+    const bin: SavedFolder = { n: TRASH, c: [] };
+    for (const x of t.trash) {
+      trashed[x.node.id] = x.reason ? { at: x.at, reason: x.reason } : { at: x.at };
+      const from: From = { path: pathOf.get(x.from) ?? "", index: x.index };
+      if (x.node.kind === "bookmark") {
+        const id = bookmark(x.node, from.path);
+        state.trashFrom[id] = from;
+        bin.c.push(id);
+      } else {
+        const f = folder(x.node, from.path);
+        (f as SavedFolder & { from?: unknown }).from = from as unknown as string;  // the page keeps {path, index} here
+        bin.c.push(f);
+      }
+    }
+    state.root.c.push(bin);
+  }
+  return { data: { keep, dupes: [], newMine: [], total, built, folders }, state, ids, trashed };
+}
+
+/** The server tree for what the page saved. `urls` are the page's applied address updates; `gone` ids (deleted for
+ *  good) are left out; anything in the top Trash folder becomes the tree's Trash, with the folder it came from. */
+export function fromPage(state: PageState, urls: Record<string, string>, page: Page, newId: () => string, now = Math.floor(Date.now() / 1000)): V1Tree {
+  const items = new Map(page.data.keep.map(i => [i.id, i]));
+  const gone = new Set(state.gone);
+  const node = (x: SavedFolder | BookmarkId): V1Node | null => {
+    if (typeof x === "number") {
+      const i = items.get(x), id = page.ids[x - 1];
+      if (!i || !id || gone.has(x)) return null;
+      const b: V1Node = { id, kind: "bookmark", title: state.titles[x] ?? i.t, url: urls[x] ?? i.u };
+      const note = state.notes[x];
+      if (note) b.note = note;
+      if (i.a) b.added = i.a;
+      return b;
+    }
+    const f: V1Node = { id: x.k || newId(), kind: "folder", title: unseg(x.n), children: [] };
+    if (x.d) f.note = x.d;
+    for (const c of x.c) { const n = node(c); if (n) f.children!.push(n); }
+    return f;
+  };
+  const root: V1Node = { id: state.root.k || "root", kind: "folder", title: "", children: [] };
+  let bin: SavedFolder | undefined;
+  for (const c of state.root.c) {
+    if (typeof c === "object" && c.n === TRASH && !bin) { bin = c; continue; }
+    const n = node(c); if (n) root.children!.push(n);
+  }
+  const byPath = new Map<string, string>([["", root.id]]);
+  const index = (f: V1Node, path: string): void => {
+    for (const c of f.children ?? []) if (c.kind === "folder") {
+      const p = path ? `${path}/${seg(c.title)}` : seg(c.title);
+      if (!byPath.has(p)) byPath.set(p, c.id);
+      index(c, p);
+    }
+  };
+  index(root, "");
+  const trash: V1Trashed[] = [];
+  for (const c of bin?.c ?? []) {
+    const n = node(c); if (!n) continue;
+    const from = (typeof c === "number" ? state.trashFrom[c] : (c as unknown as { from?: From }).from) ?? { path: "", index: 0 };
+    const meta = page.trashed[n.id];
+    const entry: V1Trashed = { node: n, from: byPath.get(from.path) ?? root.id, index: from.index ?? 0, at: meta?.at ?? now };
+    if (meta?.reason) entry.reason = meta.reason;
+    trash.push(entry);
+  }
+  const out: V1Tree = { root };
+  if (trash.length) out.trash = trash;
+  return out;
+}

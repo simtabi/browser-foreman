@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net"
 	"net/http"
 	"strconv"
@@ -36,6 +37,7 @@ type Server struct {
 	Data     store.Store
 	Limit    *auth.Limiter // failed sign-ins
 	Now      func() time.Time
+	UI       fs.FS // the web interface's files; nil: the ones embedded in the binary
 }
 
 func contextWith(r *http.Request, p Principal) context.Context {
@@ -72,6 +74,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/workspaces", s.require(store.RoleEditor, s.createWorkspace))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/import", s.require(store.RoleEditor, s.importInto))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/changes", s.require(store.RoleEditor, s.postChanges))
+	m.HandleFunc("PUT /api/v1/workspaces/{id}/tree", s.require(store.RoleEditor, s.putTree))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/nodes", s.require(store.RoleEditor, s.createNode))
 	m.HandleFunc("PATCH /api/v1/workspaces/{id}/nodes/{node}", s.require(store.RoleEditor, s.updateNode))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/move", s.require(store.RoleEditor, s.moveNodes))
@@ -81,7 +84,8 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/workspaces/{id}/undo", s.require(store.RoleEditor, s.undoRedo("undo")))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/redo", s.require(store.RoleEditor, s.undoRedo("redo")))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/rollback", s.require(store.RoleEditor, s.rollback))
-	m.HandleFunc("GET /{$}", s.home)
+	m.HandleFunc("GET /{$}", s.page)
+	m.Handle("GET /assets/", s.assets())
 	return s.guard(m)
 }
 
@@ -132,7 +136,8 @@ func (s *Server) home(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(`<!doctype html><meta charset="utf-8"><title>Browser Foreman</title>
 <body style="font:16px system-ui;margin:3rem;max-width:40rem"><h1>Browser Foreman</h1>
 <p>The server is running. API: <code>/api/v1</code> · events: <code>/api/v1/events</code>.</p>
-<p>The web interface is served here once it is ported (see docs/roadmap.md).</p></body>`))
+<p>This binary was built without the web interface. Build it with <code>make build</code> (which runs
+<code>make web</code> first) to have it served here.</p></body>`))
 }
 
 // stream sends events as Server-Sent Events: first anything after Last-Event-ID still kept, then live ones, with a
@@ -332,8 +337,26 @@ func (s *Server) getWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bm, fo := t.Count()
+	h, err := s.Data.History(r.Context(), x.ID)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
 	w.Header().Set("ETag", strconv.Quote(strconv.Itoa(x.Head)))
-	writeJSON(w, 200, map[string]any{"workspace": wsOut{x, bm, fo}, "entry": e, "tree": t})
+	writeJSON(w, 200, map[string]any{"workspace": wsOut{x, bm, fo}, "entry": e, "tree": t, "can": canUndo(h)})
+}
+
+// canUndo names what undo and redo would act on (their entries' summaries), or null when there is nothing.
+func canUndo(h []store.Entry) map[string]any {
+	undo, redo := store.Stacks(h)
+	out := map[string]any{"undo": nil, "redo": nil}
+	if len(undo) > 1 {
+		out["undo"] = h[undo[len(undo)-1]-1].Summary
+	}
+	if len(redo) > 0 {
+		out["redo"] = h[redo[len(redo)-1]-1].Summary
+	}
+	return out
 }
 
 func (s *Server) getHistory(w http.ResponseWriter, r *http.Request) {

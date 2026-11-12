@@ -23,7 +23,7 @@ export interface AlertContext {
   help: Record<string, string>; statusName: Record<string, string>; statusIcon: Record<string, string>;
 }
 
-const QUIET = ["unverified", "needs-login", "local", "skipped", "n/a"];
+const QUIET = ["unverified", "needs-login", "local", "skipped", "unchecked", "n/a"];
 
 /** The alert at the top of a link's panel, or null when there is nothing to say. Dead first, then a pending move, an
  *  applied update, a status that was not checked, a possible "not found" page. */
@@ -68,6 +68,7 @@ export function linkBadges(i: LinkItem, hasNote: boolean): [string, string, stri
 export function snapshotMessage(i: LinkItem): string {
   if (i.s === "dead") return "Dead link, so there is no snapshot. Refresh (R) re-checks it.";
   if (!/^https?:/i.test(i.u)) return "Not a web page, so there is no snapshot.";
+  if (i.s === "unchecked") return "Not checked yet. Live (L) loads it here.";
   if (["local", "skipped"].includes(i.s)) return "Not visited on purpose (local, sign-out or action link). Live (L) loads it here.";
   return NO_SNAPSHOT;
 }

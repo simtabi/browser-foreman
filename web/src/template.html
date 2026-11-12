@@ -6,11 +6,9 @@
 <meta name="referrer" content="no-referrer">
 <title>Browser Foreman</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23066fd1'/%3E%3Cpath d='M22 14h20a4 4 0 0 1 4 4v32l-14-9-14 9V18a4 4 0 0 1 4-4z' fill='%23fff'/%3E%3C/svg%3E">
-<!-- Local copies (src/pipeline/vendor_assets.py) load first; the CDN copies never block the page if the network is slow. -->
+<!-- Vendored copies (web/assets), served by the binary: the page loads nothing from other hosts. -->
 <link rel="stylesheet" href="assets/css/tabler.min.css">
 <link rel="stylesheet" href="assets/css/tabler-icons.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.7.3/dist/css/tabler.min.css" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.50.0/dist/tabler-icons.min.css" media="print" onload="this.media='all'">
 <style>
 /* Layout: the app fills the window; the tree and the detail pane scroll on their own. */
 html, body { height: 100%; }
@@ -569,7 +567,7 @@ body { overflow-wrap: break-word; }
   <div class="container-fluid">
     <!-- 1. What you are working on -->
     <div class="hdr-group hdr-context">
-      <a class="navbar-brand hdr-brand" href="#" onclick="return false" aria-label="Browser Foreman">
+      <a class="navbar-brand hdr-brand" href="./" aria-label="Browser Foreman">
         <span class="hdr-logo"><i class="ti ti-browser-check"></i></span>
         <span class="hdr-title">Browser Foreman</span>
       </a>

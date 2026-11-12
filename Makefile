@@ -12,7 +12,7 @@ HOST_OS := $(shell go env GOOS | sed 's/darwin/macos/')
 help:  ## list targets
 	@grep -E '^[a-z-]+:.*##' Makefile | sed 's/:.*## /\t/'
 
-build:  ## this machine: build/<os>/browser-foreman
+build: web  ## this machine: build/<os>/browser-foreman
 	mkdir -p build/$(HOST_OS)
 	CGO_ENABLED=0 go -C src build -trimpath -ldflags '$(LDFLAGS)' -o ../build/$(HOST_OS)/$(BINARY) ./cmd/$(BINARY)
 
@@ -28,13 +28,13 @@ fmt:  ## gofmt check (fails when a file needs formatting)
 lint:  ## golangci-lint, when installed
 	cd src && golangci-lint run ./...
 
-universal:  ## one macOS binary for Apple silicon and Intel: build/macos/browser-foreman_macos_universal
+universal: web  ## one macOS binary for Apple silicon and Intel: build/macos/browser-foreman_macos_universal
 	mkdir -p build/macos
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go -C src build -trimpath -ldflags '$(LDFLAGS)' -o ../build/macos/$(BINARY)_macos_arm64 ./cmd/$(BINARY)
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go -C src build -trimpath -ldflags '$(LDFLAGS)' -o ../build/macos/$(BINARY)_macos_amd64 ./cmd/$(BINARY)
 	lipo -create -output build/macos/$(BINARY)_macos_universal build/macos/$(BINARY)_macos_arm64 build/macos/$(BINARY)_macos_amd64
 
-cross:  ## every target in build/targets.txt, then build/checksums.txt
+cross: web  ## every target in build/targets.txt, then build/checksums.txt
 	@while read os arch; do \
 	  case "$$os" in ''|\#*) continue;; esac; \
 	  dir=$$(echo $$os | sed 's/darwin/macos/'); ext=; [ "$$os" = windows ] && ext=.exe; \
@@ -43,7 +43,12 @@ cross:  ## every target in build/targets.txt, then build/checksums.txt
 	done < build/targets.txt
 	cd build && find . -mindepth 2 -type f | sed 's|^\./||' | sort | xargs shasum -a 256 > checksums.txt
 
-web:  ## build the web interface (TypeScript) into web/dist
+web:  ## build the web interface (TypeScript) and stage it for embedding in the binary
 	cd web && npm install --no-audit --no-fund && npm run build:web
+	rm -rf src/internal/webui/dist/assets src/internal/webui/dist/index.html
+	mkdir -p src/internal/webui/dist/assets/js
+	cp web/src/template.html src/internal/webui/dist/index.html
+	cp -R web/assets/css web/assets/fonts src/internal/webui/dist/assets/
+	cp web/dist/assets/js/app.js web/dist/assets/js/v1.js src/internal/webui/dist/assets/js/
 
 check: fmt vet test  ## what CI runs

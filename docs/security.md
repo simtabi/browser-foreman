@@ -12,6 +12,11 @@ What Browser Foreman protects, and how. Report a weakness privately: see [SECURI
   session; only health, version and sign-in are open. Tokens are compared in constant time (the configured one) or by
   their SHA-256 (a person's). In `local` mode with no token configured, the API is refused rather than left open.
 - **Roles.** viewer reads, editor will change bookmarks (phase 4), owner manages people, tokens and webhooks.
+- **The web page.** Its Content Security Policy allows scripts from the server and inline scripts carrying that
+  response's nonce, nothing from other hosts. It needs `'unsafe-eval'` for Alpine, which compiles the page's own
+  `x-*` attributes. Bookmark data is embedded as JSON with `<`, `>`, `&`, U+2028 and U+2029 escaped, so a title cannot
+  end the script it sits in. In `local` mode the page carries the API token, readable only from this computer (the
+  Host and Origin checks keep other sites out); in `accounts` mode it needs a session and carries only its CSRF token.
 - **Headers.** Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
   `Referrer-Policy: no-referrer` and a Content Security Policy limited to the server itself.
 

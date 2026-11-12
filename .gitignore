@@ -5,6 +5,9 @@
 # Web interface
 /web/node_modules/
 /web/dist/
+# The web interface staged for embedding by `make web`; only the placeholder is tracked.
+/src/internal/webui/dist/*
+!/src/internal/webui/dist/.keep
 
 # Secrets and personal data never belong here. The tool keeps them in ~/.config/browser-foreman and
 # ~/.local/state/browser-foreman; these lines catch a copy made by mistake.

@@ -1,17 +1,34 @@
 # Web interface
 
-The bookmark tree, Open tabs, Timeline, the Trash and every menu, as they work in the web interface. Served by the Python
-implementation in `legacy/` today; embedded in the binary in phase 4 of the [roadmap](../roadmap.md).
-
-A first run, from a built page to cleaned bookmarks and a saved record of your tabs.
+The bookmark tree, Open tabs, Timeline, the Trash and every menu. The binary embeds the interface (`make build` runs
+`make web` first) and serves it at `/`.
 
 ## Start the server
 
 ```bash
-npm run serve
+browser-foreman serve
 ```
 
-Open <http://localhost:8765/>. The first visit shows a welcome and a short tour; Help › Tour replays it.
+Open <http://localhost:8765/>. In `local` mode the page opens straight away; in `accounts` mode it asks you to sign in
+first. The first visit shows a welcome and a short tour; Help › Tour replays it. `?ws=<id>` opens another workspace.
+
+## What the binary serves today
+
+The Bookmarks view works in full against the server: the tree, search and filters, editing titles, addresses and
+notes, new folders, drag and drop, the Trash (put back, delete permanently), Undo and Redo, and Download. Every edit is
+saved as one history entry through `PUT /api/v1/workspaces/{id}/tree`, and the server publishes what changed as events.
+If the bookmarks changed somewhere else since the page loaded, the save is refused and the page offers to reload, so
+nothing is overwritten.
+
+Still to come, so their parts of the page stay empty or show the server as not answering:
+
+| Part | Arrives in |
+|---|---|
+| Link health (*Refresh all*, *Update moved*, dead links): every bookmark shows *Not checked yet* | phase 4, link checks |
+| The workspace menu (rename, lock, archive, history window) and Settings › Backup | phase 4 |
+| Open tabs, the Timeline's tab snapshots, the Browsers menu | phase 5 |
+
+The sections below describe the whole interface, as the Python implementation in `legacy/` serves it.
 
 ## The layout
 
@@ -118,7 +135,8 @@ palette.
 
 ## Where things are kept
 
-Everything stays in `storage/` on this computer:
+The binary keeps everything in its state folder (see [configuration](../configuration.md)). The Python implementation
+keeps it in `storage/`:
 
 | Folder | Holds |
 |---|---|
@@ -128,10 +146,6 @@ Everything stays in `storage/` on this computer:
 | `storage/reports/`, `storage/exports/` | the build's reports and the cleaned import file |
 | `storage/backups/` | backups made by Settings › Backup, and the original export |
 | `storage/archive/` | old files moved aside (never deleted) |
-
----
-
-[← Docs index](../README.md#documentation)
 
 ---
 [← Docs index](../../README.md#documentation)

@@ -9,10 +9,11 @@ export const TRASH = "Trash";
 export const OLD_TRASH = "_Removed (not exported)";
 
 export type BookmarkId = number;
-export interface Folder { fid?: number; n: string; c: TreeNode[]; from?: string; d?: string; virtual?: boolean }
+/** k: the folder's id on the server, when it came from one (the page's own fid is per page load). */
+export interface Folder { fid?: number; k?: string; n: string; c: TreeNode[]; from?: string; d?: string; virtual?: boolean }
 export type TreeNode = Folder | BookmarkId;
 /** A folder as it is saved: no ids of the page's own, nothing that can be rebuilt. */
-export interface SavedFolder { n: string; c: (SavedFolder | BookmarkId)[]; from?: string; d?: string }
+export interface SavedFolder { n: string; c: (SavedFolder | BookmarkId)[]; k?: string; from?: string; d?: string }
 export type Parents = Map<TreeNode, Folder>;
 
 let fidSeq = 1;
@@ -52,11 +53,16 @@ export function defaultTree(folders: string[], items: { id: BookmarkId; path: st
 
 export const plain = (f: Folder): SavedFolder => {
   const o: SavedFolder = { n: f.n, c: f.c.map(x => isFolder(x) ? plain(x) : x) };
+  if (f.k) o.k = f.k;
   if (f.from) o.from = f.from;
   if (f.d) o.d = f.d;
   return o;
 };
-export const revive = (p: SavedFolder): Folder => mkFolder(p.n, p.c.map(x => typeof x === "object" ? revive(x) : x), p.from, p.d);
+export const revive = (p: SavedFolder): Folder => {
+  const f = mkFolder(p.n, p.c.map(x => typeof x === "object" ? revive(x) : x), p.from, p.d);
+  if (p.k) f.k = p.k;
+  return f;
+};
 
 /** A saved tree reconciled with the current data: ids that no longer exist (or were merged away, or deleted for good)
  *  drop out, each id appears once, and bookmarks the saved tree does not have go into their own folder path. */

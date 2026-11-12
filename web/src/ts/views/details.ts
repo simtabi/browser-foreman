@@ -10,14 +10,14 @@ import { isFolder, nice } from "../tree";
 /** A bookmark as the details pane reads it. */
 export interface DetailItem { id: BookmarkId; u: string; s: string; o: string; a?: number }
 
-export const STATUS_ORDER = ["ok", "moved", "moved-elsewhere", "needs-login", "unverified", "dead", "local", "skipped", "n/a"] as const;
+export const STATUS_ORDER = ["ok", "moved", "moved-elsewhere", "needs-login", "unverified", "dead", "local", "skipped", "unchecked", "n/a"] as const;
 export const STATUS_BG: Record<string, string> = { ok: "bg-success", moved: "bg-warning", "moved-elsewhere": "bg-purple", "needs-login": "bg-info",
-  unverified: "bg-secondary", dead: "bg-danger", local: "bg-dark-lt", skipped: "bg-dark-lt", "n/a": "bg-dark-lt" };
+  unverified: "bg-secondary", dead: "bg-danger", local: "bg-dark-lt", skipped: "bg-dark-lt", unchecked: "bg-secondary-lt", "n/a": "bg-dark-lt" };
 /** Short labels where space is tight (the folder summary); the full name stays in the tooltip. */
 export const STATUS_SHORT: Record<string, string> = { ok: "Working", moved: "Moved", "moved-elsewhere": "Other site", "needs-login": "Needs login",
-  unverified: "Unverified", dead: "Dead", local: "Local", skipped: "Not checked", "n/a": "Not a web link" };
+  unverified: "Unverified", dead: "Dead", local: "Local", skipped: "Not checked", unchecked: "Not checked yet", "n/a": "Not a web link" };
 export const STATUS_NAME: Record<string, string> = { ok: "Working", moved: "Moved, update ready", "moved-elsewhere": "Redirects to another site", "needs-login": "Requires login",
-  unverified: "Could not be verified", dead: "Dead", local: "Local or staging", skipped: "Not checked (action link)", "n/a": "Not a web link" };
+  unverified: "Could not be verified", dead: "Dead", local: "Local or staging", skipped: "Not checked (action link)", unchecked: "Not checked yet", "n/a": "Not a web link" };
 
 const countBy = <T>(xs: T[], key: (x: T) => string): Record<string, number> => { const c: Record<string, number> = {}; for (const x of xs) { const k = key(x); c[k] = (c[k] ?? 0) + 1; } return c; };
 const statusCounts = (its: DetailItem[]) => countBy(its, i => i.s);

@@ -370,7 +370,7 @@
     },
     "/api/v1/workspaces/{id}": {
       "get": {
-        "summary": "The tree (and Trash) at the head, or ?at=N; ETag is the head",
+        "summary": "The tree (and Trash) at the head, or ?at=N, with what undo and redo would act on; ETag is the head",
         "tags": [
           "Workspaces"
         ],
@@ -837,6 +837,40 @@
           }
         ],
         "description": "Body: {to}"
+      }
+    },
+    "/api/v1/workspaces/{id}/tree": {
+      "put": {
+        "summary": "Save a whole tree (and Trash) at once; the server works out and publishes what changed",
+        "tags": [
+          "Bookmarks"
+        ],
+        "x-role": "editor",
+        "description": "Body: {root, trash?}. A save that changes nothing records no entry (200).",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          }
+        ]
       }
     }
   }

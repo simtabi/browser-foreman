@@ -4,7 +4,7 @@
 // disk; Undo steps back through that history; the History window lists it and rolls back to any entry.
 (() => {
   const W = window.BM_WS;
-  if (!W) return;
+  if (!W || W.v1) return;  // the Go server's page installs its own hooks (v1-boot.ts)
   const LS = "bm-preview-v2"; // the page's own localStorage prefix (STORE in preview_template.html)
   const api = (p) => `api/ws/${encodeURIComponent(W.id)}${p}`;
   const owns = k => k === "urls" || k === "refreshed" || k.startsWith("tree-");

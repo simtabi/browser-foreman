@@ -13,3 +13,9 @@ await build({
   outfile: join(root, "dist", "assets", "js", "app.js"),
   bundle: true, format: "esm", target: "es2022", minify: true, sourcemap: true, legalComments: "eof", logLevel: "info",
 });
+// The Go server's page loads this first (a classic script): it turns the server's tree into the page's data.
+await build({
+  entryPoints: [join(here, "ts", "v1-boot.ts")],
+  outfile: join(root, "dist", "assets", "js", "v1.js"),
+  bundle: true, format: "iife", target: "es2022", minify: true, sourcemap: true, legalComments: "eof", logLevel: "info",
+});

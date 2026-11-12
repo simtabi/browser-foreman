@@ -1,6 +1,6 @@
 # REST API
 
-35 endpoints, all under `/api/v1`, all JSON. `GET /api/v1/openapi.json` describes every one (OpenAPI 3.1, with the
+36 endpoints, all under `/api/v1`, all JSON. `GET /api/v1/openapi.json` describes every one (OpenAPI 3.1, with the
 role each needs in `x-role`); a test fails if a route and the document ever disagree.
 
 ## Rules for every request
@@ -41,12 +41,13 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `DELETE` | `/api/v1/webhooks/{id}` | owner | `204`, or `404` |
 | `POST` | `/api/v1/webhooks/{id}/test` | owner | sends a `webhook.test` event now; `200` with the delivery record |
 | `GET` | `/api/v1/workspaces` | viewer | `200 {"workspaces": [{id, name, created, head, bookmarks, folders}]}` |
-| `GET` | `/api/v1/workspaces/{id}` | viewer | the workspace, its last entry and its tree; `?at=N` for the tree after entry N |
+| `GET` | `/api/v1/workspaces/{id}` | viewer | the workspace, its last entry, its tree and `can` (what undo and redo would act on); `?at=N` for the tree after entry N |
 | `GET` | `/api/v1/workspaces/{id}/history` | viewer | `200 {"history": [entries, oldest first]}` |
 | `POST` | `/api/v1/workspaces` | editor | body `{id, name}`; `201`, or `409` if the id is taken |
 | `POST` | `/api/v1/workspaces/{id}/import` | editor | the body is a bookmarks file (Chrome JSON or exported HTML, up to 64 MiB); replaces the tree as one entry; `?name=` labels it |
 | `GET` | `/api/v1/workspaces/{id}/export` | viewer | a download: `?format=html` (default, every browser imports it) or `chrome`; `?at=N` for an earlier state |
 | `POST` | `/api/v1/workspaces/{id}/changes` | editor | body `{base?, ops: [...]}`: several changes as one entry, all or none |
+| `PUT` | `/api/v1/workspaces/{id}/tree` | editor | body `{root, trash?}`: the whole tree at once (the web interface saves this way); the server works out what changed, checks it by the same rules and publishes those events; an unchanged tree records nothing (`200`) |
 | `POST` | `/api/v1/workspaces/{id}/nodes` | editor | body `{parent, index?, kind, title, url?, note?}`: add a bookmark or folder |
 | `PATCH` | `/api/v1/workspaces/{id}/nodes/{node}` | editor | body any of `{title, url, note}` |
 | `POST` | `/api/v1/workspaces/{id}/move` | editor | body `{ids, parent, index?}`; moved in the order given |

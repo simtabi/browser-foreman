@@ -959,7 +959,7 @@ for (const a of document.querySelectorAll(".foot-links [data-about]")) a.onclick
 on("#footKeys", e => { e?.preventDefault?.(); openShortcuts(); });
 let serverUp = null;
 async function pingServer() {
-  let up = false; try { up = (await fetch("api/ping", {cache: "no-store"})).ok; } catch {}
+  let up = false; try { up = (await fetch("api/v1/health", {cache: "no-store"})).ok; } catch {}
   if (up !== serverUp) {
     serverUp = up; const f = $("#footServer");
     f.querySelector(".status-dot").className = "status-dot " + (up ? "on" : "off");
