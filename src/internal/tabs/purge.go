@@ -17,10 +17,20 @@ type Purged struct {
 	Pages     int    `json:"pages"`     // pages removed
 }
 
-// Purge forgets private windows in saved snapshots. Level "pages" removes their pages and titles and keeps how many
-// windows and tabs there were; "windows" removes the private windows entirely, counts included. Only snapshots taken
-// before olderThan go (zero: all). Normal windows are never touched. The store then scrubs what it freed.
+// Purge forgets private windows in every pool's saved snapshots (the automatic purge). Level "pages" removes their
+// pages and titles and keeps how many windows and tabs there were; "windows" removes the private windows entirely,
+// counts included. Only snapshots taken before olderThan go (zero: all). Normal windows are never touched. The store
+// then scrubs what it freed.
 func (s *Service) Purge(ctx context.Context, level string, olderThan time.Duration) (Purged, error) {
+	return s.purge(ctx, level, olderThan, func(snapshotDoc) bool { return true })
+}
+
+// PurgePool is Purge for one pool (PoolFor) only: what a workspace's Open tabs panel counts is what it purges.
+func (s *Service) PurgePool(ctx context.Context, pool, level string, olderThan time.Duration) (Purged, error) {
+	return s.purge(ctx, level, olderThan, func(d snapshotDoc) bool { return d.Workspace == pool })
+}
+
+func (s *Service) purge(ctx context.Context, level string, olderThan time.Duration, in func(snapshotDoc) bool) (Purged, error) {
 	if level != "pages" && level != "windows" {
 		return Purged{}, errors.New(`level: "pages" or "windows"`)
 	}
@@ -39,8 +49,8 @@ func (s *Service) Purge(ctx context.Context, level string, olderThan time.Durati
 			return out, err
 		}
 		var doc snapshotDoc
-		if err := json.Unmarshal(snap.Windows, &doc); err != nil {
-			continue // unreadable: nothing of it can be shown either
+		if err := json.Unmarshal(snap.Windows, &doc); err != nil || !in(doc) {
+			continue // unreadable (nothing of it can be shown either), or another pool's
 		}
 		changed := false
 		for bi := range doc.Browsers {
@@ -114,39 +124,44 @@ func (s *Service) Stored(ctx context.Context, pool string) (snapshots, privatePa
 	return snapshots, privatePages, nil
 }
 
-// DeleteSnapshots deletes snapshots for good: the ids given, those taken before a day (YYYY-MM-DD, local time), or
-// every one. Notes stay; they belong to addresses and windows, not to snapshots.
-func (s *Service) DeleteSnapshots(ctx context.Context, ids []string, before string, everything bool) (int, error) {
-	var pick []string
+// DeleteSnapshots deletes one pool's snapshots (PoolFor) for good: the ids given, those taken before a day
+// (YYYY-MM-DD, local time), or every one. Snapshots in other pools are never touched, ids included. Notes stay; they
+// belong to addresses and windows, not to snapshots.
+func (s *Service) DeleteSnapshots(ctx context.Context, pool string, ids []string, before string, everything bool) (int, error) {
+	var day time.Time
+	want := map[string]bool{}
 	switch {
 	case everything:
-		list, err := s.Data.TabSnapshots(ctx, 0)
-		if err != nil {
-			return 0, err
-		}
-		for _, x := range list {
-			pick = append(pick, x.ID)
-		}
 	case before != "":
-		day, err := time.ParseInLocation("2006-01-02", before, time.Local)
+		d, err := time.ParseInLocation("2006-01-02", before, time.Local)
 		if err != nil {
 			return 0, errors.New("before: a day as YYYY-MM-DD")
 		}
-		list, err := s.Data.TabSnapshots(ctx, 0)
-		if err != nil {
-			return 0, err
-		}
-		for _, x := range list {
-			if x.At.Before(day) {
-				pick = append(pick, x.ID)
-			}
-		}
+		day = d
 	default:
 		for _, id := range ids {
 			if id = strings.TrimSpace(id); id != "" {
-				pick = append(pick, id)
+				want[id] = true
 			}
 		}
+		if len(want) == 0 {
+			return 0, nil
+		}
+	}
+	list, err := s.Data.TabSnapshots(ctx, 0)
+	if err != nil {
+		return 0, err
+	}
+	var pick []string
+	for _, x := range list {
+		switch {
+		case len(want) > 0 && !want[x.ID], before != "" && !x.At.Before(day):
+			continue
+		}
+		if doc, _, err := s.loadDoc(ctx, x.ID); err == nil && doc.Workspace != pool {
+			continue // another pool's (an unreadable one is deletable from any pool: nothing else can show it)
+		}
+		pick = append(pick, x.ID)
 	}
 	n, err := s.Data.DeleteTabs(ctx, pick)
 	if err != nil {

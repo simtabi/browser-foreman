@@ -143,6 +143,9 @@ ships.
 
 ### Fixed
 
+- Deleting tab history and purging private windows act on the open workspace's tab snapshots only (what its panel
+  counts), not every workspace's; the automatic purge still covers all of them.
+- Merging no longer stops with an error when a Trash entry's reason says *duplicate of* with no bookmark after it.
 - A table's column header (History, Workspaces and the other lists in dialogs and panes) stays in view under its
   search bar while the rows scroll, instead of scrolling away with them; it is solid, so rows no longer show through.
 - Buttons and menus show a focus ring for the keyboard only, so a click (or a dialog focusing its safe choice, as the

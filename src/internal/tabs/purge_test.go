@@ -61,13 +61,54 @@ func TestPurgeAndDelete(t *testing.T) {
 		t.Fatal("an unknown level was accepted")
 	}
 
-	if n, err := s.DeleteSnapshots(ctx, nil, "2026-11-12", false); err != nil || n != 1 {
+	if n, err := s.DeleteSnapshots(ctx, "", nil, "2026-11-12", false); err != nil || n != 1 {
 		t.Fatalf("before: %d %v", n, err)
 	}
-	if n, _ := s.DeleteSnapshots(ctx, nil, "", true); n != 1 {
+	if n, _ := s.DeleteSnapshots(ctx, "", nil, "", true); n != 1 {
 		t.Fatalf("everything: %d", n)
 	}
-	if _, err := s.DeleteSnapshots(ctx, nil, "yesterday", false); err == nil {
+	if _, err := s.DeleteSnapshots(ctx, "", nil, "yesterday", false); err == nil {
 		t.Fatal("a bad day was accepted")
+	}
+}
+
+func TestDeleteAndPurgeKeepToOnePool(t *testing.T) {
+	ctx := context.Background()
+	data, err := store.Open("sqlite", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer data.Close()
+	now := time.Date(2026, 11, 13, 12, 0, 0, 0, time.Local)
+	s := &Service{Data: data, Now: func() time.Time { return now }}
+	save := func(id, pool string) {
+		st := State{At: now.Add(-48 * time.Hour), Browsers: []Browser{{Browser: "Chrome", Running: true, Windows: []Window{
+			{Index: 1, Mode: "incognito", Tabs: []Tab{{URL: "https://secret.example/"}}},
+		}}}}
+		b, _ := json.Marshal(snapshotDoc{State: st, Workspace: pool})
+		if err := data.SaveTabs(ctx, store.TabSnapshot{ID: id, At: st.At, Reason: "auto", Windows: b}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	save("2026-11-11_120000", "")
+	save("2026-11-11_120001", "work")
+	if res, _ := s.PurgePool(ctx, "work", "pages", 0); res.Snapshots != 1 {
+		t.Fatalf("purge in one pool changed %d snapshots, want 1", res.Snapshots)
+	}
+	if shared, _, _ := s.Snapshot(ctx, "2026-11-11_120000"); len(shared.Browsers[0].Windows[0].Tabs) != 1 {
+		t.Fatal("purging the work pool purged the shared pool")
+	}
+	for _, try := range []func() (int, error){
+		func() (int, error) { return s.DeleteSnapshots(ctx, "work", nil, "", true) },
+		func() (int, error) { return s.DeleteSnapshots(ctx, "work", []string{"2026-11-11_120000"}, "", false) },
+		func() (int, error) { return s.DeleteSnapshots(ctx, "work", nil, "2026-11-13", false) },
+	} {
+		if _, err := try(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	left, _ := data.TabSnapshots(ctx, 0)
+	if len(left) != 1 || left[0].ID != "2026-11-11_120000" {
+		t.Fatalf("left %+v, want only the shared pool's snapshot", left)
 	}
 }

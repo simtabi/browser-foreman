@@ -119,8 +119,11 @@ func Merge(base store.Tree, sources []Source, separate bool, now int64) (Result,
 	trashedDup := map[string]bool{}
 	for _, x := range out.Trash {
 		mark(x.Node)
+		// A reason edited or written by an older version may carry no id: such an entry pairs with nothing.
 		if kept, ok := strings.CutPrefix(x.Reason, DuplicateOf); ok && x.Node.Kind == store.KindBookmark {
-			trashedDup[Key(x.Node.URL)+"\x00"+strings.Fields(kept + " ")[0]] = true
+			if id := strings.Fields(kept); len(id) > 0 {
+				trashedDup[Key(x.Node.URL)+"\x00"+id[0]] = true
+			}
 		}
 	}
 	newID := func() string {

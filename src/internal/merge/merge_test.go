@@ -150,3 +150,13 @@ func TestOldCopiesAreNeverDemotedAndIDsNeverCollide(t *testing.T) {
 		t.Fatalf("children %d added %d dups %d", len(r.Tree.Root.Children), r.Added, len(r.Dups))
 	}
 }
+
+func TestATrashReasonWithNoIDDoesNotStopAMerge(t *testing.T) {
+	base := tree(folder("bar", "Bookmarks Bar", bm("keep", "Go", "https://go.dev/", 500)))
+	base.Trash = []*store.Trashed{{Node: bm("old", "Go", "https://go.dev/", 1), From: "bar", Reason: DuplicateOf}}
+	src := tree(folder("x", "Bookmarks Bar", bm("n1", "Go docs", "https://www.go.dev", 100)))
+	r, err := Merge(base, []Source{{Name: "a.html", Tree: src}}, false, 1)
+	if err != nil || r.Again != 0 || len(r.Tree.Trash) != 2 {
+		t.Fatalf("err %v, again %d, trash %d", err, r.Again, len(r.Tree.Trash))
+	}
+}

@@ -58,7 +58,7 @@ func (s *Server) putTabNote(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"note": n})
 }
 
-// deleteSnapshots deletes snapshots for good: exactly one of ids, before (a day) or everything (which also needs
+// deleteSnapshots deletes the workspace pool's snapshots for good (?workspace=, as tabPool): exactly one of ids, before (a day) or everything (which also needs
 // confirm: "DELETE ALL"). Owners only: it cannot be undone.
 func (s *Server) deleteSnapshots(w http.ResponseWriter, r *http.Request) {
 	var in struct {
@@ -87,7 +87,7 @@ func (s *Server) deleteSnapshots(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "at most 5000 ids")
 		return
 	}
-	n, err := s.Tabs.DeleteSnapshots(r.Context(), in.IDs, in.Before, in.Everything)
+	n, err := s.Tabs.DeleteSnapshots(r.Context(), s.tabPool(r), in.IDs, in.Before, in.Everything)
 	if err != nil {
 		writeErr(w, 400, err.Error())
 		return
@@ -96,7 +96,7 @@ func (s *Server) deleteSnapshots(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"deleted": n})
 }
 
-// purgeTabs forgets private windows in saved snapshots: level "pages" keeps their counts, "windows" removes them.
+// purgeTabs forgets private windows in the workspace pool's snapshots (?workspace=, as tabPool): level "pages" keeps their counts, "windows" removes them.
 // Owners only.
 func (s *Server) purgeTabs(w http.ResponseWriter, r *http.Request) {
 	var in struct {
@@ -113,7 +113,7 @@ func (s *Server) purgeTabs(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, fmt.Sprintf("older_than_hours: 0 (all) to %d", 24*3650))
 		return
 	}
-	res, err := s.Tabs.Purge(r.Context(), in.Level, time.Duration(in.OlderThanHours)*time.Hour)
+	res, err := s.Tabs.PurgePool(r.Context(), s.tabPool(r), in.Level, time.Duration(in.OlderThanHours)*time.Hour)
 	if err != nil {
 		writeErr(w, 400, err.Error())
 		return
