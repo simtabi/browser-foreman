@@ -6,7 +6,8 @@ export type KeyAction =
   | "palette" | "undo" | "redo" | "selectAll" | "toList" | "escape" | "search" | "shortcuts" | "help" | "settings"
   | "moveUp" | "moveDown" | "nav" | "mark" | "enter" | "expandAll" | "collapseAll" | "openHere" | "openWindow"
   | "openIncognito" | "copy" | "describe" | "live" | "refresh" | "putBack" | "update" | "move" | "group"
-  | "newFolder" | "rename" | "trash" | "menu";
+  | "newFolder" | "rename" | "trash" | "menu"
+  | "rate0" | "rate1" | "rate2" | "rate3" | "rate4" | "rate5" | "tag";
 
 export interface KeyPress { key: string; shift?: boolean; alt?: boolean; meta?: boolean; ctrl?: boolean }
 export interface KeyContext {
@@ -25,6 +26,8 @@ const LETTERS: Record<string, KeyAction> = {
   r: "refresh", R: "refresh", p: "putBack", P: "putBack", u: "update", U: "update", m: "move", M: "move",
   g: "group", G: "group", n: "newFolder", N: "newFolder", F2: "rename", Delete: "trash", Backspace: "trash",
   ".": "menu", ContextMenu: "menu",
+  // Your labels on the selected bookmark: 1–5 stars, 0 clears them, T goes to its tags.
+  "0": "rate0", "1": "rate1", "2": "rate2", "3": "rate3", "4": "rate4", "5": "rate5", t: "tag", T: "tag",
 };
 const NAV = new Set(["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft", "Home", "End"]);
 

@@ -15,6 +15,14 @@ const check = (name, fn) => { fn(); checks++; console.log("ok", name); };
 const idle = { dialogOpen: false, menuOpen: false, typing: false, inSearch: false, hasRow: true };
 const act = (k, c = {}) => K.keyAction(typeof k === "string" ? { key: k } : k, { ...idle, ...c })?.action ?? null;
 
+check("1–5 rate the selected bookmark, 0 clears, T goes to its tags; never while typing or with nothing selected", () => {
+  assert.equal(act("4", { hasRow: true }), "rate4");
+  assert.equal(act("0", { hasRow: true }), "rate0");
+  assert.equal(act("t", { hasRow: true }), "tag");
+  assert.equal(act("4", { hasRow: true, typing: true }), null);
+  assert.equal(act("4", { hasRow: false }), null);
+});
+
 check("⌘K opens the palette even over a dialog or while typing", () => {
   assert.equal(act({ key: "k", meta: true }, { dialogOpen: true }), "palette");
   assert.equal(act({ key: "K", ctrl: true }, { typing: true }), "palette");
@@ -74,5 +82,5 @@ check("names, titles, addresses and notes are escaped; folder descriptions kept"
   assert.ok(out.text.includes("<DD>A &quot;quoted&quot; note"));
   assert.ok(out.text.includes('ADD_DATE="0">B</A>') && out.text.includes("<DD>why"));
 });
-assert.equal(checks, 9);
+assert.equal(checks, 10);
 console.log(`${checks} key and export checks passed`);

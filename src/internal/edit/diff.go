@@ -117,6 +117,9 @@ func Diff(prev, next store.Tree) ([]Event, error) {
 		sameTags := !existed || strings.Join(was.n.Tags, "\x00") == strings.Join(now.n.Tags, "\x00")
 		if existed && (was.n.Title != now.n.Title || was.n.URL != now.n.URL || was.n.Note != now.n.Note || was.n.Rating != now.n.Rating || !sameTags) {
 			data := map[string]any{}
+			if was.n.Title != now.n.Title {
+				data["renamed"] = true
+			}
 			if was.n.Rating != now.n.Rating {
 				data["rating"] = now.n.Rating
 			}

@@ -9,7 +9,7 @@ import { SnapshotSettingsPanel } from "../snapshot-settings";
 import { Pager } from "../pager";
 import { RangePicker } from "../rangepick";
 import { FoldCenter } from "../fold";
-import { starRating, tagEditor } from "../labels";
+import { cleanTags, starRating, tagEditor } from "../labels";
 import { api } from "../api";
 import { ViewSearch } from "../search";
 import { UndoCenter } from "../undo";
@@ -556,7 +556,7 @@ addEventListener("resize", () => { if (tourAt >= 0) paintTour(); });
 async function welcome() {
   const go = await askConfirm({title: `Welcome to ${APP.name}`, ok: "Take the 1-minute tour", no: "Not now", danger: false,
     body: `${APP.name} keeps your bookmarks clean and your tabs safe. This build holds ${DATA.keep.length.toLocaleString()} of your bookmarks (from ${DATA.total.toLocaleString()}), checked and sorted into one structure built on your own folders, and Open tabs saves your browser windows so a crash never loses them. ` +
-      "Review and edit here; nothing changes in your browser until you download the import file and import it. Editing the browser's bookmarks in place needs the browser extension, which is planned."});
+      "Review and edit here; nothing changes in your browser until you download the import file and import it, or write it back with the browser extension (Browsers › Browser extensions…)."});
   try { localStorage.setItem(STORE + ":onboarded", "1"); } catch {}
   if (go) tour(0);
 }
@@ -1818,6 +1818,8 @@ function commands() {
     ["new-folder", "New folder here…", "ti-folder-plus", "N", () => !ro, () => newFolder(null), "Organise"],
     ["rename", "Rename…", "ti-pencil", "F2", () => !!r && !many && !ro && !r.trash, rename, "Organise"],
     ["describe", "Edit description…", "ti-notes", "D", () => !!r && !many && !ro && !r.node.virtual, editDescription, "Organise"],
+    ["rate", many ? `Rate ${marked.size} items…` : "Rate (1–5, 0 clears)", "ti-star", "1–5", () => !!r && !ro && !r.trash, () => many ? askRateMany() : $("#info .star-rating .btn")?.focus(), "Organise"],
+    ["tag-add", many ? `Tag ${marked.size} items…` : "Edit tags", "ti-tag", "T", () => !!r && !ro && !r.trash, () => many ? tagMany(true) : KEY_ACTIONS.tag(), "Organise"],
     ["up", "Move up", "ti-arrow-up", "⌥↑", () => !!r && !many && !ro, () => reorder(-1), "Organise"],
     ["down", "Move down", "ti-arrow-down", "⌥↓", () => !!r && !many && !ro, () => reorder(1), "Organise"],
     ["sort", "Sort this folder A–Z", "ti-sort-ascending-letters", "", () => !!r && !ro, sortFolder, "Organise"],
@@ -2076,7 +2078,8 @@ const PALETTE = new CommandPalette(() => commands().map(toCommand));
 function openPalette() { PALETTE.open(); }
 const NAV_KEYS = [["↑ ↓", "Move through the list"], ["⇧↑ ⇧↓", "Extend the selection"], ["→ ←", "Open / close a folder, or go up"],
   ["Space", "Select or unselect"], ["⌘-click / ⇧-click", "Select several"], ["Enter", "Open a link / a folder"], ["Home End", "First / last row"],
-  [". or right-click", "Context menu"], ["Esc", "Clear the selection, close a dialog"]];
+  [". or right-click", "Context menu"], ["Esc", "Clear the selection, close a dialog"],
+  ["1 … 5", "Rate the bookmark (stars)"], ["0", "Clear its rating"], ["T", "Edit its tags"]];
 function openShortcuts() {
   PALETTE.shortcuts(NAV_KEYS);
   showModal("#keysModal");
@@ -2218,8 +2221,11 @@ function show() {
     menuButton("Open", "ti-external-link", openItems(false));
     menuButton("Actions", "ti-dots", [{h: "Organise"}, {l: "Move to", ic: "ti-folder-symlink", sub: moveToItems()},
       {l: "Group into a new folder…", ic: "ti-stack-2", k: "G", fn: () => newFolder(targets())},
-      {l: "Refresh", ic: "ti-refresh", k: "R", fn: refresh}, "-", {l: "Move to Trash", ic: "ti-trash", k: "⌫", danger: true, fn: trashNodes}]);
-    info.append(el("p", "text-secondary mb-0", "Open them, move them (M), group them (G), refresh them (R), send them to the Trash (⌫), or drag them onto a folder."));
+      {l: "Refresh", ic: "ti-refresh", k: "R", fn: refresh},
+      ...(readOnly() ? [] : [{h: "Label them"}, {l: "Rate", ic: "ti-star", sub: [1, 2, 3, 4, 5].map(v => ({l: "★".repeat(v), fn: () => rateMany(v)})).concat([{l: "Clear the rating", ic: "ti-star-off", fn: () => rateMany(0)}])},
+        {l: "Add a tag…", ic: "ti-tag", fn: () => tagMany(true)}, {l: "Remove a tag…", ic: "ti-tag-off", fn: () => tagMany(false)}]),
+      "-", {l: "Move to Trash", ic: "ti-trash", k: "⌫", danger: true, fn: trashNodes}]);
+    info.append(el("p", "text-secondary mb-0", "Open them, move them (M), group them (G), refresh them (R), rate and tag them (Actions), send them to the Trash (⌫), or drag them onto a folder."));
     return;
   }
   if (r.kind === "folder") showFolder(r); else showLink(r.item, r.node);
@@ -2380,7 +2386,52 @@ const KEY_ACTIONS = {
   update: () => { if (!readOnly()) applyUpdates(updateIds()); }, move: () => { if (!readOnly()) moveDialog(); },
   group: () => { if (!readOnly()) newFolder(targets()); }, newFolder: () => newFolder(null),
   rename: () => rename(), trash: () => trashNodes(), menu: () => menuAtSelection(),
+  rate0: () => rateSelected(0), rate1: () => rateSelected(1), rate2: () => rateSelected(2), rate3: () => rateSelected(3),
+  rate4: () => rateSelected(4), rate5: () => rateSelected(5),
+  tag: () => { const r = rows[sel]; if (r?.kind === "link" && !readOnly()) $("#info .tag-input")?.focus(); },
 };
+// Rate or tag every bookmark in the selection (folders count their bookmarks), as one undoable edit.
+function rateMany(v) {
+  const ids = targetIds(); if (!ids.length || readOnly()) return;
+  snapshot(); for (const id of ids) { if (v) st().ratings[id] = v; else delete st().ratings[id]; }
+  save(); build(true); show();
+  toast(v ? `${ids.length.toLocaleString()} bookmarks rated ${"★".repeat(v)}` : `Rating cleared on ${ids.length.toLocaleString()} bookmarks`, "success");
+}
+async function askRateMany() {
+  const v = await askText({title: `Rate ${targetIds().length.toLocaleString()} bookmarks`, label: "Stars, 1 to 5 (0 clears)", value: "5", hint: "Or use Actions › Label them › Rate."});
+  const n = Number(String(v ?? "").trim()); if (v == null || !Number.isInteger(n) || n < 0 || n > 5) return v == null ? undefined : toast("Give a number from 0 to 5.", "warning", "Not rated");
+  rateMany(n);
+}
+async function tagMany(add) {
+  const ids = targetIds(); if (!ids.length || readOnly()) return;
+  const inUse = [...new Set(ids.flatMap(id => tagsOf(id)))];
+  const raw = await askText({title: add ? `Add a tag to ${ids.length.toLocaleString()} bookmarks` : `Remove a tag from ${ids.length.toLocaleString()} bookmarks`,
+    label: "Tag", value: "", hint: add ? (allTags().slice(0, 8).join(", ") || "work, read later…") : (inUse.join(", ") || "None of them has a tag")});
+  const tag = String(raw ?? "").trim(); if (!tag) return;
+  const r = cleanTags([tag]); if (r.error) return toast(r.error, "warning", "Not tagged");
+  const t = r.tags[0], same = x => x.toLowerCase() === t.toLowerCase();
+  let n = 0;
+  snapshot();
+  for (const id of ids) {
+    const cur = tagsOf(id);
+    if (add && !cur.some(same)) {
+      const next = cleanTags([...cur, t]); if (next.error) continue;
+      st().tags[id] = next.tags; n++;
+    } else if (!add && cur.some(same)) {
+      const next = cur.filter(x => !same(x)); if (next.length) st().tags[id] = next; else delete st().tags[id]; n++;
+    }
+  }
+  save(); build(true); show();
+  toast(add ? `Tagged ${n.toLocaleString()} bookmarks “${t}”` : `“${t}” removed from ${n.toLocaleString()} bookmarks`, "success");
+}
+// Rate the selected bookmark (0 clears), as the stars in its details do; folders and read-only views are left alone.
+function rateSelected(v) {
+  const r = rows[sel]; if (!r || r.kind !== "link" || readOnly()) return;
+  if ((ratingOf(r.node) || 0) === v) return;
+  snapshot(); if (v) st().ratings[r.node] = v; else delete st().ratings[r.node];
+  save(); build(true); show();
+  toast(v ? `Rated ${"★".repeat(v)}` : "Rating cleared", "success");
+}
 document.addEventListener("keydown", e => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
   const hit = keyAction({key: e.key, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey, ctrl: e.ctrlKey},

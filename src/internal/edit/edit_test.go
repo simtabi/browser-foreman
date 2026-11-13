@@ -157,6 +157,15 @@ func TestRatingAndTags(t *testing.T) {
 	if ev[0].Type != "bookmark.updated" || ev[0].Data["rating"] != 4 {
 		t.Fatalf("%+v", ev)
 	}
+	if got := Summary(ev); got != `Rated "Go" 4 stars; tagged go, Read later, work` {
+		t.Fatalf("summary %q", got)
+	}
+	if _, ev2 := run(t, sample(), Op{Op: "update", ID: "go", Tags: []string{"x"}}); Summary(ev2) != `Tagged x: "Go"` {
+		t.Fatalf("summary %q", Summary(ev2))
+	}
+	if _, ev3 := run(t, sample(), Op{Op: "update", ID: "go", Title: s("Go!"), Rating: i(2)}); Summary(ev3) != `Edited "Go!"` {
+		t.Fatalf("a title change too stays Edited: %q", Summary(ev3))
+	}
 	cleared, _ := run(t, tr, Op{Op: "update", ID: "go", Rating: i(0), Tags: []string{}})
 	if g := cleared.Root.Children[0].Children[0]; g.Rating != 0 || g.Tags != nil {
 		t.Fatalf("0 and [] clear: %d %q", g.Rating, g.Tags)

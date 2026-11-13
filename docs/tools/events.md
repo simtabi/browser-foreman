@@ -37,7 +37,7 @@ of that buffer, the stream starts with `: some events were missed; reload the st
 | `user.created` | a person was added (`{"user", "role"}`) |
 | `user.deleted` | a person was removed (`{"user"}`) |
 | `bookmark.created`, `folder.created` | added (`{workspace, seq, id, parent, title, url}`) |
-| `bookmark.updated`, `folder.updated` | title, URL or note changed (the changed fields) |
+| `bookmark.updated`, `folder.updated` | title, URL, note, rating or tags changed (the changed fields; `renamed: true` when the title changed) |
 | `bookmark.moved`, `folder.moved` | `{from, to, index}` |
 | `bookmark.trashed`, `folder.trashed` | `{from, reason}` |
 | `bookmark.restored`, `folder.restored` | `{to}` |

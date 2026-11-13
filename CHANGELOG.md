@@ -10,6 +10,10 @@ ships.
 
 ### Added
 
+- Labels by keyboard and in bulk: 1 to 5 rate the selected bookmark, 0 clears it, T goes to its tags; with several
+  selected, Actions › Label them rates them, adds a tag to all or removes one from all (also in the command palette).
+  The history names these changes ("Rated \"Go\" 4 stars; tagged work"), and `bookmark.updated` carries
+  `renamed: true` when the title changed.
 - Workspaces across every view: the switcher moved to the top bar, the ⋮ menu has All workspaces, Rename and Notes,
   and All workspaces renames, notes and chooses per workspace whether it keeps its own tab snapshots or uses the
   shared ones (`PUT /api/v1/workspaces/{id}/tabs`, `POST /api/v1/workspaces/{id}/open`, `?workspace=` on the tab
@@ -132,6 +136,7 @@ ships.
 
 ### Fixed
 
+- The welcome text no longer calls the browser extension planned.
 - Merging the same file again no longer refills the Trash: copies it already holds as duplicates of the same kept
   bookmark are skipped and counted (`already_in_trash`). A test workspace merged ~60 times had 617,515 such copies.
 - The folder summary stacks its columns when the details pane is narrow (grid layout), instead of wrapping About's

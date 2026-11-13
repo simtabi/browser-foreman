@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -116,7 +117,49 @@ func describe(e Event) string {
 	if e.Type == "trash.emptied" {
 		return fmt.Sprintf("Emptied the Trash (%v items)", e.Data["count"])
 	}
+	if e.Type == "bookmark.updated" {
+		if l := labelChange(e.Data, what); l != "" {
+			return l
+		}
+	}
 	return fmt.Sprintf("%s %q", verb, what)
+}
+
+// labelChange words an edit that only changed a bookmark's rating and/or tags ("Rated \"Go\" 4 stars; tagged work");
+// "" when anything else changed too. The words are built directly, never used as a format, so a tag may hold a %.
+func labelChange(d map[string]any, what string) string {
+	for k := range d {
+		if k != "rating" && k != "tags" && k != "id" && k != "title" {
+			return ""
+		}
+	}
+	name := strconv.Quote(what)
+	r, hasR := d["rating"].(int)
+	_, hasT := d["tags"]
+	tags, _ := d["tags"].([]string)
+	rated := ""
+	switch {
+	case hasR && r == 0:
+		rated = "Cleared the rating of " + name
+	case hasR:
+		rated = "Rated " + name + " " + strconv.Itoa(r) + " star" + map[bool]string{true: "", false: "s"}[r == 1]
+	}
+	tagged := ""
+	switch {
+	case hasT && len(tags) == 0:
+		tagged = "cleared the tags"
+	case hasT:
+		tagged = "tagged " + strings.Join(tags, ", ")
+	}
+	switch {
+	case rated != "" && tagged != "":
+		return rated + "; " + tagged
+	case rated != "":
+		return rated
+	case tagged != "":
+		return strings.ToUpper(tagged[:1]) + tagged[1:] + ": " + name
+	}
+	return ""
 }
 
 func clone(t store.Tree) (store.Tree, error) {
@@ -385,6 +428,9 @@ func (e *editor) update(op Op) error {
 		}
 		if v == "" && n.Kind == store.KindFolder {
 			return refuse("a folder needs a title")
+		}
+		if v != n.Title {
+			changed["renamed"] = true
 		}
 		n.Title, changed["title"] = v, v
 	}
