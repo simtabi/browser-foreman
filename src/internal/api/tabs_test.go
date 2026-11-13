@@ -45,6 +45,10 @@ func TestTabsRoutes(t *testing.T) {
 	if w := send(h, "POST", "/api/v1/tabs/snapshots", `{}`); w.Code != 200 || !strings.Contains(w.Body.String(), "unchanged") {
 		t.Fatalf("unchanged %d %s", w.Code, w.Body)
 	}
+	// What tab history holds: the one snapshot; its private window's page is not kept (include_incognito is off).
+	if w := send(h, "GET", "/api/v1/tabs/stored", ""); w.Code != 200 || w.Body.String() != `{"incognito_pages":0,"snapshots":1}`+"\n" {
+		t.Fatalf("stored %d %q", w.Code, w.Body)
+	}
 	// A custom range on the Timeline: one that holds the snapshot lists it, one ending before it lists none, bad input is 400.
 	if w := send(h, "GET", "/api/v1/tabs/timeline?from=2000-01-01T00:00:00Z", ""); !strings.Contains(w.Body.String(), saved.ID) {
 		t.Fatalf("from 2000: %s", w.Body)

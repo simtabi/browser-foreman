@@ -137,7 +137,9 @@ export class TrashDialog<N> {
     }));
     const count = $("#trashCount"); if (count) count.textContent = all.length ? `${plural(bookmarksIn(all), "bookmark")} in ${plural(all.length, "item")}` : "The Trash is empty";
     const units = groupTrash(shown);
-    const pager = new Pager({ size: this.d.pageSize(), noun: "items", onChange: p => { if (p.pageSize !== this.d.pageSize()) this.d.setPageSize(p.pageSize); this.page = p.page; this.paint(); } })
+    // Copies of one page are grouped into one row, so the pager counts groups whenever there are any (the header
+    // counts items): "1–25 of 426 groups" beside "580 bookmarks in 539 items" no longer reads as a contradiction.
+    const pager = new Pager({ size: this.d.pageSize(), noun: units.length === shown.length ? "items" : "groups", onChange: p => { if (p.pageSize !== this.d.pageSize()) this.d.setPageSize(p.pageSize); this.page = p.page; this.paint(); } })
       .total(units.length).goto(this.page);
     const rows = pager.slice(units).flatMap(u => u.kind === "one" ? [this.row(u.entry)] : this.group(u));
     box.replaceChildren(...rows);

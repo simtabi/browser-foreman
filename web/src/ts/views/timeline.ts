@@ -100,11 +100,13 @@ export class TimelineView {
     }
     if (this.span) this.range?.setRange(this.span.from, this.span.to); else this.range?.set(String(this.days));
     const k = this.part("kinds"); if (!k) return;
-    k.replaceChildren();
+    // What to show: Tabler selectgroup pills, any number on at once.
+    k.replaceChildren(); k.className = "tl-kinds form-selectgroup form-selectgroup-pills"; k.setAttribute("role", "group"); k.setAttribute("aria-label", "Show");
     for (const [id, label, ic] of KINDS) {
-      const b = el("button", "btn btn-sm tl-kind" + (this.on.has(id) ? " active" : "")); b.append(icon(ic, "me-1"), label);
-      b.onclick = () => { if (this.on.has(id)) this.on.delete(id); else this.on.add(id); this.page = 1; this.paintControls(); this.paint(); };
-      k.append(b);
+      const item = el("label", "form-selectgroup-item"), box = el("input", "form-selectgroup-input"); box.type = "checkbox"; box.checked = this.on.has(id);
+      const face = el("span", "form-selectgroup-label"); face.append(icon(ic, "me-1"), label);
+      box.onchange = () => { if (box.checked) this.on.add(id); else this.on.delete(id); this.page = 1; this.paint(); };
+      item.append(box, face); k.append(item);
     }
   }
 

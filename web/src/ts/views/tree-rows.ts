@@ -73,8 +73,6 @@ export function rowElement(r: BookmarkRow, idx: number, st: RowState, d: RowDeps
   }
   if (pendingUpdate(i)) aside.append(badge("update ready", "bg-yellow-lt", "ti-arrow-forward-up"));
   if (i.m) aside.append(badge("matched", "bg-green-lt", "ti-arrow-merge"));
-  const stars = d.ratingOf?.(id) ?? 0;
-  if (stars) { const r = el("span", "stars-inline", starsText(stars)); r.dataset.tip = `Rated ${stars} of 5`; r.setAttribute("aria-label", `Rated ${stars} of 5`); aside.append(r); }
   if (i.a) { const dt = el("span", "bm-date", fmtDay(i.a)); dt.dataset.tip = "Added " + fmtDate(i.a); aside.append(dt); }
   if (aside.childNodes.length) top.append(aside);
   const h = d.host(i.u), path = d.shortUrl(i.u).replace(/^(?:www\.)?[^/]+/, "");
@@ -82,8 +80,15 @@ export function rowElement(r: BookmarkRow, idx: number, st: RowState, d: RowDeps
   sub.append(el("span", "bm-host", h || i.u), path && path !== "/" ? el("span", "bm-path", path) : "");
   body.append(top, sub);
   const ds = d.descOf(id); if (ds) body.append(el("div", "bm-desc", ds));
-  const tags = d.tagsOf?.(id) ?? [];
-  if (tags.length) { const tg = el("div", "bm-tags"); for (const t of tags.slice(0, 4)) tg.append(el("span", "badge bg-azure-lt", t)); if (tags.length > 4) tg.append(el("span", "text-secondary small", `+${tags.length - 4}`)); body.append(tg); }
+  // Your labels, on a line of their own under the address, so they never take room from the title.
+  const stars = d.ratingOf?.(id) ?? 0, tags = d.tagsOf?.(id) ?? [];
+  if (stars || tags.length) {
+    const tg = el("div", "bm-tags");
+    if (stars) { const r = el("span", "stars-inline", starsText(stars)); r.dataset.tip = `Rated ${stars} of 5`; r.setAttribute("aria-label", `Rated ${stars} of 5`); tg.append(r); }
+    for (const t of tags.slice(0, 4)) tg.append(el("span", "badge bg-azure-lt", t));
+    if (tags.length > 4) tg.append(el("span", "text-secondary small", `+${tags.length - 4}`));
+    body.append(tg);
+  }
   const vis = el("span", "bm-vis"), fav = el("span", "bm-fav"); fav.append(d.favicon(i)); vis.append(d.thumb(i, "th"), fav);
   row.append(vis, body);
   return { row, twisty: null };

@@ -128,6 +128,7 @@ ships.
 
 ### Fixed
 
+- Open tabs said 0 snapshots kept and 0 private pages stored: `GET /api/v1/tabs/stored` now counts both.
 - Expand / Collapse all now covers the Trash and works in filtered views; it used to leave the Trash open.
 - A web test now fails when `page.ts` (still unchecked by the compiler) uses a name that does not exist, and the
   header counts log their errors instead of hiding them.
@@ -135,6 +136,11 @@ ships.
 
 ### Changed
 
+- Interface pass: your rating and tags are labelled rows of a bookmark's Details, and on its row they sit under the
+  address instead of taking room from the title; letter tiles use a dark tint in dark mode; the Timeline's kinds are
+  Tabler selectgroup pills; Open tabs shows placeholders while it loads; actions that delete or close are solid danger
+  buttons (purge, clear tab history, empty and delete from the Trash, the Settings danger zone, Stop, Cancel), and the
+  Trash pager says groups when copies of one page are grouped.
 - Custom date and time ranges: every period picker has From / To fields beside its quick ranges (To before From is
   refused). `GET /api/v1/tabs/timeline` and `GET /api/v1/history` take `?from=` and `?to=` (RFC 3339 or
   `2006-01-02T15:04`); the Timeline's bookmark chart follows the range and counts by day for two months or less.

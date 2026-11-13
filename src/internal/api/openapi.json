@@ -1910,6 +1910,20 @@
           }
         ]
       }
+    },
+    "/api/v1/tabs/stored": {
+      "get": {
+        "summary": "How many tab snapshots are kept (hidden ones too) and how many private-window pages they still hold",
+        "tags": [
+          "Tabs"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
     }
   }
 }

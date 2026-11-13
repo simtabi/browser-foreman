@@ -256,7 +256,7 @@ function thumb(i, cls) {
     if (i.fv) { const d = el("div", cls + " ph fav"); const im = el("img"); im.alt = ""; im.src = `favicons/${i.fv}`; d.append(im, el("span", null, h)); return d; }
     // No snapshot and no favicon: a soft tint of the site's colour with its initial and name, never a loud block.
     const d = el("div", cls + " ph letter"), k = hue(h);
-    d.style.background = `hsl(${k} 55% 95%)`; d.style.color = `hsl(${k} 45% 38%)`;
+    d.style.setProperty("--h", String(k));  // the tint is in the stylesheet, light and dark
     d.append(el("b", null, (h[0] || "?").toUpperCase()), el("span", null, h)); return d;
   };
   if (!i.h) return ph();
@@ -766,7 +766,7 @@ const TABS = (() => {
     if (modes.length) { const md = el("div", "dropdown"), mb = el("button", "btn btn-sm"); mb.setAttribute("data-dd", ""); mb.append(icon("ti-switch-horizontal", "me-1"), "Incognito ⇄ normal", icon("ti-chevron-down", "ms-1"));
       md.append(mb, buildMenu([{h: `${items.length} selected`}, ...modes])); extra.push(md); }
     if (cur === "live") { const mv = el("button", "btn btn-sm"); mv.append(icon("ti-arrow-bar-to-right", "me-1"), "Move to bookmarks"); mv.dataset.tip = "Save them as a bookmark folder, then close the tabs"; mv.onclick = () => moveToBookmarks(items); extra.push(mv); }
-    if (cur === "live") { const cb = el("button", "btn btn-sm btn-ghost-danger"); cb.append(icon("ti-square-x", "me-1"), "Close tabs"); cb.onclick = async () => { await closeItems(items); toggle([...picked], false); }; extra.push(cb); }
+    if (cur === "live") { const cb = el("button", "btn btn-sm btn-danger"); cb.append(icon("ti-square-x", "me-1"), "Close tabs"); cb.onclick = async () => { await closeItems(items); toggle([...picked], false); }; extra.push(cb); }
     bar.append(el("span", "ms-auto"), open, ...extra, cp, ex, cl);
     return bar;
   }
@@ -1217,9 +1217,9 @@ function openSettings() {
     actionRow("MCP access (Claude)", "Where Claude can reach Browser Foreman, and whether it may change things. Off by default.", "Open…", "ti-plug-connected", "", closing(() => wsUI().mcpAccess()))]));
   // Danger zone: everything that throws work away or deletes it, kept out of the menus.
   const ws = window.BM_WS, danger = [
-    actionRow("Reset edits", "Throw away moves, renames, notes and the trash. Settings stay.", "Reset edits…", "ti-restore", "btn-ghost-danger", closing(resetEdits))];
-  if (wsUI()?.resetWs) danger.push(actionRow("Reset this workspace to its start", "The workspace goes back to how it was when it was created, as one history entry you can undo.", "Reset workspace…", "ti-history-off", "btn-ghost-danger", closing(() => wsUI().resetWs())));
-  if (wsUI()?.deleteWs && ws && ws.id !== "main") danger.push(actionRow("Delete this workspace", "Moves it to the workspace trash; you can bring it back from All workspaces.", "Delete workspace…", "ti-trash", "btn-ghost-danger", closing(() => wsUI().deleteWs())));
+    actionRow("Reset edits", "Throw away moves, renames, notes and the trash. Settings stay.", "Reset edits…", "ti-restore", "btn-danger", closing(resetEdits))];
+  if (wsUI()?.resetWs) danger.push(actionRow("Reset this workspace to its start", "The workspace goes back to how it was when it was created, as one history entry you can undo.", "Reset workspace…", "ti-history-off", "btn-danger", closing(() => wsUI().resetWs())));
+  if (wsUI()?.deleteWs && ws && ws.id !== "main") danger.push(actionRow("Delete this workspace", "Moves it to the workspace trash; you can bring it back from All workspaces.", "Delete workspace…", "ti-trash", "btn-danger", closing(() => wsUI().deleteWs())));
   danger.push(actionRow("Factory reset", "Everything this tool has saved goes back to how it was on first open: edits, link updates, refresh results, view, open folders and settings. Your original bookmarks, the backup and the checked data on disk are not touched.", "Factory reset…", "ti-alert-triangle", "btn-danger", factoryReset));
   extra.push(settingsGroup("Danger zone", danger, "set-danger"));
   renderSettings($("#settingsBody"), store, extra);
@@ -2223,7 +2223,7 @@ function showFolder(r) {
   head(el("span", "avatar avatar-sm " + (r.trash ? "bg-red-lt" : "bg-primary-lt"), "").appendChild(icon(r.trash ? "ti-trash" : f.virtual ? "ti-category" : "ti-folder-open")).parentNode,
     readOnly() || f.virtual ? nice(f.n) : nice(pathOf(f)), `${ids.length.toLocaleString()} bookmarks`);
   if (!readOnly()) {
-    if (r.trash) act("ti-trash-x", "Empty trash…", emptyTrash, "btn-ghost-danger");
+    if (r.trash) act("ti-trash-x", "Empty trash…", emptyTrash, "btn-danger");
     else {
       // A top-level folder (Bookmarks Bar) is the root of the import: it can't be moved or trashed.
       const top = !f.virtual && st().root.c.includes(f);
@@ -2296,13 +2296,12 @@ function showLink(i, id) {
   }
   const ds = descOf(id);
   if (ds) info.append(el("p", "lead-text mb-3", ds));
-  // Your own labels: a 1–5 star rating and tags, saved with your edits (and onto the server's bookmark).
-  if (!readOnly()) {
-    const lab = el("div", "bm-labels mb-3");
-    const stars = starRating(ratingOf(id), v => { snapshot(); if (v) st().ratings[id] = v; else delete st().ratings[id]; save(); build(true); });
-    const tg = tagEditor(tagsOf(id), t => { snapshot(); if (t.length) st().tags[id] = t; else delete st().tags[id]; save(); build(true); }, allTags());
-    lab.append(stars, tg); info.append(lab);
-  }
+  // Your own labels (a 1–5 star rating and tags) are rows of Details below, saved with your edits.
+  const labels = readOnly() ? null : {
+    stars: starRating(ratingOf(id), v => { snapshot(); if (v) st().ratings[id] = v; else delete st().ratings[id]; save(); build(true); }),
+    tags: tagEditor(tagsOf(id), t => { snapshot(); if (t.length) st().tags[id] = t; else delete st().tags[id]; save(); build(true); }, allTags()),
+  };
+  if (labels) labels.tags.dataset.wide = "1";  // the tag field takes the whole row
   const al = statusAlert(i, id); if (al) info.append(al);
   const tags = el("div", "d-flex flex-wrap gap-2 mb-3");
   for (const [text, cls, ic, tip] of linkBadges(i, !!noteOf(id))) { const b = badge(text, cls, ic); if (tip) b.dataset.tip = HELP[tip]; tags.append(b); }
@@ -2315,6 +2314,7 @@ function showLink(i, id) {
   a.append(la, cp);
   info.append(sectionCard("Details", (() => { const g = datagrid([
     ["Link", a], ["Updated from", i.applied ? i.prev : ""],
+    ["Your rating", labels ? labels.stars : ""], ["Tags", labels ? labels.tags : ""],
     ["Added", fmtDate(i.a)],
     ["Last opened", (o => o ? `${fmtDate(o.t)} · ${o.n.toLocaleString()} visit${o.n === 1 ? "" : "s"}` : OPENED_READ ? "Not in your browsers' history"
       : OPENED_BLOCKED ? "Unknown: macOS blocks reading browser history (Browsers › Allow reading)" : "")(openedOf(i.u))],

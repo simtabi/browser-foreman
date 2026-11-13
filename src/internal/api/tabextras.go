@@ -119,3 +119,13 @@ func (s *Server) purgeTabs(w http.ResponseWriter, r *http.Request) {
 	_, _ = s.Bus.Publish("tabs.purged", map[string]any{"level": res.Level, "snapshots": res.Snapshots, "windows": res.Windows})
 	writeJSON(w, 200, res)
 }
+
+// tabsStored says how many snapshots tab history keeps and how many private-window pages they still hold.
+func (s *Server) tabsStored(w http.ResponseWriter, r *http.Request) {
+	n, pages, err := s.Tabs.Stored(r.Context())
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]int{"snapshots": n, "incognito_pages": pages})
+}

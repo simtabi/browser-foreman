@@ -114,8 +114,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .timeline-view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 1rem; padding: 1rem 1rem .75rem; }
 .timeline-view[hidden] { display: none; }
 .tl-top { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
-.tl-kinds { display: flex; gap: .35rem; flex-wrap: wrap; }
-.tl-kind.active { border-color: var(--tblr-primary); color: var(--tblr-primary); background: var(--tblr-primary-lt, rgba(32,107,196,.08)); }
+.tl-kinds { gap: .35rem; margin: 0; } .tl-kinds .form-selectgroup-item { margin: 0; } .tl-kinds .form-selectgroup-label { padding: .3rem .75rem; font-size: .8125rem; }
 #tlRange .btn.active { background: var(--tblr-primary); color: #fff; border-color: var(--tblr-primary); }
 .tl-search { width: 240px; }
 .tl-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; flex: none; }
@@ -182,7 +181,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 @container (min-width: 21rem) {
   .tabs-set-row { grid-template-columns: minmax(0, 1fr) 10.5rem; }
 }
-.tabs-purge > .btn { flex: 1 1 0; justify-content: center; white-space: nowrap; min-width: 0; }
+.tabs-purge { display: grid; grid-template-columns: 1fr; gap: .4rem; }
+.tabs-purge > .btn { justify-content: center; white-space: nowrap; min-width: 0; padding-left: .4rem; padding-right: .4rem; overflow: hidden; text-overflow: ellipsis; font-size: .78rem; }  /* never past the panel edge */
 .tabs-strip { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
 .tabs-chip { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .65rem; border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius); font-size: .8rem; }
 .tabs-chip .ti { color: var(--tblr-secondary); }
@@ -315,6 +315,8 @@ body.no-tree-thumbs .bm-fav { position: static; padding: 0; box-shadow: none; ba
 .ph.letter b { font-size: 1.6rem; line-height: 1; }
 .ph.letter span { font-size: .75rem; font-weight: 500; opacity: .8; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .th.ph.letter b { font-size: .95rem; }
+.th.ph.letter { background: hsl(var(--h, 210) 55% 95%); color: hsl(var(--h, 210) 45% 38%); }
+[data-bs-theme="dark"] .th.ph.letter { background: hsl(var(--h, 210) 28% 21%); color: hsl(var(--h, 210) 55% 78%); border-color: hsl(var(--h, 210) 20% 28%); }
 .fv { width: 16px; height: 16px; flex: none; object-fit: contain; border-radius: 3px; margin-top: .15rem; }
 .fvd { width: 16px; height: 16px; flex: none; border-radius: 4px; color: #fff; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-top: .15rem; }
 
@@ -613,7 +615,7 @@ body.layout-grid .app-main { grid-template-columns: minmax(0, 1.7fr) minmax(320p
 .ext-steps .btn { vertical-align: middle; width: 1.5rem; height: 1.5rem; padding: 0; }
 .ext-code { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem 1rem; padding: .85rem 1rem; border-radius: var(--tblr-border-radius-lg); background: var(--tblr-primary-lt); }
 /* Labels (ts/labels.ts): the star rating and the tag editor. A star is grey until set, amber when set or hovered. */
-.star-rating { display: inline-flex; gap: 0; }
+.star-rating { display: inline-flex; gap: 0; margin-left: -.4rem; }
 .star-rating .btn { font-size: 1.35rem; line-height: 1; width: 2rem; height: 2rem; padding: 0; color: var(--tblr-border-color-dark, #c8d1dc); }
 .star-rating .btn.on, .star-rating .btn.hover { color: #f59f00; }
 .star-rating .btn:disabled { opacity: 1; }
@@ -856,7 +858,7 @@ body { overflow-wrap: break-word; }
         <select class="form-select form-select-sm w-auto" :value="status ? String(status.recheck_days) : '7'" @change="setDays($event.target.value)">
           <option value="0">never (off)</option><option value="1">day</option><option value="7">week</option><option value="14">2 weeks</option><option value="30">month</option></select></label>
       <button type="button" class="btn btn-sm" x-show="!current" @click="runNow()"><i class="ti ti-player-play me-1"></i>Run now</button>
-      <button type="button" class="btn btn-sm btn-ghost-danger" x-show="current" x-cloak @click="stop()"><i class="ti ti-player-stop me-1"></i>Stop</button>
+      <button type="button" class="btn btn-sm btn-danger" x-show="current" x-cloak @click="stop()"><i class="ti ti-player-stop me-1"></i>Stop</button>
     </div>
     <template x-if="report && (report.newly_broken.length || report.fixed.length)">
       <details class="card-footer py-2"><summary class="small" x-text="report.newly_broken.length + ' newly broken, ' + report.fixed.length + ' working again'"></summary>
@@ -873,8 +875,9 @@ body { overflow-wrap: break-word; }
       <h3 class="card-title">Snapshots</h3>
       <div class="card-actions"><button class="btn btn-sm btn-primary" id="tabsSnap"><i class="ti ti-camera me-1"></i>Save now</button></div>
     </div>
-    <div class="tabs-settings" id="tabsSettings"></div>
-    <div class="pane-scroll"><div id="tabsTimeline" class="tabs-timeline" role="listbox" aria-label="Snapshots"></div></div>
+    <!-- Placeholders until the first read fills these (TabsSettingsPanel and the snapshot list replace them). -->
+    <div class="tabs-settings" id="tabsSettings"><div class="placeholder-glow p-2" aria-hidden="true"><span class="placeholder col-4 mb-2"></span><span class="placeholder col-12 mb-2"></span><span class="placeholder col-12 mb-2"></span><span class="placeholder col-8"></span></div></div>
+    <div class="pane-scroll"><div id="tabsTimeline" class="tabs-timeline" role="listbox" aria-label="Snapshots"><div class="placeholder-glow p-2" aria-hidden="true"><span class="placeholder col-4 mb-2"></span><span class="placeholder col-12 mb-2"></span><span class="placeholder col-12 mb-2"></span><span class="placeholder col-8"></span></div></div></div>
   </aside>
   <section class="card tabs-main">
     <div class="card-header py-2 flex-wrap gap-2">
@@ -1115,7 +1118,7 @@ body { overflow-wrap: break-word; }
     <div class="modal-footer">
       <span class="text-secondary small me-auto" id="trashSel"></span>
       <button type="button" class="btn" id="trashRestore"><i class="ti ti-restore me-1"></i>Put back</button>
-      <button type="button" class="btn btn-ghost-danger" id="trashPurge"><i class="ti ti-trash-x me-1"></i>Delete permanently</button>
+      <button type="button" class="btn btn-danger" id="trashPurge"><i class="ti ti-trash-x me-1"></i>Delete permanently</button>
       <div class="vr mx-1"></div>
       <button type="button" class="btn" id="trashRestoreAll">Put back all</button>
       <button type="button" class="btn btn-danger" id="trashEmpty"><i class="ti ti-alert-triangle me-1"></i>Empty Trash…</button>
@@ -1178,7 +1181,7 @@ body { overflow-wrap: break-word; }
     <div class="d-flex align-items-center gap-2">
       <span class="text-secondary small flex-fill" id="jobDetail"></span>
       <button class="btn btn-sm" id="jobPause"><i class="ti ti-player-pause me-1"></i>Pause</button>
-      <button class="btn btn-sm btn-ghost-danger" id="jobCancel"><i class="ti ti-player-stop me-1"></i>Cancel</button>
+      <button class="btn btn-sm btn-danger" id="jobCancel"><i class="ti ti-player-stop me-1"></i>Cancel</button>
     </div>
   </div>
 </div>

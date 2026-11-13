@@ -90,6 +90,33 @@ func (s *Service) Purge(ctx context.Context, level string, olderThan time.Durati
 	return out, nil
 }
 
+// Stored counts what tab history holds: every snapshot kept (hidden ones too), and how many private-window pages
+// are still stored in them (what Purge "pages" would remove).
+func (s *Service) Stored(ctx context.Context) (snapshots, privatePages int, err error) {
+	list, err := s.Data.TabSnapshots(ctx, 0)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, row := range list {
+		snap, err := s.Data.TabSnapshot(ctx, row.ID)
+		if err != nil {
+			return 0, 0, err
+		}
+		var doc snapshotDoc
+		if json.Unmarshal(snap.Windows, &doc) != nil {
+			continue
+		}
+		for _, b := range doc.Browsers {
+			for _, w := range b.Windows {
+				if w.Mode == "incognito" {
+					privatePages += len(w.Tabs)
+				}
+			}
+		}
+	}
+	return len(list), privatePages, nil
+}
+
 // DeleteSnapshots deletes snapshots for good: the ids given, those taken before a day (YYYY-MM-DD, local time), or
 // every one. Notes stay; they belong to addresses and windows, not to snapshots.
 func (s *Service) DeleteSnapshots(ctx context.Context, ids []string, before string, everything bool) (int, error) {

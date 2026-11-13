@@ -50,7 +50,10 @@ export async function legacy(method: string, path: string, query: string, body: 
       case "tabs/notes": return ok(await call("GET", "tabs/notes"));
       case "opened": return ok(await call("GET", `workspaces/${encodeURIComponent(workspace)}/opened`));
       case "snapshot-settings": return ok(snapshotSettings(await call("GET", "preferences")));
-      case "tabs/status": return ok({ settings: legacySettings(await call("GET", "preferences")), last_auto: null });
+      case "tabs/status": {
+        const [p, st] = await Promise.all([call("GET", "preferences"), call("GET", "tabs/stored").catch(() => ({}))]);
+        return ok({ settings: legacySettings(p), last_auto: null, snapshots: st.snapshots ?? 0, incognito_pages_stored: st.incognito_pages ?? 0 });
+      }
       case "tabs/browsers": {
         const b = await call("GET", "browsers");
         const installed = (b.installed ?? []).map(({ path: _p, ...rest }: any) => rest);

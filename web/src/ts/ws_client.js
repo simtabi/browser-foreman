@@ -295,7 +295,7 @@
         h("i", {class: "ti " + (st.registered ? "ti-circle-check text-green" : "ti-circle-dashed text-secondary")}),
         h("div", {class: "flex-fill"}, h("div", null, label), h("div", {class: "small text-secondary"}, st.error || where)),
         st.registered ? h("span", {class: "badge bg-green-lt"}, st.writes ? "registered, changes always on" : "registered") : null,
-        h("button", {class: "btn btn-sm" + (st.registered ? " btn-ghost-danger" : " btn-primary"), onclick: () => act(st.registered ? "remove" : "add")},
+        h("button", {class: "btn btn-sm" + (st.registered ? " btn-danger" : " btn-primary"), onclick: () => act(st.registered ? "remove" : "add")},
           st.registered ? "Remove" : "Register"));
     };
     MC.body.replaceChildren(
@@ -438,7 +438,7 @@
         h("div", {class: "flex-fill"}, h("div", null, t.name), h("div", {class: "small text-secondary"}, "deleted " + new Date(t.deleted).toLocaleString())),
         h("button", {class: "btn btn-sm", onclick: async () => { try { const j = await post("api/trash/restore", {trash_id: t.trash_id}); toast(`Restored as “${j.id}”`, "success"); } catch (e) { toast(e.message, "danger"); } manage(); }},
           h("i", {class: "ti ti-arrow-back-up me-1"}), "Restore")))),
-      h("button", {class: "btn btn-sm btn-ghost-danger mt-2", onclick: () => emptyWsTrash(bin)}, h("i", {class: "ti ti-trash-x me-1"}), "Empty workspace trash…"));
+      h("button", {class: "btn btn-sm btn-danger mt-2", onclick: () => emptyWsTrash(bin)}, h("i", {class: "ti ti-trash-x me-1"}), "Empty workspace trash…"));
     M.foot.replaceChildren(h("button", {class: "btn btn-primary", onclick: () => { hideModal("#wsManage"); importer(); }}, h("i", {class: "ti ti-plus me-1"}), "New workspace from bookmarks…"));
     showModal("#wsManage");
   }

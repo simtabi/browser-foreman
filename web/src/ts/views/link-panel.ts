@@ -33,7 +33,7 @@ export function linkAlert(i: LinkItem, c: AlertContext): AlertSpec | null {
     tone: "danger", icon: "ti-alert-triangle",
     title: i.dk === "host" ? "Dead: the whole site is gone" : "Dead: the page is gone, the site is still up",
     body: (c.help.dead ?? "").split(". ")[0] + "." + note,
-    actions: c.readOnly ? [] : [["Re-check", "ti-refresh", "recheck"], c.inTrash ? ["Put back", "ti-arrow-back-up", "putBack"] : ["Move to Trash", "ti-trash", "trash", "btn-ghost-danger"]],
+    actions: c.readOnly ? [] : [["Re-check", "ti-refresh", "recheck"], c.inTrash ? ["Put back", "ti-arrow-back-up", "putBack"] : ["Move to Trash", "ti-trash", "trash", "btn-danger"]],
   };
   if (pendingUpdate(i)) {
     const other = i.nk === "other";

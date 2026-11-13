@@ -47,8 +47,8 @@ export class TabsSettingsPanel {
       this.purgeGroup(
         this.purgeButton("Purge incognito pages", "Purge pages", "pages", "Every saved incognito link and title is removed from the database for good (overwritten, not just hidden). How many incognito windows and tabs there were is kept.", "ti-file-x"),
         this.purgeButton("Forget incognito windows", "Forget windows", "windows", "Every saved incognito window is removed for good, pages and counts. Normal windows are not touched.", "ti-browser-x")));
-    const ch = el("button", "btn btn-sm btn-ghost-danger"); ch.append(icon("ti-history-off", "me-1"), "Clear tab history…"); ch.onclick = () => this.d.clearHistory();
-    box.append(el("div", "tabs-set-title mt-1", "History"), this.row(this.label(`${(stat.snapshots ?? 0).toLocaleString()} snapshots kept`), ch));
+    const ch = el("button", "btn btn-sm btn-danger w-100"); ch.type = "button"; ch.append(icon("ti-history-off", "me-1"), "Clear tab history…"); ch.onclick = () => this.d.clearHistory();
+    box.append(el("div", "tabs-set-title mt-1", "History"), this.row(this.label(`${(stat.snapshots ?? 0).toLocaleString()} snapshots kept`)), ch);
     return this;
   }
 
@@ -101,12 +101,12 @@ export class TabsSettingsPanel {
 
   // Short label on the button, the full name in its tooltip and the confirm; the two sit together as one group.
   private purgeGroup(...kids: HTMLElement[]): HTMLElement {
-    const g = el("div", "btn-group w-100 tabs-purge"); g.setAttribute("role", "group"); g.setAttribute("aria-label", "Remove saved incognito data"); g.append(...kids);
+    const g = el("div", "tabs-purge"); g.setAttribute("role", "group"); g.setAttribute("aria-label", "Remove saved incognito data"); g.append(...kids);
     return g;
   }
 
   private purgeButton(label: string, short: string, level: "pages" | "windows", body: string, ic: string): HTMLButtonElement {
-    const b = el("button", "btn btn-sm btn-outline-danger"); b.type = "button"; b.append(icon(ic, "me-1"), short); b.dataset.tip = label;
+    const b = el("button", "btn btn-sm btn-danger"); b.type = "button"; b.append(icon(ic, "me-1"), short); b.dataset.tip = label;
     b.onclick = async () => {
       if (!(await this.d.confirm({ title: label + "?", ok: label, no: "Keep them", body }))) return;
       try {
