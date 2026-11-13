@@ -44,6 +44,14 @@ func Read(r io.Reader) (store.Tree, Format, error) {
 	if len(b) > MaxSize {
 		return store.Tree{}, "", fmt.Errorf("the file is larger than %d MB", MaxSize>>20)
 	}
+	switch {
+	case bytes.HasPrefix(b, sqliteMagic):
+		t, err := ReadFirefoxBytes(b)
+		return t, Firefox, err
+	case isPlist(b):
+		t, err := ReadSafari(b)
+		return t, Safari, err
+	}
 	trimmed := bytes.TrimSpace(b)
 	switch {
 	case bytes.HasPrefix(trimmed, []byte("{")):
@@ -53,7 +61,7 @@ func Read(r io.Reader) (store.Tree, Format, error) {
 		t, err := ReadNetscape(trimmed)
 		return t, Netscape, err
 	}
-	return store.Tree{}, "", errors.New("not a bookmarks file: expected Chrome's JSON Bookmarks file or an exported bookmarks HTML file")
+	return store.Tree{}, "", errors.New("not a bookmarks file: expected an exported bookmarks HTML file, Chrome's Bookmarks (JSON), Firefox's places.sqlite or Safari's Bookmarks.plist")
 }
 
 type ids struct{ n int }

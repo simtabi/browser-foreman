@@ -5,7 +5,8 @@ Read a browser's bookmarks into a new workspace. The format is detected from the
 | Browser | File to import |
 |---|---|
 | Chrome, Edge, Brave, Vivaldi, Opera, Arc | the profile's `Bookmarks` file (JSON), or an exported HTML file |
-| Firefox, Safari | an exported bookmarks HTML file (Bookmarks › Export) |
+| Firefox | the profile's `places.sqlite` (read through a copy), or an exported HTML file |
+| Safari | `~/Library/Safari/Bookmarks.plist` (needs Full Disk Access on macOS), or an exported HTML file |
 | Browser Foreman (or the Python tool it grew from) | its downloaded import file (HTML) |
 
 On macOS, Chrome's file is at `~/Library/Application Support/Google/Chrome/Default/Bookmarks`:

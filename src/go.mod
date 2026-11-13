@@ -8,6 +8,7 @@ require (
 	golang.org/x/crypto v0.59.0
 	golang.org/x/net v0.62.0
 	golang.org/x/term v0.48.0
+	howett.net/plist v1.0.1
 	modernc.org/sqlite v1.62.0
 )
 

@@ -126,8 +126,8 @@ function install(W: V1): void {
   // (addFiles), through /sources: copies of the same page are folded into one, each copy going to the Trash.
   function sourcesDialog(into: "new" | "this"): void {
     const { body, foot } = modal("v1Sources", into === "new" ? "Import bookmarks as a new workspace" : `Add bookmarks to “${W.workspace.name}”`);
-    body.append(el("p", "text-secondary", "Choose one or more bookmarks files: an HTML export from any browser, or Chrome's Bookmarks file. Copies of the same page are kept once; every other copy goes to the Trash, where it can be put back, and the Merged duplicates list names them."));
-    const file = el("input", "form-control mb-3"); file.type = "file"; file.multiple = true; file.accept = ".html,.htm,.json,application/json,text/html";
+    body.append(el("p", "text-secondary", "Choose one or more bookmarks files: an HTML export from any browser, Chrome's Bookmarks file, Firefox's places.sqlite or Safari's Bookmarks.plist. Copies of the same page are kept once; every other copy goes to the Trash, where it can be put back, and the Merged duplicates list names them."));
+    const file = el("input", "form-control mb-3"); file.type = "file"; file.multiple = true; file.accept = ".html,.htm,.json,.sqlite,.plist,application/json,text/html";
     let nameIn: HTMLInputElement | null = null;
     if (into === "new") {
       const lab = el("label", "form-label", "Name"); nameIn = el("input", "form-control mb-3"); nameIn.placeholder = "Imported bookmarks";
@@ -135,6 +135,24 @@ function install(W: V1): void {
       file.onchange = () => { if (nameIn && !nameIn.value && file.files?.[0]) nameIn.value = file.files[0].name.replace(/\.[^.]+$/, ""); };
     }
     body.append(file);
+    // Browsers on this computer: each profile's own bookmarks file, read where it is (owners; Update reads it again).
+    const picks: HTMLInputElement[] = [];
+    const found = el("div", "mb-3");
+    body.append(found);
+    void (async () => {
+      try {
+        const { profiles } = await W.call<{ profiles: { browser: string; profile: string; name?: string; path: string; readable: boolean; why?: string }[] }>("GET", "profiles");
+        if (!profiles.length) return;
+        found.append(el("div", "form-label", "Or read a browser on this computer"));
+        for (const p of profiles) {
+          const row = el("label", "form-check"), box = el("input", "form-check-input"); box.type = "checkbox"; box.value = p.path; box.disabled = !p.readable;
+          const label = p.browser + (p.name || p.profile ? ` · ${p.name || p.profile}` : "");
+          row.append(box, el("span", "form-check-label", label));
+          if (!p.readable) row.append(el("div", "text-secondary small", p.why ?? "cannot be read"));
+          row.title = p.path; found.append(row); picks.push(box);
+        }
+      } catch { /* not an owner, or the server cannot look: the files above still work */ }
+    })();
     const fromSel = el("select", "form-select mb-3");
     fromSel.append(new Option("Only the files", ""));
     for (const w of W.workspaces) if (w.id !== W.id || into === "new") fromSel.append(new Option(`Also the bookmarks of “${w.name}”`, w.id));
@@ -146,8 +164,8 @@ function install(W: V1): void {
     const cancel = el("button", "btn", "Cancel"); cancel.type = "button"; cancel.onclick = () => hideModal("#v1Sources");
     foot.append(cancel, go);
     go.onclick = async () => {
-      const files = [...(file.files ?? [])];
-      if (!files.length && !fromSel.value) { toast("Choose a file, or a workspace to add from.", "warning"); return; }
+      const files = [...(file.files ?? [])], paths = picks.filter(b => b.checked).map(b => b.value);
+      if (!files.length && !paths.length && !fromSel.value) { toast("Choose a file, a browser, or a workspace to add from.", "warning"); return; }
       go.disabled = true;
       try {
         let id = W.id;
@@ -160,6 +178,7 @@ function install(W: V1): void {
         for (const f of files) fd.append("file", f, f.name);
         const q = new URLSearchParams();
         if (fromSel.value) q.set("from", fromSel.value);
+        for (const p of paths) q.append("path", p);
         if (sep.checked) q.set("separate", "1");
         const h = W.headers(); delete h["Content-Type"];  // the browser sets multipart/form-data with its boundary
         const r = await fetch(`api/v1/workspaces/${encodeURIComponent(id)}/sources?${q}`, { method: "POST", headers: h, body: fd });

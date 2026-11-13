@@ -7,14 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 
 	"github.com/simtabi/browser-foreman/src/internal/importer"
 	"github.com/simtabi/browser-foreman/src/internal/merge"
 	"github.com/simtabi/browser-foreman/src/internal/store"
 )
 
-// read is one source as it was last read and as it is now, with the bytes to keep for next time.
+// A file or path source keeps the tree it held last time as JSON (a path source's file can be a large database); a
+// file sent in keeps its bytes. read is one source as it was last read and as it is now, with the bytes to keep for next time.
 type read struct {
 	src  store.Source
 	up   merge.Upstream
@@ -23,7 +23,7 @@ type read struct {
 
 // readSource parses a source's kept bytes: a tree for a workspace, a bookmarks file otherwise.
 func readSource(kind string, b []byte) (store.Tree, error) {
-	if kind == store.SourceWorkspace {
+	if kind == store.SourceWorkspace || kind == store.SourcePath {
 		var t store.Tree
 		if err := json.Unmarshal(b, &t); err != nil || t.Root == nil {
 			return store.Tree{}, errors.New("the kept copy is unreadable")
@@ -54,10 +54,12 @@ func (s *Server) upstreams(ctx context.Context, x store.Workspace) (out []read, 
 		nowBody := before
 		switch src.Kind {
 		case store.SourcePath:
-			if nowBody, err = os.ReadFile(src.Path); err != nil {
-				missing = append(missing, fmt.Sprintf("%s: %s cannot be read now", src.Name, src.Path))
+			t, _, err := importer.ReadFile(src.Path)
+			if err != nil {
+				missing = append(missing, src.Name+": "+err.Error())
 				continue
 			}
+			nowBody, _ = json.Marshal(store.Tree{Root: t.Root})
 		case store.SourceWorkspace:
 			other, err := s.Data.Workspace(ctx, src.From)
 			if err != nil {

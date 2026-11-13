@@ -499,7 +499,7 @@
     },
     "/api/v1/workspaces/{id}/sources": {
       "post": {
-        "summary": "Merge bookmarks files (and ?from= another workspace) into the workspace as one entry; copies of the same page go to the Trash as duplicates",
+        "summary": "Merge bookmarks files (sent, ?path= on this computer, ?from= another workspace) into the workspace as one entry; copies of the same page go to the Trash as duplicates",
         "tags": [
           "Workspaces"
         ],
@@ -553,6 +553,15 @@
               "type": "string"
             },
             "description": "1: each source's folders go under a folder named after it"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "a bookmarks file on this computer (owners only; repeatable): a browser profile's Bookmarks, places.sqlite or Bookmarks.plist, or an export"
           }
         ],
         "description": "Body: one file, or multipart/form-data with up to 20 \"file\" parts. Answers the entry, and added, duplicates and folders counts."
@@ -1603,6 +1612,20 @@
           "Extension"
         ],
         "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/profiles": {
+      "get": {
+        "summary": "Every browser profile's bookmarks file on this computer (Chrome, Edge, Brave, Vivaldi, Opera, Arc, Firefox, Safari), and whether it can be read",
+        "tags": [
+          "Browsers"
+        ],
+        "x-role": "owner",
         "responses": {
           "default": {
             "description": "JSON; errors are {\"error\": \"message\"}"

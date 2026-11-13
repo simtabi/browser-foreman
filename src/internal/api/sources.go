@@ -11,6 +11,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -63,6 +64,31 @@ func (s *Server) addSources(w http.ResponseWriter, r *http.Request) {
 		records = append(records, pendingSource{store.Source{ID: "w-" + other.ID, Name: "workspace " + other.Name, Kind: store.SourceWorkspace,
 			From: other.ID, Count: count(t), Separate: sep}, body})
 	}
+	if paths := q["path"]; len(paths) > 0 {
+		if store.RoleRank(principal(r).Role) < store.RoleRank(store.RoleOwner) {
+			writeErr(w, 403, "reading files on this computer is for owners")
+			return
+		}
+		if len(paths) > maxSources {
+			writeErr(w, 400, fmt.Sprintf("at most %d files at once", maxSources))
+			return
+		}
+		profiles := importer.FindProfiles()
+		for _, p := range paths {
+			t, _, err := importer.ReadFile(p)
+			if err != nil {
+				writeErr(w, 400, err.Error())
+				return
+			}
+			real, _ := filepath.EvalSymlinks(p)
+			name := profileLabel(profiles, real)
+			sources = append(sources, merge.Source{Name: name, Tree: t})
+			body, _ := json.Marshal(store.Tree{Root: t.Root})
+			sum := sha256.Sum256([]byte(real))
+			records = append(records, pendingSource{store.Source{ID: "p-" + hex.EncodeToString(sum[:8]), Name: name, Kind: store.SourcePath,
+				Path: real, Count: count(t), Separate: sep}, body})
+		}
+	}
 	files, code, err := readFiles(w, r)
 	if err != nil {
 		writeErr(w, code, err.Error())
@@ -80,7 +106,7 @@ func (s *Server) addSources(w http.ResponseWriter, r *http.Request) {
 			SHA256: hex.EncodeToString(sum[:]), Count: count(t), Separate: sep}, f.body})
 	}
 	if len(sources) == 0 {
-		writeErr(w, 400, "send at least one bookmarks file, or ?from= another workspace")
+		writeErr(w, 400, "send at least one bookmarks file, ?path= one on this computer, or ?from= another workspace")
 		return
 	}
 	prev, err := s.head(r, x)
@@ -264,4 +290,26 @@ func safeCell(v string) string {
 		return "'" + v
 	}
 	return v
+}
+
+// profileLabel names a file on this computer by the browser profile it belongs to, when it is one.
+func profileLabel(profiles []importer.Profile, path string) string {
+	for _, p := range profiles {
+		if real, err := filepath.EvalSymlinks(p.Path); err == nil && real == path {
+			name := p.Name
+			if name == "" {
+				name = p.Profile
+			}
+			if name == "" {
+				return p.Browser
+			}
+			return p.Browser + " (" + name + ")"
+		}
+	}
+	return filepath.Base(filepath.Dir(path)) + "/" + filepath.Base(path)
+}
+
+// listProfiles is every browser profile's bookmarks file on this computer, and whether it can be read.
+func (s *Server) listProfiles(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, 200, map[string]any{"profiles": importer.FindProfiles()})
 }

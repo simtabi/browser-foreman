@@ -51,6 +51,7 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `POST` | `/api/v1/workspaces/{id}/import` | editor | the body is a bookmarks file (Chrome JSON or exported HTML, up to 64 MiB); replaces the tree as one entry; `?name=` labels it |
 | `POST` | `/api/v1/workspaces/{id}/sources` | editor | merges files (the body, or multipart `file` parts, up to 20) and `?from=` another workspace into this one, as one entry; copies of a page go to the Trash as duplicates; `?separate=1` keeps each source's folders apart; answers `added`, `duplicates`, `folders` |
 | `GET` | `/api/v1/workspaces/{id}/duplicates.csv` | viewer | every copy merged away, with the bookmark kept for it |
+| `GET` | `/api/v1/profiles` | owner | every browser profile's bookmarks file on this computer, with `readable` and `why` |
 | `GET` | `/api/v1/workspaces/{id}/sources` | viewer | where the workspace's bookmarks came from: files (a copy is kept), other workspaces, files on this computer |
 | `GET` | `/api/v1/workspaces/{id}/update` | viewer | what Update would do: `plan.new`, `plan.retitle` (titles changed upstream that you have not renamed here), `plan.gone` (no longer upstream; they stay), and `missing` sources |
 | `POST` | `/api/v1/workspaces/{id}/update` | editor | reads the sources again and brings new bookmarks and titles in, as one entry; nothing is removed |

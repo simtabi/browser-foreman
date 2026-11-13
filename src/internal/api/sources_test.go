@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -249,4 +252,45 @@ func history(t *testing.T, h http.Handler) []store.Entry {
 		t.Fatal(err)
 	}
 	return out.History
+}
+
+func TestSourcesFromAFileOnThisComputer(t *testing.T) {
+	s := seeded(t)
+	h := s.Handler()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "Default", "Bookmarks")
+	_ = os.MkdirAll(filepath.Dir(path), 0o700)
+	_ = os.WriteFile(path, []byte(chromeFile), 0o600)
+	w := send(h, "POST", "/api/v1/workspaces/main/sources?path="+url.QueryEscape(path), "")
+	if w.Code != 201 || !strings.Contains(w.Body.String(), "from Default/Bookmarks") {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if b := send(h, "GET", "/api/v1/workspaces/main/sources", "").Body.String(); !strings.Contains(b, `"kind":"path"`) || !strings.Contains(b, `"path":"`) {
+		t.Fatalf("sources %s", b)
+	}
+	// The browser saves a new bookmark: Update finds it in the file.
+	_ = os.WriteFile(path, []byte(strings.Replace(chromeFile, `"other":{"type":"folder","name":"Other bookmarks","children":[]}`,
+		`"other":{"type":"folder","name":"Other bookmarks","children":[{"type":"url","name":"Fresh","url":"https://fresh.example/"}]}`, 1)), 0o600)
+	if w := send(h, "POST", "/api/v1/workspaces/main/update", ""); w.Code != 201 || !strings.Contains(w.Body.String(), "1 new") {
+		t.Fatalf("update %d %s", w.Code, w.Body)
+	}
+	// Gone from disk: named as missing, not an error.
+	_ = os.Remove(path)
+	if w := send(h, "GET", "/api/v1/workspaces/main/update", ""); w.Code != 200 || !strings.Contains(w.Body.String(), "no file at") {
+		t.Fatalf("missing %d %s", w.Code, w.Body)
+	}
+	if w := send(h, "POST", "/api/v1/workspaces/main/sources?path="+url.QueryEscape(filepath.Join(dir, "notes.txt")), ""); w.Code != 400 {
+		t.Fatalf("a file not named like bookmarks: %d", w.Code)
+	}
+	// Owners only: an editor cannot make the server read its files.
+	s.Cfg.Server.Mode = "accounts"
+	p := pw(t)
+	addUser(t, s, "ed", store.RoleEditor, p)
+	_, ed := signIn(t, h, "ed", p)
+	if w := ed.do(h, "POST", "/api/v1/workspaces/main/sources?path="+url.QueryEscape(path), "", true); w.Code != 403 {
+		t.Fatalf("editor read a file: %d %s", w.Code, w.Body)
+	}
+	if w := ed.do(h, "GET", "/api/v1/profiles", "", false); w.Code != 403 {
+		t.Fatalf("editor listed profiles: %d", w.Code)
+	}
 }

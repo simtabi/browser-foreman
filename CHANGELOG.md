@@ -87,6 +87,10 @@ ships.
   what is new upstream and titles changed upstream that were not renamed here, without removing anything.
 - Saving tabs as bookmarks: `POST /api/v1/workspaces/{id}/save-links` makes a new folder of them in one entry; the
   page's Save and Move to bookmarks and the MCP tool use it.
+- Firefox and Safari: the importer reads Firefox's `places.sqlite` (through a copy, with its write-ahead log) and
+  Safari's `Bookmarks.plist`. `GET /api/v1/profiles` finds every browser profile's bookmarks file on macOS, Linux
+  and Windows (Chromium profiles by the names the browser shows), and says why one cannot be read (Full Disk Access
+  on macOS). Owners can merge one in with `?path=`, which Update then reads again; only bookmarks file names open.
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed
