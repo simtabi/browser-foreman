@@ -92,7 +92,13 @@ func workspaceCmd() *cobra.Command {
 					return err
 				}
 				bm, fo := tree.Count()
-				fmt.Fprintf(cmd.OutOrStdout(), "%-16s %-32s %6d bookmarks %5d folders  change #%d %s\n", w.ID, w.Name, bm, fo, e.Seq, e.Summary)
+				mark := ""
+				if !w.Deleted.IsZero() {
+					mark = "  [in the workspace Trash]"
+				} else if w.Archived {
+					mark = "  [archived]"
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "%-16s %-32s %6d bookmarks %5d folders  change #%d %s%s\n", w.ID, w.Name, bm, fo, e.Seq, e.Summary, mark)
 			}
 			return nil
 		},

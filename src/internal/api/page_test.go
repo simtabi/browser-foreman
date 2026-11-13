@@ -116,3 +116,26 @@ func TestPageOpensTheFirstUnarchivedWorkspace(t *testing.T) {
 		t.Fatalf("%s", body[strings.Index(body, "BF_V1"):][:300])
 	}
 }
+
+func TestPageNeverOpensTheWorkspaceTrash(t *testing.T) {
+	s := withUI(seeded(t))
+	ctx := context.Background()
+	_, _ = s.Data.CreateWorkspace(ctx, "zed", "Zed", time.Now())
+	_, _ = s.Data.Commit(ctx, "zed", 0, store.Change{Op: "import", Summary: "x", Tree: store.Tree{Root: &store.Node{ID: "root", Kind: store.KindFolder}}}, time.Now())
+	main, _ := s.Data.Workspace(ctx, "main")
+	main.Deleted = time.Now()
+	_ = s.Data.UpdateWorkspace(ctx, main)
+	body := get(s.Handler(), "/", nil).Body.String()
+	if !strings.Contains(body, `"id":"zed"`) || strings.Contains(body, `"id":"main"`) {
+		t.Fatalf("a deleted workspace was opened or listed: %s", body[strings.Index(body, "BF_V1"):][:300])
+	}
+	if w := get(s.Handler(), "/?ws=main", nil); w.Code != 404 {
+		t.Fatalf("opening a deleted workspace by id: %d", w.Code)
+	}
+	zed, _ := s.Data.Workspace(ctx, "zed")
+	zed.Deleted = time.Now()
+	_ = s.Data.UpdateWorkspace(ctx, zed)
+	if body := get(s.Handler(), "/", nil).Body.String(); !strings.Contains(body, "workspace Trash") {
+		t.Fatal("with every workspace deleted, the page must say so")
+	}
+}

@@ -343,7 +343,7 @@
     },
     "/api/v1/workspaces": {
       "get": {
-        "summary": "Every workspace with its head and counts",
+        "summary": "Every workspace with its head and counts; ?trash=1 lists the workspace Trash instead",
         "tags": [
           "Workspaces"
         ],
@@ -1727,6 +1727,102 @@
             "description": "JSON; errors are {\"error\": \"message\"}"
           }
         }
+      }
+    },
+    "/api/v1/workspaces/{id}/reset": {
+      "post": {
+        "summary": "Go back to how the workspace started (its first import or merge), as one entry undo takes back",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{id}/delete": {
+      "post": {
+        "summary": "Move the workspace to the workspace Trash, history and all: {\"confirm\": \"<id>\"}; not a locked one, nor the last in use",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{id}/restore": {
+      "post": {
+        "summary": "Bring a workspace back from the workspace Trash",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{id}/purge": {
+      "post": {
+        "summary": "Remove a workspace in the workspace Trash for good: {\"confirm\": \"<id>\"}; cannot be undone",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     }
   }

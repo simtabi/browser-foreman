@@ -84,6 +84,18 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 <p class="text-secondary">Chrome, Edge, Brave, Vivaldi, Opera and Arc: their <code>Bookmarks</code> file or an export. Firefox and Safari: an exported HTML file.</p>`)
 		return
 	}
+	live := all[:0:0] // the workspace Trash is never opened as a page
+	for _, a := range all {
+		if a.Deleted.IsZero() {
+			live = append(live, a)
+		}
+	}
+	all = live
+	if len(all) == 0 {
+		plainPage(w, 200, nonce, "Every workspace is in the Trash", `<h1 class="h2">Every workspace is in the workspace Trash</h1>
+<p>Restore one with <code>POST /api/v1/workspaces/{id}/restore</code> (list them with <code>GET /api/v1/workspaces?trash=1</code>), then reload this page.</p>`)
+		return
+	}
 	x := all[0] // the first one not archived, unless every one is
 	for i := len(all) - 1; i >= 0; i-- {
 		if !all[i].Archived {

@@ -55,6 +55,10 @@ func (s *Server) workspace(w http.ResponseWriter, r *http.Request) (store.Worksp
 		writeErr(w, 500, err.Error())
 		return x, false
 	}
+	if !x.Deleted.IsZero() {
+		writeErr(w, http.StatusGone, "that workspace is in the workspace Trash: restore it first")
+		return x, false
+	}
 	return x, true
 }
 

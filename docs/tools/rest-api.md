@@ -56,6 +56,10 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `GET` | `/api/v1/workspaces/{id}/update` | viewer | what Update would do: `plan.new`, `plan.retitle` (titles changed upstream that you have not renamed here), `plan.gone` (no longer upstream; they stay), and `missing` sources |
 | `POST` | `/api/v1/workspaces/{id}/update` | editor | reads the sources again and brings new bookmarks and titles in, as one entry; nothing is removed |
 | `POST` | `/api/v1/workspaces/{id}/save-links` | editor | `{folder, parent, links: [{url, title}]}`: saves up to 2000 http(s) links as a new folder inside `parent` ("Saved tabs" when left out), as one entry |
+| `POST` | `/api/v1/workspaces/{id}/reset` | editor | back to how it started (its first import or merge), as one entry undo takes back |
+| `POST` | `/api/v1/workspaces/{id}/delete` | owner | `{"confirm": "<id>"}`: to the workspace Trash, history and all; not a locked one, nor the last in use. `GET /api/v1/workspaces?trash=1` lists the Trash |
+| `POST` | `/api/v1/workspaces/{id}/restore` | owner | back from the workspace Trash |
+| `POST` | `/api/v1/workspaces/{id}/purge` | owner | `{"confirm": "<id>"}`: removes a workspace in the Trash for good |
 | `GET` | `/api/v1/workspaces/{id}/export` | viewer | a download: `?format=html` (default, every browser imports it) or `chrome`; `?at=N` for an earlier state |
 | `POST` | `/api/v1/workspaces/{id}/changes` | editor | body `{base?, ops: [...]}`: several changes as one entry, all or none |
 | `PUT` | `/api/v1/workspaces/{id}/tree` | editor | body `{root, trash?}`: the whole tree at once (the web interface saves this way); the server works out what changed, checks it by the same rules and publishes those events; an unchanged tree records nothing (`200`) |

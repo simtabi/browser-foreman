@@ -154,6 +154,9 @@ type Workspace struct {
 	Locked bool `json:"locked,omitempty"`
 	// Archived: kept, out of the way; lists show it last and the web interface does not open it by default.
 	Archived bool `json:"archived,omitempty"`
+	// Deleted: when it went to the workspace Trash (zero: it is not there). It keeps everything, history included,
+	// until it is restored or the Trash is emptied (PurgeWorkspace).
+	Deleted time.Time `json:"deleted,omitzero"`
 }
 
 // Entry is one step in a workspace's history.
@@ -195,6 +198,8 @@ type Store interface {
 	// Commit appends a change made on `base` (the head the caller saw). A base that is not the head is ErrConflict.
 	Commit(ctx context.Context, wsID string, base int, c Change, at time.Time) (Entry, error)
 	History(ctx context.Context, wsID string) ([]Entry, error)
+	// PurgeWorkspace removes a workspace for good, with its history, sources and the trees no other workspace uses.
+	PurgeWorkspace(ctx context.Context, wsID string) error
 	// State reads the tree after entry seq (0: the head).
 	State(ctx context.Context, wsID string, seq int) (Tree, Entry, error)
 

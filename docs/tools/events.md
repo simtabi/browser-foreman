@@ -44,6 +44,9 @@ of that buffer, the stream starts with `: some events were missed; reload the st
 | `bookmark.deleted`, `folder.deleted` | deleted from the Trash for good |
 | `trash.emptied` | `{count}` |
 | `workspace.created` | `{workspace, name}` |
+| `workspace.deleted` | `{workspace, name}`: moved to the workspace Trash |
+| `workspace.restored` | `{workspace, name}` |
+| `workspace.purged` | `{workspace, name}`: removed for good |
 | `workspace.committed` | after any change above: `{workspace, seq, op, summary}` |
 | `workspace.imported`, `workspace.undone`, `workspace.redone`, `workspace.rolled_back` | the same fields |
 | `workspace.exported` | `{workspace, format, at}` |

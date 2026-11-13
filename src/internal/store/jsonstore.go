@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -55,6 +56,7 @@ type wsFile struct {
 	Notes    string    `json:"notes,omitempty"`
 	Locked   bool      `json:"locked,omitempty"`
 	Archived bool      `json:"archived,omitempty"`
+	Deleted  time.Time `json:"deleted,omitzero"`
 }
 
 func (s *JSONStore) CreateWorkspace(_ context.Context, id, name string, at time.Time) (Workspace, error) {
@@ -121,7 +123,7 @@ func (s *JSONStore) workspace(id string) (Workspace, error) {
 	if err != nil {
 		return Workspace{}, err
 	}
-	w := Workspace{ID: id, Name: f.Name, Created: f.Created, Notes: f.Notes, Locked: f.Locked, Archived: f.Archived}
+	w := Workspace{ID: id, Name: f.Name, Created: f.Created, Notes: f.Notes, Locked: f.Locked, Archived: f.Archived, Deleted: f.Deleted}
 	if len(h) > 0 {
 		w.Head = h[len(h)-1].Seq
 	}
@@ -138,7 +140,7 @@ func (s *JSONStore) UpdateWorkspace(_ context.Context, w Workspace) error {
 	if err != nil {
 		return err
 	}
-	b, _ := json.Marshal(wsFile{Name: w.Name, Created: old.Created, Notes: w.Notes, Locked: w.Locked, Archived: w.Archived})
+	b, _ := json.Marshal(wsFile{Name: w.Name, Created: old.Created, Notes: w.Notes, Locked: w.Locked, Archived: w.Archived, Deleted: w.Deleted})
 	return writeAtomic(filepath.Join(s.wsDir(w.ID), "workspace.json"), b)
 }
 
@@ -311,4 +313,45 @@ func (s *JSONStore) TabSnapshot(_ context.Context, id string) (TabSnapshot, erro
 	}
 	var t TabSnapshot
 	return t, json.Unmarshal(b, &t)
+}
+
+func (s *JSONStore) PurgeWorkspace(_ context.Context, id string) error {
+	if ValidID(id) != nil {
+		return ErrNotFound
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := os.Stat(filepath.Join(s.wsDir(id), "workspace.json")); err != nil {
+		return ErrNotFound
+	}
+	if err := os.RemoveAll(s.wsDir(id)); err != nil {
+		return err
+	}
+	// Trees are shared by content: remove only those no remaining workspace's history names.
+	used := map[string]bool{}
+	dirs, err := os.ReadDir(filepath.Join(s.root, "workspaces"))
+	if err != nil {
+		return err
+	}
+	for _, d := range dirs {
+		h, err := s.history(d.Name())
+		if err != nil {
+			return err
+		}
+		for _, e := range h {
+			used[e.Snap] = true
+		}
+	}
+	snaps, err := os.ReadDir(filepath.Join(s.root, "snapshots"))
+	if err != nil {
+		return err
+	}
+	for _, f := range snaps {
+		if hash, ok := strings.CutSuffix(f.Name(), ".json"); ok && !used[hash] {
+			if err := os.Remove(filepath.Join(s.root, "snapshots", f.Name())); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

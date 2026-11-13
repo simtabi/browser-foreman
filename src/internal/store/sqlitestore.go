@@ -48,6 +48,9 @@ func OpenSQLite(dir string) (*SQLiteStore, error) {
 		db.Close()
 		return nil, fmt.Errorf("sqlite schema: %w", err)
 	}
+	// Columns added after the first release: an older database gains them here (the error for one already there is
+	// the expected answer and ignored).
+	_, _ = db.Exec(`ALTER TABLE workspace_meta ADD COLUMN deleted TEXT NOT NULL DEFAULT ''`)
 	return &SQLiteStore{db: db}, nil
 }
 
@@ -72,7 +75,7 @@ func (s *SQLiteStore) CreateWorkspace(ctx context.Context, id, name string, at t
 
 func (s *SQLiteStore) Workspaces(ctx context.Context) ([]Workspace, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT w.id, w.name, w.created, COALESCE(MAX(e.seq), 0),
-	  COALESCE(m.notes, ''), COALESCE(m.locked, 0), COALESCE(m.archived, 0) FROM workspaces w
+	  COALESCE(m.notes, ''), COALESCE(m.locked, 0), COALESCE(m.archived, 0), COALESCE(m.deleted, '') FROM workspaces w
 	  LEFT JOIN entries e ON e.ws = w.id LEFT JOIN workspace_meta m ON m.id = w.id GROUP BY w.id ORDER BY w.id`)
 	if err != nil {
 		return nil, err
@@ -81,11 +84,12 @@ func (s *SQLiteStore) Workspaces(ctx context.Context) ([]Workspace, error) {
 	out := []Workspace{}
 	for rows.Next() {
 		var w Workspace
-		var created string
-		if err := rows.Scan(&w.ID, &w.Name, &created, &w.Head, &w.Notes, &w.Locked, &w.Archived); err != nil {
+		var created, deleted string
+		if err := rows.Scan(&w.ID, &w.Name, &created, &w.Head, &w.Notes, &w.Locked, &w.Archived, &deleted); err != nil {
 			return nil, err
 		}
 		w.Created, _ = time.Parse(ts, created)
+		w.Deleted, _ = time.Parse(ts, deleted)
 		out = append(out, w)
 	}
 	return out, rows.Err()
@@ -93,14 +97,15 @@ func (s *SQLiteStore) Workspaces(ctx context.Context) ([]Workspace, error) {
 
 func (s *SQLiteStore) Workspace(ctx context.Context, id string) (Workspace, error) {
 	var w Workspace
-	var created string
+	var created, deleted string
 	err := s.db.QueryRowContext(ctx, `SELECT w.id, w.name, w.created, COALESCE((SELECT MAX(seq) FROM entries WHERE ws = w.id), 0),
-	  COALESCE(m.notes, ''), COALESCE(m.locked, 0), COALESCE(m.archived, 0)
-	  FROM workspaces w LEFT JOIN workspace_meta m ON m.id = w.id WHERE w.id = ?`, id).Scan(&w.ID, &w.Name, &created, &w.Head, &w.Notes, &w.Locked, &w.Archived)
+	  COALESCE(m.notes, ''), COALESCE(m.locked, 0), COALESCE(m.archived, 0), COALESCE(m.deleted, '')
+	  FROM workspaces w LEFT JOIN workspace_meta m ON m.id = w.id WHERE w.id = ?`, id).Scan(&w.ID, &w.Name, &created, &w.Head, &w.Notes, &w.Locked, &w.Archived, &deleted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Workspace{}, ErrNotFound
 	}
 	w.Created, _ = time.Parse(ts, created)
+	w.Deleted, _ = time.Parse(ts, deleted)
 	return w, err
 }
 
@@ -117,9 +122,13 @@ func (s *SQLiteStore) UpdateWorkspace(ctx context.Context, w Workspace) error {
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO workspace_meta (id, notes, locked, archived) VALUES (?, ?, ?, ?)
-	  ON CONFLICT(id) DO UPDATE SET notes = excluded.notes, locked = excluded.locked, archived = excluded.archived`,
-		w.ID, w.Notes, w.Locked, w.Archived); err != nil {
+	deleted := ""
+	if !w.Deleted.IsZero() {
+		deleted = w.Deleted.UTC().Format(ts)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO workspace_meta (id, notes, locked, archived, deleted) VALUES (?, ?, ?, ?, ?)
+	  ON CONFLICT(id) DO UPDATE SET notes = excluded.notes, locked = excluded.locked, archived = excluded.archived, deleted = excluded.deleted`,
+		w.ID, w.Notes, w.Locked, w.Archived, deleted); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -257,4 +266,33 @@ func (s *SQLiteStore) TabSnapshot(ctx context.Context, id string) (TabSnapshot, 
 	t.At, _ = time.Parse(ts, at)
 	t.Windows = w
 	return t, err
+}
+
+func (s *SQLiteStore) PurgeWorkspace(ctx context.Context, id string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var n int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM workspaces WHERE id = ?`, id).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	for _, q := range []string{`DELETE FROM entries WHERE ws = ?`, `DELETE FROM sources WHERE workspace = ?`,
+		`DELETE FROM workspace_meta WHERE id = ?`, `DELETE FROM workspaces WHERE id = ?`} {
+		if _, err := tx.ExecContext(ctx, q, id); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM snapshots WHERE hash NOT IN (SELECT snap FROM entries)`); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
+	return err
 }

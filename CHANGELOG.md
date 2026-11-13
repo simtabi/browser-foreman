@@ -99,6 +99,10 @@ ships.
   one row per address, marking what a workspace already has; `GET /api/v1/history/access` and
   `POST …/open-settings` check and open Full Disk Access on macOS. Nothing read is stored or published. The page has
   a Browser history window that saves chosen pages as bookmarks.
+- Workspace Trash and reset: `POST /api/v1/workspaces/{id}/delete` moves a workspace to the workspace Trash,
+  history and all (`GET /api/v1/workspaces?trash=1` lists it), `…/restore` brings it back, `…/purge` removes it for
+  good with its id typed, and `…/reset` goes back to how it started as one undoable entry. The page's Workspaces
+  window has In use and Trash tabs, and the workspace menu has Reset and Delete.
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed

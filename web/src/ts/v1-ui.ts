@@ -6,7 +6,7 @@ import { askConfirm, askText, hideModal, showModal, toast } from "./dialogs";
 import { closeDropdowns } from "./menu";
 import { el, fmtDate, icon } from "./ui";
 
-interface Info { id: string; name: string; head: number; notes?: string; locked?: boolean; archived?: boolean }
+interface Info { id: string; name: string; head: number; notes?: string; locked?: boolean; archived?: boolean; deleted?: string; bookmarks?: number }
 interface Entry { seq: number; at: string; op: string; summary: string }
 interface V1 {
   v1: true; id: string; locked: boolean; workspace: Info; workspaces: Info[];
@@ -67,27 +67,93 @@ function install(W: V1): void {
     showModal("#v1History");
   }
 
-  function manage(): void {
-    const { body } = modal("v1Workspaces", "Workspaces");
-    const list = el("div", "list-group list-group-flush");
-    for (const w of W.workspaces) {
-      const row = el("div", "list-group-item d-flex align-items-center gap-2");
-      const text = el("div", "flex-fill min-w-0");
-      text.append(el("div", "fw-medium text-truncate", w.name + (w.id === W.id ? " (open)" : "")),
-        el("div", "text-secondary small", [w.archived ? "archived" : "", w.locked ? "locked" : "", `${w.head} entries`].filter(Boolean).join(" · ")));
-      row.append(text);
-      if (w.id !== W.id) { const o = el("button", "btn btn-sm", "Open"); o.type = "button"; o.onclick = () => nav(w.id); row.append(o); }
-      if (!w.locked) {
-        const a = el("button", "btn btn-sm btn-ghost-secondary", w.archived ? "Bring back" : "Archive"); a.type = "button";
-        a.onclick = async () => {
-          try { await W.call("PATCH", `workspaces/${encodeURIComponent(w.id)}`, { archived: !w.archived }); location.reload(); } catch (e) { fail(e); }
-        };
-        row.append(a);
+  // Workspaces: the ones in use, and the workspace Trash (deleted ones, kept whole until it is emptied).
+  function manage(tab: "use" | "trash" = "use"): void {
+    const { body, foot } = modal("v1Workspaces", "Workspaces");
+    const nav2 = el("ul", "nav nav-tabs mb-3"); nav2.setAttribute("role", "tablist");
+    const pane = el("div");
+    const tabBtn = (id: "use" | "trash", label: string, ic: string) => {
+      const li = el("li", "nav-item"), a = el("a", "nav-link" + (tab === id ? " active" : "")); a.href = "#"; a.setAttribute("role", "tab");
+      a.append(icon(ic, "me-1"), label); a.onclick = e => { e.preventDefault(); tab = id; void paint(); };
+      li.append(a); return li;
+    };
+    const badge = (text: string, cls: string, ic?: string) => { const b = el("span", `badge ${cls}`); if (ic) b.append(icon(ic, "me-1")); b.append(text); return b; };
+    const typed = async (title: string, id: string, ok: string): Promise<boolean> => {
+      const v = await askText({ title, label: `Type the workspace id, ${id}, to go ahead`, ok, hint: "" });
+      if (v == null) return false;
+      if (v.trim() !== id) { toast("The id did not match, so nothing happened.", "info"); return false; }
+      return true;
+    };
+    const paint = async (): Promise<void> => {
+      let trash: Info[] = [], inUse: Info[] = W.workspaces;
+      try { inUse = (await W.call<{ workspaces: Info[] }>("GET", "workspaces")).workspaces; } catch { /* the page's own list will do */ }
+      try { trash = (await W.call<{ workspaces: Info[] }>("GET", "workspaces?trash=1")).workspaces; } catch { /* not an owner: no Trash tab */ }
+      nav2.replaceChildren(tabBtn("use", `In use (${inUse.length})`, "ti-stack-2"), tabBtn("trash", `Trash (${trash.length})`, "ti-trash"));
+      const list = el("div", "list-group list-group-flush border rounded");
+      const rows = tab === "use" ? inUse : trash;
+      if (!rows.length) {
+        const e = el("div", "empty py-4"); e.append(el("p", "empty-title", tab === "use" ? "No workspaces" : "The workspace Trash is empty"),
+          el("p", "empty-subtitle text-secondary", tab === "use" ? "Import bookmarks to make one." : "Deleted workspaces wait here, history and all, until you restore them or delete them for good."));
+        list.append(e);
       }
-      list.append(row);
-    }
-    body.append(list);
-    showModal("#v1Workspaces");
+      for (const w of rows) {
+        const row = el("div", "list-group-item d-flex align-items-center gap-3");
+        const text = el("div", "flex-fill min-w-0"), title = el("div", "d-flex align-items-center gap-2 flex-wrap");
+        title.append(el("span", "fw-medium text-truncate", w.name));
+        if (w.id === W.id && tab === "use") title.append(badge("open", "bg-primary-lt"));
+        if (w.archived) title.append(badge("archived", "bg-secondary-lt", "ti-archive"));
+        if (w.locked) title.append(badge("locked", "bg-yellow-lt", "ti-lock"));
+        const facts = [w.bookmarks != null ? `${w.bookmarks.toLocaleString()} bookmarks` : "", `${w.head} change${w.head === 1 ? "" : "s"}`,
+          w.deleted ? `deleted ${fmtDate(Date.parse(w.deleted) / 1000)}` : ""].filter(Boolean).join(" · ");
+        text.append(title, el("div", "text-secondary small", `${w.id} · ${facts}`));
+        const acts = el("div", "btn-list flex-nowrap");
+        const btn = (label: string, ic: string, cls: string, fn: () => Promise<void> | void) => {
+          const b = el("button", `btn btn-sm ${cls}`); b.type = "button"; b.append(icon(ic, "me-1"), label);
+          b.onclick = async () => { b.disabled = true; try { await fn(); } catch (e) { fail(e); } finally { b.disabled = false; } };
+          acts.append(b);
+        };
+        const enc = encodeURIComponent(w.id);
+        if (tab === "use") {
+          if (w.id !== W.id) btn("Open", "ti-external-link", "", () => nav(w.id));
+          if (!w.locked) btn(w.archived ? "Bring back" : "Archive", w.archived ? "ti-archive-off" : "ti-archive", "btn-ghost-secondary", async () => {
+            await W.call("PATCH", `workspaces/${enc}`, { archived: !w.archived }); location.reload();
+          });
+          if (!w.locked && inUse.length > 1) btn("Delete…", "ti-trash", "btn-ghost-danger", async () => {
+            if (!(await typed(`Delete “${w.name}”?`, w.id, "Move to the Trash"))) return;
+            await W.call("POST", `workspaces/${enc}/delete`, { confirm: w.id });
+            toast("It is in the workspace Trash, history and all. Restore brings it back.", "success", "Workspace deleted");
+            setTimeout(() => (w.id === W.id ? nav(inUse.find(x => x.id !== w.id)!.id) : location.reload()), 700);
+          });
+        } else {
+          btn("Restore", "ti-restore", "btn-primary", async () => {
+            await W.call("POST", `workspaces/${enc}/restore`);
+            toast(`“${w.name}” is back.`, "success", "Workspace restored"); setTimeout(() => nav(w.id), 600);
+          });
+          btn("Delete for good…", "ti-trash-x", "btn-ghost-danger", async () => {
+            if (!(await askConfirm({ title: `Delete “${w.name}” for good?`, ok: "Continue", body: "Its bookmarks and every change in its history are removed from this computer. This cannot be undone. A backup made earlier still has it." }))) return;
+            if (!(await typed(`Delete “${w.name}” for good`, w.id, "Delete for good"))) return;
+            await W.call("POST", `workspaces/${enc}/purge`, { confirm: w.id });
+            toast(`“${w.name}” was removed for good.`, "success", "Deleted for good"); void paint();
+          });
+        }
+        row.append(text, acts); list.append(row);
+      }
+      pane.replaceChildren(list);
+    };
+    body.append(nav2, pane);
+    const add = el("button", "btn btn-primary"); add.type = "button"; add.append(icon("ti-plus", "me-1"), "New workspace from bookmarks…");
+    add.onclick = () => { hideModal("#v1Workspaces"); importer(); };
+    const close = el("button", "btn"); close.type = "button"; close.textContent = "Close"; close.onclick = () => hideModal("#v1Workspaces");
+    foot.append(close, add);
+    void paint(); showModal("#v1Workspaces");
+  }
+
+  // Reset: back to how the workspace started, as one entry (undo brings today's back).
+  async function resetWs(): Promise<void> {
+    if (!(await askConfirm({ title: `Reset “${W.workspace.name}” to how it started?`, ok: "Reset", danger: false,
+      body: "Every change since its first import or merge is set aside as one entry in the history. Undo, or History, brings today's state back." }))) return;
+    try { const j = await W.call<{ entry: Entry }>("POST", ws("/reset")); toast(j.entry.summary, "success", "Reset"); setTimeout(() => location.reload(), 700); }
+    catch (e) { fail(e); }
   }
 
   async function rename(): Promise<void> {
@@ -388,7 +454,9 @@ function install(W: V1): void {
     if (W.locked) dm.append(item("ti-lock-open", "Unlock", () => void toggleLock(false)));
     else dm.append(item("ti-pencil", "Rename…", () => void rename()), item("ti-notes", "Notes…", () => void notes()),
       item("ti-lock", "Lock (read-only)…", () => void toggleLock(true)),
-      W.workspace.archived ? item("ti-archive-off", "Bring back from the archive", () => void archive(false)) : item("ti-archive", "Archive…", () => void archive(true)));
+      item("ti-arrow-back-up-double", "Reset to how it started…", () => void resetWs()),
+      W.workspace.archived ? item("ti-archive-off", "Bring back from the archive", () => void archive(false)) : item("ti-archive", "Archive…", () => void archive(true)),
+      item("ti-trash", "Delete…", () => manage("use"), "text-danger"));
     root.append(btn, dm);
     return root;
   }
@@ -421,7 +489,7 @@ function install(W: V1): void {
   }
 
   W.ui = {
-    history, manage, importer, addFiles, addLinks, updateWs, browserHistory, menu, download, toggleLock, backup, restore, extensions, duplicatesCsv,
+    history, manage, importer, addFiles, addLinks, updateWs, browserHistory, resetWs, menu, download, toggleLock, backup, restore, extensions, duplicatesCsv,
   };
   const mount = () => { document.getElementById("wsMenu")?.remove(); document.querySelector("#edited")?.before(menu()); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount); else mount();

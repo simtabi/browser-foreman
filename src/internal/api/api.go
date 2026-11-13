@@ -96,6 +96,10 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/workspaces/{id}/update", s.require(store.RoleViewer, s.updatePreview))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/update", s.require(store.RoleEditor, s.updateApply))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/save-links", s.require(store.RoleEditor, s.saveLinks))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/reset", s.require(store.RoleEditor, s.resetWorkspace))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/delete", s.require(store.RoleOwner, s.deleteWorkspace))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/restore", s.require(store.RoleOwner, s.restoreWorkspace))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/purge", s.require(store.RoleOwner, s.purgeWorkspace))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/changes", s.require(store.RoleEditor, s.postChanges))
 	m.HandleFunc("PUT /api/v1/workspaces/{id}/tree", s.require(store.RoleEditor, s.putTree))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/nodes", s.require(store.RoleEditor, s.createNode))
@@ -400,8 +404,12 @@ func (s *Server) listWorkspaces(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
+	trash := r.URL.Query().Get("trash") == "1" // the workspace Trash instead of the workspaces in use
 	out := []wsOut{}
 	for _, x := range all {
+		if x.Deleted.IsZero() == trash {
+			continue
+		}
 		t, _, err := s.Data.State(r.Context(), x.ID, 0)
 		if err != nil && !errors.Is(err, store.ErrNotFound) {
 			writeErr(w, 500, err.Error())
