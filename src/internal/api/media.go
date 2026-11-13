@@ -58,7 +58,7 @@ func (s *Server) keepIcons(b []byte) int {
 // {url: key}}, for the page to show.
 func (s *Server) mediaFor(t store.Tree) map[string]any {
 	icons, thumbs := map[string]string{}, map[string]string{}
-	seen, m := map[string]bool{}, s.mediaNow()
+	seen, m := map[string]bool{}, s.mediaNow().Index() // one read of each folder, not one per bookmark
 	var walk func(n *store.Node)
 	walk = func(n *store.Node) {
 		for _, c := range n.Children {
@@ -174,8 +174,9 @@ func (s *Server) startSnapshots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var urls []string
+	have := s.media(r).Index()
 	for _, u := range webURLs(t, in.Nodes) {
-		if in.Force || !s.media(r).HasThumb(u) {
+		if in.Force || !have.HasThumb(u) {
 			urls = append(urls, u)
 		}
 	}

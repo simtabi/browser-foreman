@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/simtabi/browser-foreman/src/internal/history"
@@ -28,23 +29,23 @@ func (s *Server) opened(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	// Each bookmark's key, and the address it is answered under (the bookmark's own, not the visited form).
-	byKey := map[string]string{}
+	// Each bookmark's key, and the addresses it is answered under (each bookmark's own, not the visited form): two
+	// bookmarks may share a key (http and https, a trailing slash), and both are answered.
+	byKey := map[string][]string{}
 	var walk func(n *store.Node)
 	walk = func(n *store.Node) {
 		for _, c := range n.Children {
 			if c.Kind == store.KindFolder {
 				walk(c)
 			} else if c.URL != "" {
-				byKey[merge.Key(c.URL)] = c.URL
+				k := merge.Key(c.URL)
+				if !slices.Contains(byKey[k], c.URL) {
+					byKey[k] = append(byKey[k], c.URL)
+				}
 			}
 		}
 	}
 	walk(t.Root)
-	type seen struct {
-		Last   time.Time `json:"last"`
-		Visits int       `json:"visits"`
-	}
 	out := map[string]*seen{}
 	type skipped struct{ Browser, Profile, Why string }
 	skip, read := []skipped{}, 0
@@ -62,8 +63,23 @@ func (s *Server) opened(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		read++
-		for _, v := range vs {
-			u := byKey[merge.Key(v.URL)]
+		creditVisits(out, byKey, vs)
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, map[string]any{"opened": out, "read": read, "skipped": skip})
+}
+
+// seen is one bookmark's visits: the latest, and how many in all.
+type seen struct {
+	Last   time.Time `json:"last"`
+	Visits int       `json:"visits"`
+}
+
+// creditVisits adds visits to every bookmark address sharing the visited page's key, summing counts and keeping the
+// latest time.
+func creditVisits(out map[string]*seen, byKey map[string][]string, vs []history.Visit) {
+	for _, v := range vs {
+		for _, u := range byKey[merge.Key(v.URL)] {
 			if o := out[u]; o != nil {
 				o.Visits += v.Visits
 				if v.Last.After(o.Last) {
@@ -74,6 +90,4 @@ func (s *Server) opened(w http.ResponseWriter, r *http.Request) {
 			out[u] = &seen{v.Last, v.Visits}
 		}
 	}
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, 200, map[string]any{"opened": out, "read": read, "skipped": skip})
 }

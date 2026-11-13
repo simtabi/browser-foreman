@@ -19,6 +19,9 @@ func timeRange(q url.Values) (from, to time.Time, set bool, err error) {
 			return t, nil
 		}
 		if t, err := time.ParseInLocation("2006-01-02T15:04", v, time.Local); err == nil {
+			if name == "to" { // to the minute: the whole minute counts, so "to 09:30" keeps a visit at 09:30:40
+				return t.Add(time.Minute - time.Nanosecond), nil
+			}
 			return t, nil
 		}
 		return time.Time{}, errors.New(name + ": a date and time like 2026-11-13T09:30")

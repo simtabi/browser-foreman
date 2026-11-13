@@ -133,3 +133,29 @@ func TestSnapKeepsASmallJPEG(t *testing.T) {
 		}
 	}
 }
+
+func TestIndexAgreesWithTheFolder(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	if ok, err := s.SaveIconURI("go.dev", pngURI(t, 16)); !ok || err != nil {
+		t.Fatalf("%v %v", ok, err)
+	}
+	if err := os.MkdirAll(s.dir("thumbs"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(s.dir("thumbs"), ThumbKey("https://go.dev/")+".jpg"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	x := s.Index()
+	if got, want := x.Icon("go.dev"), s.Icon("go.dev"); got == "" || got != want {
+		t.Fatalf("index icon %q, folder %q", got, want)
+	}
+	if x.Icon("example.com") != "" || x.Icon("") != "" {
+		t.Fatal("the index found an icon that is not there")
+	}
+	if !x.HasThumb("https://go.dev/") || x.HasThumb("https://example.com/") {
+		t.Fatal("the index disagrees with the snapshots folder")
+	}
+	if e := (Store{}).Index(); e.Icon("go.dev") != "" || e.HasThumb("https://go.dev/") {
+		t.Fatal("a store with no folder held something")
+	}
+}

@@ -143,6 +143,11 @@ ships.
 
 ### Fixed
 
+- *Last opened* credits every bookmark of a page: two bookmarks of the same page (http and https, a trailing slash)
+  both show its visits, where one of them showed none.
+- Reordering inside a folder of more than 2,000 bookmarks records just what moved; before, every child was recorded
+  as moved. The diff now finds the kept order in O(n log n) time, at any folder size.
+- A custom range ending at a minute (*to 09:30*) includes that whole minute.
 - Menus no longer close by themselves: a background refresh that rebuilt a menu's button (Browsers, Download and
   others, about half a second after opening) closed it; the rebuilt menu now stays open. Scrolling or resizing moves
   an open menu with its button instead of closing it; it closes once the button leaves the screen, on Escape, or on a
@@ -180,6 +185,8 @@ ships.
 
 ### Changed
 
+- The page loads faster with many bookmarks: site icons and page snapshots are found with one read of each folder,
+  not one per bookmark; history searches with an end date let the database skip what is newer.
 - Work that blocks the page dims it behind a centred card with a large spinner and what is happening, and turns every
   button off until it ends, so nothing can be pressed twice. A save shows a spinner in the button that started it,
   which stays off until the answer arrives; a slow one also shows a note at the top.

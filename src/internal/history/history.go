@@ -141,26 +141,32 @@ func Read(ctx context.Context, f File, q Query) ([]Visit, error) {
 		limit = 500
 	}
 	var query string
-	var since int64
+	var since, until int64 // the range in the file's own clock; the database skips what lies outside it
 	switch f.Kind {
 	case Chromium: // microseconds since 1601-01-01
-		query = `SELECT url, COALESCE(title, ''), last_visit_time, visit_count FROM urls WHERE last_visit_time >= ? ORDER BY last_visit_time DESC`
+		query = `SELECT url, COALESCE(title, ''), last_visit_time, visit_count FROM urls WHERE last_visit_time >= ? AND last_visit_time <= ? ORDER BY last_visit_time DESC`
 		since = (q.Since.Unix() + 11644473600) * 1_000_000
+		until = (q.Until.Unix()+11644473600)*1_000_000 + 999_999 // the whole second: Last is read to the second
 	case Firefox: // microseconds since 1970
-		query = `SELECT url, COALESCE(title, ''), COALESCE(last_visit_date, 0), visit_count FROM moz_places WHERE COALESCE(last_visit_date, 0) >= ? AND visit_count > 0 ORDER BY last_visit_date DESC`
+		query = `SELECT url, COALESCE(title, ''), COALESCE(last_visit_date, 0), visit_count FROM moz_places WHERE COALESCE(last_visit_date, 0) >= ? AND COALESCE(last_visit_date, 0) <= ? AND visit_count > 0 ORDER BY last_visit_date DESC`
 		since = q.Since.UnixMicro()
+		until = q.Until.UnixMicro()
 	case Safari: // seconds since 2001-01-01, as a real
 		query = `SELECT i.url, COALESCE((SELECT v2.title FROM history_visits v2 WHERE v2.history_item = i.id AND v2.title IS NOT NULL ORDER BY v2.visit_time DESC LIMIT 1), ''),
 			CAST(MAX(v.visit_time) AS INTEGER), i.visit_count FROM history_items i JOIN history_visits v ON v.history_item = i.id
-			GROUP BY i.id HAVING MAX(v.visit_time) >= ? ORDER BY MAX(v.visit_time) DESC`
+			GROUP BY i.id HAVING MAX(v.visit_time) >= ? AND MAX(v.visit_time) <= ? ORDER BY MAX(v.visit_time) DESC`
 		since = q.Since.Unix() - 978307200
+		until = q.Until.Unix() - 978307200 + 1 // MAX is a real: the whole second
 	default:
 		return nil, errors.New("unknown history kind " + f.Kind)
 	}
 	if q.Since.IsZero() {
 		since = -1 << 62
 	}
-	rows, err := conn.QueryContext(ctx, query, since)
+	if q.Until.IsZero() {
+		until = 1 << 62
+	}
+	rows, err := conn.QueryContext(ctx, query, since, until)
 	if err != nil {
 		return nil, errors.New("not a " + f.Kind + " history database: " + err.Error())
 	}

@@ -1,6 +1,8 @@
 package edit
 
 import (
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/simtabi/browser-foreman/src/internal/store"
@@ -202,39 +204,44 @@ func reorders(prev, next store.Tree, a, b map[string]place) map[string]bool {
 	return moved
 }
 
-// lcs returns the ids in the longest common subsequence of x and y.
+// lcs returns the ids in a longest common subsequence of x and y, for lists of distinct ids (a folder's children).
+// Each id of y is replaced by its position in x (ids x lacks are dropped), and the longest increasing run of positions
+// is found by patience sorting: O(n log n) time and O(n) memory, so a folder of any size is diffed exactly.
 func lcs(x, y []string) map[string]bool {
-	if len(x)*len(y) > 4_000_000 { // a folder this large: report nothing rather than spend the memory
-		out := map[string]bool{}
+	out := map[string]bool{}
+	if slices.Equal(x, y) { // the usual case: nothing reordered
 		for _, id := range y {
 			out[id] = true
 		}
 		return out
 	}
-	m := make([][]int, len(x)+1)
-	for i := range m {
-		m[i] = make([]int, len(y)+1)
+	at := make(map[string]int, len(x))
+	for i, id := range x {
+		at[id] = i
 	}
-	for i := len(x) - 1; i >= 0; i-- {
-		for j := len(y) - 1; j >= 0; j-- {
-			if x[i] == y[j] {
-				m[i][j] = m[i+1][j+1] + 1
-			} else {
-				m[i][j] = max(m[i+1][j], m[i][j+1])
-			}
+	var seq []int    // positions in x, in y's order
+	var ids []string // the id at each seq entry
+	for _, id := range y {
+		if p, ok := at[id]; ok {
+			seq, ids = append(seq, p), append(ids, id)
 		}
 	}
-	out := map[string]bool{}
-	for i, j := 0, 0; i < len(x) && j < len(y); {
-		switch {
-		case x[i] == y[j]:
-			out[x[i]] = true
-			i++
-			j++
-		case m[i+1][j] >= m[i][j+1]:
-			i++
-		default:
-			j++
+	tails, prev := []int{}, make([]int, len(seq)) // tails[k]: index in seq ending the best run of length k+1
+	for i, v := range seq {
+		k := sort.Search(len(tails), func(k int) bool { return seq[tails[k]] >= v })
+		prev[i] = -1
+		if k > 0 {
+			prev[i] = tails[k-1]
+		}
+		if k == len(tails) {
+			tails = append(tails, i)
+		} else {
+			tails[k] = i
+		}
+	}
+	if len(tails) > 0 {
+		for i := tails[len(tails)-1]; i >= 0; i = prev[i] {
+			out[ids[i]] = true
 		}
 	}
 	return out

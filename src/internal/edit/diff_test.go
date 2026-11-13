@@ -1,6 +1,7 @@
 package edit
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -76,5 +77,44 @@ func TestDiffRefusesUnsafeNewURLs(t *testing.T) {
 	bad.Root.Children[0].Children = append(bad.Root.Children[0].Children, bad.Root.Children[0].Children[0])
 	if _, err := Diff(sample(), bad); err == nil {
 		t.Fatal("a tree with a repeated id was accepted")
+	}
+}
+
+func TestLCSKeepsTheLongestOrderAtAnySize(t *testing.T) {
+	for _, c := range []struct {
+		x, y  string
+		moved string
+	}{
+		{"a b c d e", "a b c d e", ""},
+		{"a b c d e", "b c d e a", "a"},
+		{"a b c d e", "a d b c e", "d"},
+		{"a b c d e", "e d c b a", "4 of 5"},
+	} {
+		x, y := strings.Fields(c.x), strings.Fields(c.y)
+		keep := lcs(x, y)
+		var moved []string
+		for _, id := range y {
+			if !keep[id] {
+				moved = append(moved, id)
+			}
+		}
+		got := strings.Join(moved, " ")
+		if c.moved == "4 of 5" {
+			if len(moved) != 4 {
+				t.Errorf("%q -> %q: moved %q, want 4", c.x, c.y, got)
+			}
+		} else if got != c.moved {
+			t.Errorf("%q -> %q: moved %q, want %q", c.x, c.y, got, c.moved)
+		}
+	}
+	// A folder far past the old 2,000-child cutoff: moving one child reports that one, not all of them.
+	const n = 5000
+	x := make([]string, n)
+	for i := range x {
+		x[i] = "b" + strconv.Itoa(i)
+	}
+	y := append(append([]string{}, x[1:]...), x[0])
+	if keep := lcs(x, y); len(keep) != n-1 || keep[x[0]] {
+		t.Fatalf("kept %d of %d after moving one child to the end", len(keep), n)
 	}
 }

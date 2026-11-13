@@ -67,6 +67,50 @@ func (s Store) Icon(host string) string {
 	return ""
 }
 
+// Index is what a Store holds, read once: each icon by its host's name stem, and each snapshot's key. Use it to look up
+// many bookmarks at once (Icon and HasThumb read the folder per call).
+type Index struct {
+	icons  map[string]string // name stem (sum(host, 12)) -> file
+	thumbs map[string]bool   // ThumbKey
+}
+
+// Index reads the icons and snapshots folders once. A Store with no Dir, or a missing folder, holds nothing.
+func (s Store) Index() Index {
+	x := Index{icons: map[string]string{}, thumbs: map[string]bool{}}
+	if s.Dir == "" {
+		return x
+	}
+	if es, err := os.ReadDir(s.dir("icons")); err == nil {
+		for _, e := range es {
+			if n := e.Name(); !e.IsDir() && iconName.MatchString(n) {
+				stem := strings.TrimSuffix(n, filepath.Ext(n))
+				if _, dup := x.icons[stem]; !dup || n < x.icons[stem] {
+					x.icons[stem] = n // the same pick as Icon: the first match in name order
+				}
+			}
+		}
+	}
+	if es, err := os.ReadDir(s.dir("thumbs")); err == nil {
+		for _, e := range es {
+			if n := e.Name(); !e.IsDir() && strings.HasSuffix(n, ".jpg") {
+				x.thumbs[strings.TrimSuffix(n, ".jpg")] = true
+			}
+		}
+	}
+	return x
+}
+
+// Icon is the file name of a host's icon in the index, "" when there is none.
+func (x Index) Icon(host string) string {
+	if host == "" {
+		return ""
+	}
+	return x.icons[sum(host, 12)]
+}
+
+// HasThumb reports whether the index holds a snapshot of a page.
+func (x Index) HasThumb(u string) bool { return x.thumbs[ThumbKey(u)] }
+
 // HasThumb reports whether a page has a snapshot.
 func (s Store) HasThumb(u string) bool {
 	if s.Dir == "" {
