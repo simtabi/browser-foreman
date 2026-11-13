@@ -5,7 +5,7 @@ point at. They are added with the first public release.
 
 > Clean bookmarks, safe tabs: a local server and web interface that keeps your browsers' bookmarks tidy and your open tabs safe from a crash.
 
-Runs on macOS, Linux and Windows from one Go binary (macOS ships as one universal binary for Apple silicon and Intel); reading live tabs needs macOS today.
+Runs on macOS, Linux and Windows from one Go binary (macOS ships as one universal binary for Apple silicon and Intel). Open tabs are read through each browser's scripting on macOS and from its session files on Linux and Windows.
 
 ## Install
 
@@ -43,24 +43,17 @@ Bring in a browser's bookmarks as a workspace, with its full history from here o
 browser-foreman import ~/Downloads/bookmarks.html --workspace main
 ```
 
-Start the server (it listens on `127.0.0.1:8765` and answers on localhost only):
+Start the server, then open <http://127.0.0.1:8765/> to clean the bookmarks, rate and tag them, and keep your open tabs
+safe (it listens on localhost only):
 
 ```bash
 browser-foreman serve
 ```
 
-Watch everything that happens, as Server-Sent Events:
+Follow every change as Server-Sent Events, for scripts and other tools:
 
 ```bash
-curl -N http://127.0.0.1:8765/api/v1/events
-```
-
-Have changes sent to your own endpoint, signed with your secret:
-
-```bash
-curl -X POST http://127.0.0.1:8765/api/v1/webhooks \
-  -H "Authorization: Bearer $BROFO_API_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"url": "https://example.com/brofo", "events": ["bookmark.*"], "secret": "a-long-random-secret"}'
+curl -N http://127.0.0.1:8765/api/v1/events -H "Authorization: Bearer $BROFO_API_TOKEN"
 ```
 
 The full walkthrough is in [getting started](docs/getting-started.md); everything else is in the
@@ -92,7 +85,10 @@ Hosted at <https://opensource.simtabi.com/documentation/simtabi/browser-foreman/
 - [Browser extension](docs/tools/browser-extension.md) — Chromium, Firefox and Safari: tabs, tab groups, bookmarks in place
 - [Browsers and tabs](docs/tools/browsers-and-tabs.md) — opening links, open tabs, snapshots, restoring a session
 - [Backup and restore](docs/tools/backup.md) — what a backup holds and leaves out, restoring without replacing
-- [Web interface](docs/tools/web-interface.md) — the bookmark and tab views
+- [Web interface](docs/tools/web-interface.md) — the views, list and grid, menus, keyboard
+- [Workspaces](docs/tools/workspaces.md) — switching, managing, and own or shared tab snapshots
+- [Labels](docs/tools/labels.md) — ratings, tags and when each bookmark was last opened
+- [Page snapshots](docs/tools/page-snapshots.md) — how pictures of pages are taken, window size, wait and folder
 
 ### Recipes
 
@@ -101,10 +97,13 @@ Hosted at <https://opensource.simtabi.com/documentation/simtabi/browser-foreman/
 - [Merge bookmarks](docs/recipes/merge-bookmarks.md) — several browsers into one workspace, one copy of each page
 - [Receive a webhook](docs/recipes/receive-a-webhook.md) — verify the signature in your endpoint
 - [Stream events](docs/recipes/stream-events.md) — follow changes live, and catch up after a reconnect
+- [Rate and tag bookmarks](docs/recipes/rate-and-tag-bookmarks.md) — one at a time or many at once, then find them again
+- [Keep tabs per workspace](docs/recipes/keep-tabs-per-workspace.md) — give a workspace its own open-tab snapshots
 
 ## Contributing & security
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
+Issues and PRs are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities per
+[SECURITY.md](SECURITY.md) (security@simtabi.com); participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

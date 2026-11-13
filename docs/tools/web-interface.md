@@ -12,34 +12,27 @@ browser-foreman serve
 Open <http://localhost:8765/>. In `local` mode the page opens straight away; in `accounts` mode it asks you to sign in
 first. The first visit shows a welcome and a short tour; Help › Tour replays it. `?ws=<id>` opens another workspace.
 
-## What the binary serves today
+## What it covers
 
-The Bookmarks view works in full against the server, link health included ([link checks](link-checks.md)), with the
-workspace menu (switch, rename, notes, lock, archive, History with *Go back to this*), import into a new workspace,
-export, and backup and restore ([backup](backup.md)). A locked workspace opens read-only: the tree, search and filters, editing titles, addresses and
-notes, new folders, drag and drop, the Trash (put back, delete permanently), Undo and Redo, and Download. Every edit is
-saved as one history entry through `PUT /api/v1/workspaces/{id}/tree`, and the server publishes what changed as events.
-If the bookmarks changed somewhere else since the page loaded, the save is refused and the page offers to reload, so
-nothing is overwritten.
-
-Still to come, so their parts of the page stay empty or say they are not available yet:
-
-| Part | Arrives in |
-|---|---|
-
-Open tabs, the Timeline and the Browsers menu work through the server too ([browsers and tabs](browsers-and-tabs.md)).
-Notes on tabs, deleting snapshots and purging private pages answer that they are not available yet.
-
-The sections below describe the whole interface, as the Python implementation in `legacy/` serves it.
+Everything on the page works against the server: Bookmarks (the tree, link health from [link checks](link-checks.md),
+details, your labels, the Trash, history with *Go back here*), Open tabs and the Timeline
+([browsers and tabs](browsers-and-tabs.md)), workspaces, import and export, and backup and restore
+([backup](backup.md)). Every bookmark edit is saved as one history entry through `PUT /api/v1/workspaces/{id}/tree`,
+and the server publishes what changed as events. If the bookmarks changed somewhere else since the page loaded, the
+save is refused and the page offers *Reload* or *Keep my change*, so nothing is overwritten. A locked workspace opens
+read-only.
 
 ## The layout
 
-One header holds everything that applies everywhere: the three views (with counts), one search box that searches
-the view you are in (each view keeps its own query; press `/` to jump to it), Commands (`⌘K`), the Browsers menu
-(which browsers' tabs to show, and *Browsers and access…*), Undo and Redo for the view you are in, the theme toggle
-(a moon in light mode, a sun in dark), and the ⋮ menu (settings, help).
-Each view then has its own bar: Bookmarks shows the workspace, *Update moved*, *Refresh all* and *Download*, and the
-Show chips with a count on each. The footer shows whether the server is running and when tabs were last saved.
+One header holds everything that applies everywhere: the workspace switcher, the three views (with counts), one
+search box that searches the view you are in (each view keeps its own query; press `/` to jump to it), Commands
+(`⌘K`), the Browsers menu (which browsers' tabs to show, *Browsers and access…* and *Browser extensions…*), Undo and
+Redo for the view you are in, *Expand / Collapse all* for that view (folders in Bookmarks, windows in Open tabs), the
+theme toggle (a moon in light mode, a sun in dark), and the ⋮ menu (workspace, help, settings).
+Each view then has its own bar. Bookmarks has *Update moved*, *Refresh all*, *Trash* and *Download*, then two rows:
+**Show** (one segmented control: All, Untouched, Dead, Moved, Redirects, Unverified, Login, Duplicates, each with its
+count) and **View** (Group by, Sort, Folders, and *Added*, a period picker with quick ranges and a custom date and
+time range; *Clear filters* at the end). The footer shows whether the server is running and when tabs were last saved.
 
 ## The three views
 
@@ -112,6 +105,27 @@ incognito, and *Another browser* with the system default and each browser on thi
 *Organise* and *View*. A group appears only when something in it applies here; a group with a single action shows
 that action directly. Keyboard: ↑ ↓ move, → opens a submenu, ← or Esc goes back, Esc closes, Enter runs.
 
+## List and grid
+
+One toggle in the Folders pane's header switches between a **list** (rows under their folders) and a **grid** (each
+folder's bookmarks as cards with their page snapshot, stars and tags); its icon shows the layout it switches to. The choice is kept in this browser. In the grid the
+details pane is narrower and its folder summary stacks its columns.
+
+## Your labels: rating, tags and last opened
+
+A bookmark's Details hold **Your rating** (1 to 5 stars; click the same star again to clear) and **Tags** (type and
+press Enter or a comma; tags used elsewhere are suggested). Rows and cards show both. Search finds tags, and `#work`
+matches that tag exactly; Sort has *Highest rated* and *Recently opened*, Group by has *Rating*, *Tag* and *Last
+opened*. **Last opened** comes from your browsers' own history (read when the page opens, never stored); when macOS
+blocks reading it, the details say so. With several bookmarks selected, *Actions › Label them* rates them, adds a tag
+to all or removes one from all. Every change is a history entry ("Rated \"Go\" 4 stars; tagged work").
+
+## Keyboard
+
+`?` lists every shortcut. The ones used most: `/` search, `⌘K` commands, ↑ ↓ → ← move and open, Space select, Enter
+open, `.` the context menu, `1`–`5` rate the selected bookmark and `0` clear it, `T` its tags, `R` refresh, `M` move,
+`G` group, `F2` rename, `⌫` to the Trash, `-` collapse all, ⌘Z and ⇧⌘Z undo and redo.
+
 ## Moving things by dragging
 
 Drag any bookmark or folder (or several selected ones) anywhere in the Bookmarks tree. Over a folder, its top
@@ -136,27 +150,30 @@ palette.
 
 ## Menus
 
-- **⋮ (top right):** View (expand or collapse folders in Bookmarks), Help (help, shortcuts, tour, About), and Settings.
-  Undo, Redo and the theme toggle sit beside it in the top bar.
-- **The workspace name (Bookmarks bar):** switch workspace, all workspaces, and this workspace's history, rename,
-  notes, lock, update from source and archive.
+- **The workspace (top bar, beside the logo):** switch workspace, *All workspaces…*, and this workspace's history,
+  update from source, rename, notes, lock, reset, archive and delete.
+- **⋮ (top right):** Workspace (*All workspaces…*, *Rename this workspace…*, *Notes…*), Help (help, shortcuts, tour,
+  About), and Settings.
+- **Browsers (top bar):** which browsers' tabs and history to show, *Browsers and access…* (tracking, opening links,
+  reading bookmarks and history) and *Browser extensions…* (the supported browsers, how to install the extension in
+  each, pairing, connected browsers).
 - **The arrow beside Download:** import, export, merged duplicates, history and workspaces, backup and restore.
-- **Settings:** preferences, Browser history access, MCP access for Claude, and a **Danger zone** with every action
-  that throws work away: Reset edits, Reset this workspace, Delete this workspace, Factory reset. Each asks first.
+- **Settings:** preferences, Browser history access, Page snapshots (window size, wait, folder), MCP access for Claude,
+  and a **Danger zone** with every action that throws work away: Reset edits, Reset this workspace, Delete this
+  workspace, Factory reset. Each asks first.
 
 ## Where things are kept
 
-The binary keeps everything in its state folder (see [configuration](../configuration.md)). The Python implementation
-keeps it in `storage/`:
+Everything lives in the state folder (`~/.local/state/browser-foreman/` by default; see
+[configuration](../configuration.md)):
 
-| Folder | Holds |
+| Path | Holds |
 |---|---|
-| `storage/workspaces/` | each bookmark set and its edit history |
-| `storage/sessions/tabs.sqlite3` | open-tab snapshots, notes, link re-check results |
-| `storage/thumbs/` | page snapshots |
-| `storage/reports/`, `storage/exports/` | the build's reports and the cleaned import file |
-| `storage/backups/` | backups made by Settings › Backup, and the original export |
-| `storage/archive/` | old files moved aside (never deleted) |
+| `browser-foreman.sqlite3` | every workspace and its history, link check results, tab snapshots and notes, preferences (the `sqlite` driver; the `json` driver keeps the same in JSON files, see [storage](storage.md)) |
+| `media/icons/`, `media/thumbs/` | site icons and page snapshots, unless Settings › Page snapshots names another folder ([page snapshots](page-snapshots.md)) |
+
+Backups are written where you choose ([backup](backup.md)). The Python tool's `storage/` folders are listed in
+[moving from the Python tool](../recipes/migrate-from-python.md).
 
 ---
 [← Docs index](../../README.md#documentation)

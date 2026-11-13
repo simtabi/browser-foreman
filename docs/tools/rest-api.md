@@ -49,7 +49,7 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `GET` | `/api/v1/workspaces/{id}/history` | viewer | `200 {"history": [entries, oldest first]}` |
 | `POST` | `/api/v1/workspaces` | editor | body `{id, name}`; `201`, or `409` if the id is taken |
 | `POST` | `/api/v1/workspaces/{id}/import` | editor | the body is a bookmarks file (Chrome JSON or exported HTML, up to 64 MiB); replaces the tree as one entry; `?name=` labels it |
-| `POST` | `/api/v1/workspaces/{id}/sources` | editor | merges files (the body, or multipart `file` parts, up to 20) and `?from=` another workspace into this one, as one entry; copies of a page go to the Trash as duplicates; `?separate=1` keeps each source's folders apart; answers `added`, `duplicates`, `folders` |
+| `POST` | `/api/v1/workspaces/{id}/sources` | editor | merges files (the body, or multipart `file` parts, up to 20) and `?from=` another workspace into this one, as one entry; copies of a page go to the Trash as duplicates (a copy the Trash already holds as a duplicate of the same kept bookmark is not added again); `?separate=1` keeps each source's folders apart; answers `added`, `duplicates`, `already_in_trash`, `folders` |
 | `GET` | `/api/v1/workspaces/{id}/duplicates.csv` | viewer | every copy merged away, with the bookmark kept for it |
 | `GET` | `/api/v1/profiles` | owner | every browser profile's bookmarks file on this computer, with `readable` and `why` |
 | `GET` | `/api/v1/workspaces/{id}/sources` | viewer | where the workspace's bookmarks came from: files (a copy is kept), other workspaces, files on this computer |
@@ -82,8 +82,11 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `POST` | `/api/v1/restore` | owner | the backup file as the body; adds, replaces nothing; `200 {"workspaces": {old: new}, "entries", "links"}` |
 | `GET` | `/api/v1/browsers`, `/api/v1/browsers/icon?name=` | viewer, none | installed browsers and the default; a browser's icon (public, so an `<img>` can load it; other sites cannot) |
 | `POST` | `/api/v1/open` | owner | open http(s) links in browsers; see [browsers and tabs](browsers-and-tabs.md) |
-| `GET`, `PUT` | `/api/v1/preferences` | viewer, owner | browsers, snapshots and re-checks |
-| `GET` | `/api/v1/tabs` and the `/api/v1/tabs/…` routes | viewer to owner | open tabs, snapshots, timeline, restore, close; see [browsers and tabs](browsers-and-tabs.md) |
+| `GET`, `PUT` | `/api/v1/preferences` | viewer, owner | browsers, tab snapshots, re-checks, page snapshots (`snapshot_width`, `snapshot_height`, `snapshot_wait_seconds`, `snapshot_dir`; see [page snapshots](page-snapshots.md)) and workspace pools (`tabs_own`, `active_workspace`) |
+| `GET` | `/api/v1/workspaces/{id}/opened` | owner | when each bookmark was last opened and how often, from the browsers' own history; `no-store`, never kept. See [labels](labels.md) |
+| `POST` | `/api/v1/workspaces/{id}/open` | editor | records the workspace in use, so background tab snapshots go into its pool; see [workspaces](workspaces.md) |
+| `PUT` | `/api/v1/workspaces/{id}/tabs` | owner | body `{"own": true}` gives the workspace its own tab snapshots, `false` returns it to the shared ones; see [workspaces](workspaces.md) |
+| `GET` | `/api/v1/tabs` and the `/api/v1/tabs/…` routes | viewer to owner | open tabs, snapshots, timeline (`?days=` or `?from=`/`?to=`), `tabs/stored` counts, restore, close; `?workspace=` picks the workspace's pool; see [browsers and tabs](browsers-and-tabs.md) |
 | `GET` | `/api/v1/linkchecks` | viewer | the running check and earlier ones, with links newly broken and fixed |
 | `POST`, `GET` | `/api/v1/extension/…` | see [browser extension](browser-extension.md) | pairing, tabs and groups, bookmarks, commands |
 | `GET` | `/api/v1/settings` | owner | the configuration in force, without secrets; read-only |
@@ -98,7 +101,7 @@ Every change answers `201 {"entry", "events"}` with the new head as its `ETag`.
 | `op` | Fields |
 |---|---|
 | `create` | `parent` (folder id; `""` is the root), `index` (end when left out), `kind` (`bookmark` or `folder`), `title`, `url`, `note` |
-| `update` | `id`, and any of `title`, `url`, `note` |
+| `update` | `id`, and any of `title`, `url`, `note`, `rating` (0 to 5; 0 clears), `tags` (up to 20, 40 characters each, no commas; `[]` clears) |
 | `move` | `ids`, `parent`, `index` |
 | `trash` | `ids`, `reason` (top folders such as Bookmarks Bar cannot go) |
 | `restore` | `ids` |

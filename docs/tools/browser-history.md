@@ -26,5 +26,4 @@ browsers can be read and open System Settings at the right place. Add the app th
 | `GET /api/v1/history` | owner | pages visited, newest first, one row per address across browsers: `q`, `days` (30), `browser`, `limit` (300); `workspace` marks each `bookmarked` or not |
 
 ---
-
 [← Docs index](../../README.md#documentation)

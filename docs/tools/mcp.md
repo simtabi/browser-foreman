@@ -64,5 +64,4 @@ Every write is one history entry, so `undo` (or the History window in the web in
 MCP server does deletes data: emptying the Trash is not one of its tools.
 
 ---
-
 [← Docs index](../../README.md#documentation)
