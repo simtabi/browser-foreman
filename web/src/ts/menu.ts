@@ -90,6 +90,7 @@ export function placeDropdown(m: HTMLElement, btn: Element): void {
  *  click now being handled (data-brofo-fresh) stays: closing it there is what made every pop-up menu look dead. The
  *  right-click menu (#ctx) closes itself. */
 export function closeDropdowns(): void {
+  openAt = null;
   for (const b of Array.from(document.querySelectorAll("[data-dd][aria-expanded=true]"))) b.setAttribute("aria-expanded", "false");
   for (const m of Array.from(document.querySelectorAll<HTMLElement>(".dropdown-menu.show"))) {
     if (m.id === "ctx" || Dom.read(m, "fresh")) continue;
@@ -97,11 +98,54 @@ export function closeDropdowns(): void {
   }
 }
 
-/** The page-wide rules, once: a [data-dd] button toggles the menu beside it; a click elsewhere, a scroll or a resize
- *  closes open menus. `beforeOpen` runs first (the page hides its tooltip). */
+/** Where an open menu's button is, as a path a rebuilt copy of it shares: the nearest ancestor with an id or a
+ *  data-brofo-* name, then which [data-dd] button inside it. A view that repaints (a poll, a count, a list arriving)
+ *  replaces the button and its menu; the path finds the new ones, so the menu stays open instead of vanishing. */
+function anchorOf(btn: Element): { host: string; index: number } | null {
+  for (let h: Element | null = btn.parentElement; h && h !== document.body; h = h.parentElement) {
+    const key = h.id ? `#${CSS.escape(h.id)}` : Array.from(h.attributes).find(a => a.name.startsWith("data-brofo-"))?.name;
+    if (key) {
+      const sel = h.id ? key : `[${key}]`;
+      return { host: sel, index: Array.from(h.querySelectorAll("[data-dd]")).indexOf(btn) };
+    }
+  }
+  return null;
+}
+let openAt: { btn: Element; menu: HTMLElement; anchor: { host: string; index: number } | null } | null = null;
+
+function openMenu(t: Element, m: HTMLElement): void {
+  m.classList.add("show"); placeDropdown(m, t); t.setAttribute("aria-expanded", "true");
+  openAt = { btn: t, menu: m, anchor: anchorOf(t) };
+}
+
+/** After a repaint: reopen the rebuilt menu where the open one was replaced, or forget it if its button is gone. */
+function followRepaint(): void {
+  if (!openAt || openAt.menu.isConnected) return;
+  const a = openAt.anchor; openAt = null;
+  const host = a && document.querySelector(a.host);
+  const t = host && a!.index >= 0 ? host.querySelectorAll("[data-dd]")[a!.index] : null;
+  const m = t?.parentElement?.querySelector<HTMLElement>(".dropdown-menu");
+  if (t && m && !m.classList.contains("show")) openMenu(t, m);
+}
+
+/** Keep the open menu beside its button as the page scrolls or resizes; close it once the button is off screen. */
+function follow(): void {
+  if (!openAt) return;
+  const { btn, menu } = openAt;
+  if (!menu.isConnected || !menu.classList.contains("show")) { openAt = null; return; }
+  const r = btn.getBoundingClientRect();
+  if (!btn.isConnected || r.bottom < 0 || r.top > innerHeight || r.width === 0) { closeDropdowns(); return; }
+  placeDropdown(menu, btn);
+}
+
+/** The page-wide rules, once: a [data-dd] button toggles the menu beside it; a click elsewhere or Escape closes open
+ *  menus. Scrolling and resizing move an open menu with its button (closing it only once the button is off screen),
+ *  and a repaint that rebuilds the button keeps its menu open. `beforeOpen` runs first (the page hides its tooltip). */
 export function installMenus(beforeOpen: () => void = () => {}): void {
-  addEventListener("resize", () => { if (document.querySelector(".dropdown-menu.show.dd-placed")) closeDropdowns(); });
-  addEventListener("scroll", e => { if (!(e.target as Element | null)?.closest?.(".dropdown-menu")) closeDropdowns(); }, true);
+  addEventListener("resize", () => requestAnimationFrame(follow));
+  addEventListener("scroll", e => { if (!(e.target as Element | null)?.closest?.(".dropdown-menu")) requestAnimationFrame(follow); }, true);
+  new MutationObserver(followRepaint).observe(document.body, { childList: true, subtree: true });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && openAt) { const b = openAt.btn; closeDropdowns(); (b as HTMLElement).focus?.(); } });
   document.addEventListener("click", e => {
     const target = e.target as Element;
     const t = target.closest("[data-dd]");
@@ -109,7 +153,7 @@ export function installMenus(beforeOpen: () => void = () => {}): void {
       e.preventDefault(); beforeOpen();
       const m = t.parentElement?.querySelector<HTMLElement>(".dropdown-menu"); if (!m) return;
       const was = m.classList.contains("show"); closeDropdowns();
-      if (!was) { m.classList.add("show"); placeDropdown(m, t); t.setAttribute("aria-expanded", "true"); }
+      if (!was) openMenu(t, m);
       return;
     }
     if (!target.closest(".dropdown-menu")) closeDropdowns();

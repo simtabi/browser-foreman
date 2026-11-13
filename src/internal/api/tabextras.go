@@ -153,17 +153,10 @@ func (s *Server) openWorkspace(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	p, err := store.LoadPrefs(r.Context(), s.Data)
+	p, err := store.UpdatePrefs(r.Context(), s.Data, func(p *store.Prefs) error { p.ActiveWorkspace = x.ID; return nil })
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
-	}
-	if p.ActiveWorkspace != x.ID {
-		p.ActiveWorkspace = x.ID
-		if err := store.SavePrefs(r.Context(), s.Data, p); err != nil {
-			writeErr(w, 500, err.Error())
-			return
-		}
 	}
 	writeJSON(w, 200, map[string]any{"active": x.ID, "own_tabs": tabs.PoolFor(p, x.ID) != ""})
 }
@@ -189,22 +182,20 @@ func (s *Server) setWorkspaceTabs(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, `give "own": true or false`)
 		return
 	}
-	p, err := store.LoadPrefs(r.Context(), s.Data)
-	if err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	keep := []string{}
-	for _, id := range p.TabsOwn {
-		if id != x.ID {
-			keep = append(keep, id)
+	p, err := store.UpdatePrefs(r.Context(), s.Data, func(p *store.Prefs) error {
+		keep := []string{}
+		for _, id := range p.TabsOwn {
+			if id != x.ID {
+				keep = append(keep, id)
+			}
 		}
-	}
-	if *in.Own {
-		keep = append(keep, x.ID)
-	}
-	p.TabsOwn = keep
-	if err := store.SavePrefs(r.Context(), s.Data, p); err != nil {
+		if *in.Own {
+			keep = append(keep, x.ID)
+		}
+		p.TabsOwn = keep
+		return nil
+	})
+	if err != nil {
 		writeErr(w, 400, err.Error())
 		return
 	}

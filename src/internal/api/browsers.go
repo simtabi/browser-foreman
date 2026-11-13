@@ -1,7 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"sync"
 
@@ -106,18 +109,20 @@ func (s *Server) getPrefs(w http.ResponseWriter, r *http.Request) {
 
 // putPrefs replaces the preferences; fields left out keep their current values.
 func (s *Server) putPrefs(w http.ResponseWriter, r *http.Request) {
-	p, err := store.LoadPrefs(r.Context(), s.Data)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 16<<10)) // read before the lock: a slow client holds nothing
 	if err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&p); err != nil {
 		writeErr(w, 400, "bad JSON body: "+err.Error())
 		return
 	}
-	if err := store.SavePrefs(r.Context(), s.Data, p); err != nil {
+	p, err := store.UpdatePrefs(r.Context(), s.Data, func(p *store.Prefs) error {
+		dec := json.NewDecoder(bytes.NewReader(body))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(p); err != nil {
+			return fmt.Errorf("bad JSON body: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
 		writeErr(w, 400, err.Error())
 		return
 	}

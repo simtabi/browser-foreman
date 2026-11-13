@@ -143,6 +143,14 @@ ships.
 
 ### Fixed
 
+- Menus no longer close by themselves: a background refresh that rebuilt a menu's button (Browsers, Download and
+  others, about half a second after opening) closed it; the rebuilt menu now stays open. Scrolling or resizing moves
+  an open menu with its button instead of closing it; it closes once the button leaves the screen, on Escape, or on a
+  click elsewhere.
+- Bookmark cards draw their border at once instead of fading it in from dark.
+- Two preference changes made at once (switching workspace while changing a setting) no longer lose one of them.
+- A tag's 40-character limit counts characters, not bytes, so tags in accented or non-Latin scripts get the full
+  length; a whole-tree save refuses a rating or tags on a folder.
 - The page adapts to the window without clipping or covering anything, checked from 1920 to 390 pixels wide: the
   search keeps a usable width (the product name, then the view tabs' labels, give way first, and the Commands label
   and shortcut hints go by the search's own width); the Show filters wrap instead of hiding off the edge; on a phone

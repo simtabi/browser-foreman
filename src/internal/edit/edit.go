@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/simtabi/browser-foreman/src/internal/store"
 )
@@ -274,7 +275,7 @@ func CleanTags(in []string) ([]string, error) {
 		if t == "" || seen[strings.ToLower(t)] {
 			continue
 		}
-		if len(t) > maxTagLen {
+		if utf8.RuneCountInString(t) > maxTagLen { // characters, as the page counts them, not bytes
 			return nil, refuse("a tag is longer than %d characters", maxTagLen)
 		}
 		if strings.ContainsAny(t, ",\x00") {

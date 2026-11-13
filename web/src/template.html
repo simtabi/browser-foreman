@@ -630,6 +630,9 @@ body.no-tree-dates #list .bm-date { display: none !important; }
 #list.grid > .bm-row:not(.folder) .bm-path, #list.grid > .bm-row:not(.folder) .bm-desc { display: none; }
 #list.grid > .bm-row.sel:not(.folder) { border-color: var(--tblr-primary); box-shadow: 0 0 0 1px var(--tblr-primary); }
 #list.grid > .bm-row:not(.folder):hover { border-color: var(--tblr-border-color-dark, var(--tblr-border-color)); }
+/* Cards draw their border at once: animating border-color would fade it in from the row's dark starting colour each
+   time cards are drawn (on load, scrolling into view, switching to the grid). */
+#list.grid > .bm-row:not(.folder) { transition: background-color .12s, box-shadow .12s; }
 .layout-toggle:focus:not(:focus-visible), .layout-toggle:active { background: transparent; color: inherit; box-shadow: none; }  /* no dark block after a click */
 /* Buttons and menus show their focus ring for the keyboard only: a click, or a dialog focusing its safe choice, leaves
    no outline or grey block behind. */

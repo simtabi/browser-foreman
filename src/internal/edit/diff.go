@@ -88,6 +88,10 @@ func Diff(prev, next store.Tree) ([]Event, error) {
 			err = e
 			return
 		}
+		if now.n.Kind == store.KindFolder && (now.n.Rating != 0 || len(now.n.Tags) > 0) {
+			err = refuse("a folder has no rating or tags")
+			return
+		}
 		if e := CheckRating(now.n.Rating); e != nil {
 			err = e
 			return

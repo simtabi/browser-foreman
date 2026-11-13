@@ -199,3 +199,17 @@ func TestDiffChecksRatingAndTags(t *testing.T) {
 		t.Fatal("a 9-star rating got through a whole-tree save")
 	}
 }
+
+func TestTagLengthIsCharactersAndFoldersHaveNoLabels(t *testing.T) {
+	if _, err := CleanTags([]string{strings.Repeat("é", maxTagLen)}); err != nil {
+		t.Fatalf("a %d-character tag of two-byte letters was refused: %v", maxTagLen, err)
+	}
+	if _, err := CleanTags([]string{strings.Repeat("é", maxTagLen+1)}); err == nil {
+		t.Fatal("a tag one character too long got through")
+	}
+	bad := sample()
+	bad.Root.Children[0].Tags = []string{"work"}
+	if _, err := Diff(sample(), bad); err == nil || !IsRefusal(err) {
+		t.Fatalf("a folder took tags in a whole-tree save: %v", err)
+	}
+}

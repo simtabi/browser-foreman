@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sync"
 )
 
 // Prefs are the owner's choices about browsers and tabs, kept with the data (not in the config files, which hold the
@@ -105,7 +106,27 @@ func LoadPrefs(ctx context.Context, s Store) (Prefs, error) {
 	return p, nil
 }
 
-// SavePrefs validates and stores the preferences.
+// prefsMu serialises UpdatePrefs: the preferences are one document, so two read-change-save rounds running at once
+// would each save over the other's change. It guards the stored document (one per process), never request data.
+var prefsMu sync.Mutex
+
+// UpdatePrefs reads the preferences, lets change edit them, and saves the result, as one step: concurrent updates
+// (switching workspace while changing a setting, say) each see the other's change. A change returning an error saves
+// nothing. It returns what was saved.
+func UpdatePrefs(ctx context.Context, s Store, change func(*Prefs) error) (Prefs, error) {
+	prefsMu.Lock()
+	defer prefsMu.Unlock()
+	p, err := LoadPrefs(ctx, s)
+	if err != nil {
+		return p, err
+	}
+	if err := change(&p); err != nil {
+		return p, err
+	}
+	return p, SavePrefs(ctx, s, p)
+}
+
+// SavePrefs validates and stores the preferences. Prefer UpdatePrefs for a change to what is stored.
 func SavePrefs(ctx context.Context, s Store, p Prefs) error {
 	if err := p.Validate(); err != nil {
 		return err
