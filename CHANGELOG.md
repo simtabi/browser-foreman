@@ -114,8 +114,8 @@ ships.
 
 ### Fixed
 
-- The page no longer throws on load: `setFilter` and the Show counts were lost in an edit before this release; a web
-  test now fails when `page.ts` uses a name that does not exist.
+- A web test now fails when `page.ts` (still unchecked by the compiler) uses a name that does not exist, and the
+  header counts log their errors instead of hiding them.
 - The Timeline's All range showed no tab snapshots: `days=0` now means every snapshot kept.
 
 ### Changed
