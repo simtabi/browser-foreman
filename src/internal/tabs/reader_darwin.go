@@ -23,13 +23,13 @@ function run(argv) {
   const out = [], wins = app.windows();
   for (let i = 0; i < wins.length; i++) {
     const w = wins[i];
-    let urls = [], titles = [], ids = [], mode = "normal", active = 0, wid = 0;
+    let urls = [], titles = [], ids = [], mode = "normal", active = 0, wid = null;
     try { urls = w.tabs.url(); titles = safari ? w.tabs.name() : w.tabs.title(); } catch (e) { continue; }
     try { wid = w.id(); } catch (e) {}
     if (!safari) { try { ids = w.tabs.id(); } catch (e) {} try { mode = w.mode(); } catch (e) {} try { active = w.activeTabIndex(); } catch (e) {} }
     else { try { active = w.currentTab().index(); } catch (e) {} }
     out.push({index: i + 1, id: wid, mode: mode || "normal", active: active,
-      tabs: urls.map((u, k) => ({url: u || "", title: titles[k] || "", id: ids[k] == null ? 0 : ids[k]}))});
+      tabs: urls.map((u, k) => ({url: u || "", title: titles[k] || "", id: ids[k] == null ? null : ids[k]}))});
   }
   return JSON.stringify({running: true, windows: out});
 }`
@@ -45,9 +45,10 @@ function run(argv) {
   items.sort((a, b) => (b.pos || 0) - (a.pos || 0));
   for (const it of items) {
     try {
-      let tab;
-      if (!safari && it.tab_id) tab = app.windows.byId(it.window_id).tabs.byId(it.tab_id);
-      else tab = app.windows.byId(it.window_id).tabs[it.pos];
+      // Ids come back as text; a browser that numbers them is asked with the number.
+      const byId = (coll, id) => { try { const x = coll.byId(id); x.id(); return x; } catch (e) { return coll.byId(Number(id)); } };
+      const win = byId(app.windows, it.window_id);
+      const tab = !safari && it.tab_id ? byId(win.tabs, it.tab_id) : win.tabs[it.pos];
       if (tab.url() !== it.url) { skipped.push(it.url + ": changed since it was read"); continue; }
       tab.close(); closed++;
     } catch (e) { skipped.push(it.url + ": already closed or window gone"); }
@@ -92,21 +93,7 @@ func (m *Mac) Read(ctx context.Context, b browsers.Browser) Browser {
 		}
 		return out
 	}
-	var doc struct {
-		Running bool     `json:"running"`
-		Windows []Window `json:"windows"`
-	}
-	if err := json.Unmarshal(stdout, &doc); err != nil {
-		out.Error = "unreadable answer"
-		return out
-	}
-	out.Running, out.Windows = doc.Running, doc.Windows
-	if !b.PrivateKnown {
-		for i := range out.Windows {
-			out.Windows[i].Mode = "normal"
-		}
-	}
-	return out
+	return ParseRead(b.Name, b.PrivateKnown, stdout)
 }
 
 func (m *Mac) Close(ctx context.Context, browser string, items []CloseItem) (int, []string, error) {

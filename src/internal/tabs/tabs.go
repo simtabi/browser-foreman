@@ -16,18 +16,43 @@ import (
 	"github.com/simtabi/browser-foreman/src/internal/browsers"
 )
 
-// Tab is one open tab. ID is the browser's own id for it (Chromium browsers), 0 when it has none.
+// ID is a browser's own id for a window or tab. Browsers answer it as a number or as a string (Chrome does both,
+// depending on its version), so it is kept as text either way.
+type ID string
+
+func (i *ID) UnmarshalJSON(b []byte) error {
+	if len(b) > 0 && b[0] == '"' {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return err
+		}
+		*i = ID(s)
+		return nil
+	}
+	if string(b) == "null" {
+		*i = ""
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(b, &n); err != nil {
+		return err
+	}
+	*i = ID(n.String())
+	return nil
+}
+
+// Tab is one open tab. ID is the browser's own id for it (Chromium browsers), "" when it has none.
 type Tab struct {
 	URL   string `json:"url"`
 	Title string `json:"title"`
-	ID    int64  `json:"id,omitempty"`
+	ID    ID     `json:"id,omitempty"`
 }
 
 // Window is one browser window: Mode is "normal" or "incognito". A private window that was redacted has TabCount and
 // no Tabs.
 type Window struct {
 	Index    int    `json:"index"`
-	ID       int64  `json:"id,omitempty"`
+	ID       ID     `json:"id,omitempty"`
 	Mode     string `json:"mode"`
 	Active   int    `json:"active,omitempty"`
 	Tabs     []Tab  `json:"tabs,omitempty"`
@@ -196,8 +221,8 @@ func RestorePlan(s State, pick []int) []RestoreWindow {
 // address it must still show, so a tab that moved on since the read is left alone.
 type CloseItem struct {
 	Browser  string `json:"browser"`
-	WindowID int64  `json:"window_id"`
-	TabID    int64  `json:"tab_id,omitempty"`
+	WindowID ID     `json:"window_id"`
+	TabID    ID     `json:"tab_id,omitempty"`
 	Pos      int    `json:"pos"`
 	URL      string `json:"url"`
 }
@@ -221,5 +246,26 @@ func SortedNames(items []CloseItem) []string {
 		}
 	}
 	sort.Strings(out)
+	return out
+}
+
+// ParseRead reads what the read script answered for one browser. A browser that cannot tell private windows apart
+// has every window reported as normal.
+func ParseRead(name string, privateKnown bool, stdout []byte) Browser {
+	out := Browser{Browser: name}
+	var doc struct {
+		Running bool     `json:"running"`
+		Windows []Window `json:"windows"`
+	}
+	if err := json.Unmarshal(stdout, &doc); err != nil {
+		out.Error = "unreadable answer: " + err.Error()
+		return out
+	}
+	out.Running, out.Windows = doc.Running, doc.Windows
+	for i := range out.Windows {
+		if !privateKnown || out.Windows[i].Mode == "" {
+			out.Windows[i].Mode = "normal"
+		}
+	}
 	return out
 }

@@ -67,8 +67,8 @@ func service(t *testing.T) (*Service, *reader, *platform, *closer) {
 	}
 	r := &reader{state: map[string][]Window{
 		"Google Chrome": {
-			{Index: 1, ID: 11, Mode: "normal", Tabs: []Tab{{URL: "https://go.dev/", Title: "Go", ID: 1}, {URL: "chrome://settings", Title: "Settings", ID: 2}}},
-			{Index: 2, ID: 12, Mode: "incognito", Tabs: []Tab{{URL: "https://private.example/", Title: "Secret", ID: 3}}},
+			{Index: 1, ID: "11", Mode: "normal", Tabs: []Tab{{URL: "https://go.dev/", Title: "Go", ID: "1"}, {URL: "chrome://settings", Title: "Settings", ID: "2"}}},
+			{Index: 2, ID: "12", Mode: "incognito", Tabs: []Tab{{URL: "https://private.example/", Title: "Secret", ID: "3"}}},
 		},
 	}}
 	p := &platform{}
@@ -143,7 +143,7 @@ func TestRestoreAndClose(t *testing.T) {
 	if got := strings.Join(p.ran[0], " "); got != "open -na /Applications/Google Chrome.app --args --new-window https://go.dev/" {
 		t.Fatal(got)
 	}
-	out, err := s.CloseTabs(ctx, []CloseItem{{Browser: "Google Chrome", WindowID: 11, TabID: 1, URL: "https://go.dev/"}})
+	out, err := s.CloseTabs(ctx, []CloseItem{{Browser: "Google Chrome", WindowID: "11", TabID: "1", URL: "https://go.dev/"}})
 	if err != nil || out.Closed != 1 || out.UndoSnapshot == "" || len(c.got) != 1 {
 		t.Fatalf("%+v %v", out, err)
 	}
@@ -191,5 +191,21 @@ func TestRestorePlanSkipsRedactedWindows(t *testing.T) {
 	plan := RestorePlan(st, nil)
 	if len(plan) != 1 || plan[0].URLs[0] != "https://go.dev/" {
 		t.Fatalf("%+v", plan)
+	}
+}
+
+// The read script's real answers: Chrome gives ids as strings, Safari as numbers and no mode.
+func TestParseReadTakesRealAnswers(t *testing.T) {
+	chrome := ParseRead("Google Chrome", true, []byte(`{"running":true,"windows":[{"index":1,"id":"1873301","mode":"normal","active":3,
+		"tabs":[{"url":"https://go.dev/","title":"Go","id":"1873302"},{"url":"https://b.example/","title":"B","id":"tab-7F3A"}]},{"index":2,"id":"1873400","mode":"incognito","active":1,"tabs":[]}]}`))
+	if chrome.Error != "" || len(chrome.Windows) != 2 || chrome.Windows[0].ID != "1873301" || chrome.Windows[0].Tabs[0].ID != "1873302" || chrome.Windows[0].Tabs[1].ID != "tab-7F3A" || chrome.Windows[1].Mode != "incognito" {
+		t.Fatalf("%+v", chrome)
+	}
+	safari := ParseRead("Safari", false, []byte(`{"running":true,"windows":[{"index":1,"id":4512,"active":2,"tabs":[{"url":"https://a.example/","title":"A","id":null}]}]}`))
+	if safari.Error != "" || safari.Windows[0].ID != "4512" || safari.Windows[0].Mode != "normal" || safari.Windows[0].Tabs[0].ID != "" {
+		t.Fatalf("%+v", safari)
+	}
+	if bad := ParseRead("Google Chrome", true, []byte("execution error")); bad.Error == "" {
+		t.Fatal("a broken answer was accepted")
 	}
 }

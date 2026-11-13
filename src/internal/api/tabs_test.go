@@ -20,8 +20,8 @@ func (f *fakeTabs) Read(_ context.Context, b browsers.Browser) tabs.Browser {
 		return tabs.Browser{Browser: b.Name}
 	}
 	return tabs.Browser{Browser: b.Name, Running: true, Windows: []tabs.Window{
-		{Index: 1, ID: 7, Mode: "normal", Tabs: []tabs.Tab{{URL: "https://go.dev/", Title: "Go", ID: 1}}},
-		{Index: 2, ID: 8, Mode: "incognito", Tabs: []tabs.Tab{{URL: "https://private.example/", Title: "Secret", ID: 2}}},
+		{Index: 1, ID: "7", Mode: "normal", Tabs: []tabs.Tab{{URL: "https://go.dev/", Title: "Go", ID: "1"}}},
+		{Index: 2, ID: "8", Mode: "incognito", Tabs: []tabs.Tab{{URL: "https://private.example/", Title: "Secret", ID: "2"}}},
 	}}
 }
 
