@@ -57,6 +57,8 @@ type wsFile struct {
 	Locked   bool      `json:"locked,omitempty"`
 	Archived bool      `json:"archived,omitempty"`
 	Deleted  time.Time `json:"deleted,omitzero"`
+	Color    string    `json:"color,omitempty"`
+	Icon     string    `json:"icon,omitempty"`
 }
 
 func (s *JSONStore) CreateWorkspace(_ context.Context, id, name string, at time.Time) (Workspace, error) {
@@ -123,7 +125,8 @@ func (s *JSONStore) workspace(id string) (Workspace, error) {
 	if err != nil {
 		return Workspace{}, err
 	}
-	w := Workspace{ID: id, Name: f.Name, Created: f.Created, Notes: f.Notes, Locked: f.Locked, Archived: f.Archived, Deleted: f.Deleted}
+	w := Workspace{ID: id, Name: f.Name, Created: f.Created, Notes: f.Notes, Locked: f.Locked, Archived: f.Archived, Deleted: f.Deleted,
+		Color: f.Color, Icon: f.Icon}
 	if len(h) > 0 {
 		w.Head = h[len(h)-1].Seq
 	}
@@ -140,7 +143,8 @@ func (s *JSONStore) UpdateWorkspace(_ context.Context, w Workspace) error {
 	if err != nil {
 		return err
 	}
-	b, _ := json.Marshal(wsFile{Name: w.Name, Created: old.Created, Notes: w.Notes, Locked: w.Locked, Archived: w.Archived, Deleted: w.Deleted})
+	b, _ := json.Marshal(wsFile{Name: w.Name, Created: old.Created, Notes: w.Notes, Locked: w.Locked, Archived: w.Archived, Deleted: w.Deleted,
+		Color: w.Color, Icon: w.Icon})
 	return writeAtomic(filepath.Join(s.wsDir(w.ID), "workspace.json"), b)
 }
 

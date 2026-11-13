@@ -16,15 +16,15 @@ func TestRenameNotesLockArchive(t *testing.T) {
 		if _, err := s.Commit(ctx, "main", 1, Change{Op: "edit", Summary: "y", Tree: tree("go", "dev")}, t0); err != nil {
 			t.Fatal(err)
 		}
-		w.Name, w.Notes, w.Locked, w.Archived = "Chrome (cleaned)", "kept for reference", true, true
+		w.Name, w.Notes, w.Locked, w.Archived, w.Color, w.Icon = "Chrome (cleaned)", "kept for reference", true, true, "teal", "briefcase"
 		if err := s.UpdateWorkspace(ctx, w); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := s.Workspace(ctx, "main")
-		if got.Name != "Chrome (cleaned)" || got.Notes != "kept for reference" || !got.Locked || !got.Archived || got.Head != 2 {
+		if got.Name != "Chrome (cleaned)" || got.Notes != "kept for reference" || !got.Locked || !got.Archived || got.Head != 2 || got.Color != "teal" || got.Icon != "briefcase" {
 			t.Fatalf("%+v", got)
 		}
-		if all, _ := s.Workspaces(ctx); len(all) != 1 || !all[0].Locked {
+		if all, _ := s.Workspaces(ctx); len(all) != 1 || !all[0].Locked || all[0].Color != "teal" || all[0].Icon != "briefcase" {
 			t.Fatalf("%+v", all)
 		}
 		if _, err := s.Commit(ctx, "main", 2, Change{Op: "edit", Summary: "z", Tree: tree("go")}, t0); !errors.Is(err, ErrLocked) {

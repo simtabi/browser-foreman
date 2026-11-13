@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -457,14 +459,24 @@ func (s *Server) putTree(w http.ResponseWriter, r *http.Request) {
 	s.commit(w, r, x, saw, given, given, store.Change{Op: "edit", Summary: edit.Summary(events), Tree: next}, events, "committed")
 }
 
-// updateWorkspace renames a workspace, sets its notes, locks or unlocks it, or archives it. While it is locked, only
-// unlocking is accepted (423 otherwise), so a locked workspace cannot be renamed or archived by mistake either.
+// WorkspaceColors are the colours a workspace may take (Tabler's named colours); "" is the default.
+var WorkspaceColors = []string{"blue", "azure", "indigo", "purple", "pink", "red", "orange", "yellow", "lime", "green", "teal", "cyan"}
+
+// validIcon accepts a Tabler icon name ("briefcase", "device-laptop"), with or without its "ti-" prefix; "" is the
+// default.
+var validIcon = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+// updateWorkspace renames a workspace, sets its notes, colour and icon, locks or unlocks it, or archives it. While it
+// is locked, only unlocking and its colour and icon are accepted (423 otherwise), so a locked workspace cannot be
+// renamed or archived by mistake either.
 func (s *Server) updateWorkspace(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name     *string `json:"name"`
 		Notes    *string `json:"notes"`
 		Locked   *bool   `json:"locked"`
 		Archived *bool   `json:"archived"`
+		Color    *string `json:"color"`
+		Icon     *string `json:"icon"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -473,7 +485,8 @@ func (s *Server) updateWorkspace(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if x.Locked && (in.Name != nil || in.Notes != nil || in.Archived != nil || in.Locked == nil || *in.Locked) {
+	looks := in.Color != nil || in.Icon != nil
+	if x.Locked && (in.Name != nil || in.Notes != nil || in.Archived != nil || (in.Locked != nil && *in.Locked) || (in.Locked == nil && !looks)) {
 		writeErr(w, http.StatusLocked, store.ErrLocked.Error())
 		return
 	}
@@ -492,6 +505,22 @@ func (s *Server) updateWorkspace(w http.ResponseWriter, r *http.Request) {
 		}
 		x.Notes = *in.Notes
 	}
+	if in.Color != nil {
+		c := strings.ToLower(strings.TrimSpace(*in.Color))
+		if c != "" && !slices.Contains(WorkspaceColors, c) {
+			writeErr(w, 400, "color: one of "+strings.Join(WorkspaceColors, ", ")+", or empty for the default")
+			return
+		}
+		x.Color = c
+	}
+	if in.Icon != nil {
+		ic := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(*in.Icon)), "ti-")
+		if ic != "" && (len(ic) > 40 || !validIcon.MatchString(ic)) {
+			writeErr(w, 400, `icon: a Tabler icon name such as "briefcase", or empty for the default`)
+			return
+		}
+		x.Icon = ic
+	}
 	if in.Locked != nil {
 		x.Locked = *in.Locked
 	}
@@ -502,6 +531,7 @@ func (s *Server) updateWorkspace(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	_, _ = s.Bus.Publish("workspace.updated", map[string]any{"workspace": x.ID, "name": x.Name, "locked": x.Locked, "archived": x.Archived})
+	_, _ = s.Bus.Publish("workspace.updated", map[string]any{"workspace": x.ID, "name": x.Name, "locked": x.Locked, "archived": x.Archived,
+		"color": x.Color, "icon": x.Icon})
 	writeJSON(w, 200, map[string]any{"workspace": x})
 }

@@ -51,6 +51,8 @@ func OpenSQLite(dir string) (*SQLiteStore, error) {
 	// Columns added after the first release: an older database gains them here (the error for one already there is
 	// the expected answer and ignored).
 	_, _ = db.Exec(`ALTER TABLE workspace_meta ADD COLUMN deleted TEXT NOT NULL DEFAULT ''`)
+	_, _ = db.Exec(`ALTER TABLE workspace_meta ADD COLUMN color TEXT NOT NULL DEFAULT ''`)
+	_, _ = db.Exec(`ALTER TABLE workspace_meta ADD COLUMN icon TEXT NOT NULL DEFAULT ''`)
 	return &SQLiteStore{db: db}, nil
 }
 
@@ -75,7 +77,8 @@ func (s *SQLiteStore) CreateWorkspace(ctx context.Context, id, name string, at t
 
 func (s *SQLiteStore) Workspaces(ctx context.Context) ([]Workspace, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT w.id, w.name, w.created, COALESCE(MAX(e.seq), 0),
-	  COALESCE(m.notes, ''), COALESCE(m.locked, 0), COALESCE(m.archived, 0), COALESCE(m.deleted, '') FROM workspaces w
+	  COALESCE(m.notes, ''), COALESCE(m.locked, 0), COALESCE(m.archived, 0), COALESCE(m.deleted, ''),
+	  COALESCE(m.color, ''), COALESCE(m.icon, '') FROM workspaces w
 	  LEFT JOIN entries e ON e.ws = w.id LEFT JOIN workspace_meta m ON m.id = w.id GROUP BY w.id ORDER BY w.id`)
 	if err != nil {
 		return nil, err
@@ -85,7 +88,7 @@ func (s *SQLiteStore) Workspaces(ctx context.Context) ([]Workspace, error) {
 	for rows.Next() {
 		var w Workspace
 		var created, deleted string
-		if err := rows.Scan(&w.ID, &w.Name, &created, &w.Head, &w.Notes, &w.Locked, &w.Archived, &deleted); err != nil {
+		if err := rows.Scan(&w.ID, &w.Name, &created, &w.Head, &w.Notes, &w.Locked, &w.Archived, &deleted, &w.Color, &w.Icon); err != nil {
 			return nil, err
 		}
 		w.Created, _ = time.Parse(ts, created)
@@ -99,8 +102,9 @@ func (s *SQLiteStore) Workspace(ctx context.Context, id string) (Workspace, erro
 	var w Workspace
 	var created, deleted string
 	err := s.db.QueryRowContext(ctx, `SELECT w.id, w.name, w.created, COALESCE((SELECT MAX(seq) FROM entries WHERE ws = w.id), 0),
-	  COALESCE(m.notes, ''), COALESCE(m.locked, 0), COALESCE(m.archived, 0), COALESCE(m.deleted, '')
-	  FROM workspaces w LEFT JOIN workspace_meta m ON m.id = w.id WHERE w.id = ?`, id).Scan(&w.ID, &w.Name, &created, &w.Head, &w.Notes, &w.Locked, &w.Archived, &deleted)
+	  COALESCE(m.notes, ''), COALESCE(m.locked, 0), COALESCE(m.archived, 0), COALESCE(m.deleted, ''),
+	  COALESCE(m.color, ''), COALESCE(m.icon, '')
+	  FROM workspaces w LEFT JOIN workspace_meta m ON m.id = w.id WHERE w.id = ?`, id).Scan(&w.ID, &w.Name, &created, &w.Head, &w.Notes, &w.Locked, &w.Archived, &deleted, &w.Color, &w.Icon)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Workspace{}, ErrNotFound
 	}
@@ -126,9 +130,10 @@ func (s *SQLiteStore) UpdateWorkspace(ctx context.Context, w Workspace) error {
 	if !w.Deleted.IsZero() {
 		deleted = w.Deleted.UTC().Format(ts)
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO workspace_meta (id, notes, locked, archived, deleted) VALUES (?, ?, ?, ?, ?)
-	  ON CONFLICT(id) DO UPDATE SET notes = excluded.notes, locked = excluded.locked, archived = excluded.archived, deleted = excluded.deleted`,
-		w.ID, w.Notes, w.Locked, w.Archived, deleted); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO workspace_meta (id, notes, locked, archived, deleted, color, icon) VALUES (?, ?, ?, ?, ?, ?, ?)
+	  ON CONFLICT(id) DO UPDATE SET notes = excluded.notes, locked = excluded.locked, archived = excluded.archived, deleted = excluded.deleted,
+	  color = excluded.color, icon = excluded.icon`,
+		w.ID, w.Notes, w.Locked, w.Archived, deleted, w.Color, w.Icon); err != nil {
 		return err
 	}
 	return tx.Commit()

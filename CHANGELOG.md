@@ -10,6 +10,9 @@ ships.
 
 ### Added
 
+- Workspace colour and icon: *Appearance…* picks one of 12 colours and an icon for each workspace, shown on its badge
+  in the switcher, its menu and All workspaces, with the top bar tinted in the current workspace's colour
+  (`color` and `icon` on `PATCH /api/v1/workspaces/{id}`, kept by both storage drivers and in backups).
 - Labels by keyboard and in bulk: 1 to 5 rate the selected bookmark, 0 clears it, T goes to its tags; with several
   selected, Actions › Label them rates them, adds a tag to all or removes one from all (also in the command palette).
   The history names these changes ("Rated \"Go\" 4 stars; tagged work"), and `bookmark.updated` carries
@@ -150,6 +153,8 @@ ships.
 
 ### Changed
 
+- List and grid switch instantly and keep the panes' widths: the grid is CSS on the same rows (nothing is rebuilt),
+  and long lists lay out only what is near the screen (`content-visibility`).
 - Docs to the Simtabi and laranail standard: new reference pages for workspaces, labels and page snapshots, new
   recipes for rating and tagging and for keeping tabs per workspace, the web interface page brought up to date (the
   layout, list and grid, labels, keyboard, menus, where things are kept), the REST API page listing the new routes

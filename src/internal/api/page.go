@@ -134,7 +134,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		built = h[n-1].At
 	}
 	boot, err := json.Marshal(map[string]any{ // json.Marshal escapes <, >, &, U+2028 and U+2029: safe inside <script>
-		"workspace":  map[string]any{"id": x.ID, "name": x.Name, "head": x.Head, "notes": x.Notes, "locked": x.Locked, "archived": x.Archived},
+		"workspace":  map[string]any{"id": x.ID, "name": x.Name, "head": x.Head, "notes": x.Notes, "locked": x.Locked, "archived": x.Archived, "color": x.Color, "icon": x.Icon},
 		"workspaces": all,
 		"tree":       t, "built": built.UTC().Format(time.RFC3339), "can": canUndo(h), "auth": auth, "links": links,
 		"media": s.mediaFor(t),

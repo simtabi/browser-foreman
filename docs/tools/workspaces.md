@@ -10,6 +10,7 @@ A workspace is one bookmark set with its full history; it scopes every view: Boo
 | History | every change as an entry; *Go back here* makes an older state the newest, as a new entry you can undo |
 | Sources | where its bookmarks came from (files, other workspaces, browser profiles), so *Update from source* can read them again |
 | Name and notes | renamed and noted from the top bar's workspace menu, the ⋮ menu, or *All workspaces…* |
+| Colour and icon | *Appearance…* (the workspace menu, or a row in *All workspaces…*): one of 12 colours and an icon, shown on its badge in the switcher, the menu and the list; the top bar takes the colour of the workspace you are in. They can be set on a locked workspace too |
 | State | locked (read-only), archived (out of the list, kept), or in the workspace Trash (restorable until deleted for good) |
 | Tab snapshots | shared with every other workspace (the default), or its own; see below |
 

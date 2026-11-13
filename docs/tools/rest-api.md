@@ -76,7 +76,7 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `POST` | `/api/v1/linkchecks` | editor | body `{workspace, nodes?}`: check the links (under `nodes`, or all) in the background; `202 {"job"}`, `409` while another runs. See [link checks](link-checks.md) |
 | `GET` | `/api/v1/linkchecks/{id}` | viewer | progress; `?results=1` adds every result so far |
 | `POST` | `/api/v1/linkchecks/{id}/pause`, `/resume`, `/cancel` | editor | `200`, or `409` when the check is not in a state to do that |
-| `PATCH` | `/api/v1/workspaces/{id}` | editor | body any of `{name, notes, locked, archived}`; a locked workspace accepts only `{"locked": false}` (`423` otherwise), and every change to it answers `423` |
+| `PATCH` | `/api/v1/workspaces/{id}` | editor | body any of `{name, notes, locked, archived, color, icon}` (`color`: blue, azure, indigo, purple, pink, red, orange, yellow, lime, green, teal or cyan; `icon`: a Tabler icon name; `""` resets either); a locked workspace accepts only `{"locked": false}` and its colour and icon (`423` otherwise) |
 | `GET` | `/api/v1/webhooks/deliveries` | owner | the latest deliveries, newest first; `?subscription=`, `?limit=` (1–1000) |
 | `GET` | `/api/v1/backup` | owner | every workspace with its history, and the link results, as gzipped JSON; see [backup](backup.md) |
 | `POST` | `/api/v1/restore` | owner | the backup file as the body; adds, replaces nothing; `200 {"workspaces": {old: new}, "entries", "links"}` |

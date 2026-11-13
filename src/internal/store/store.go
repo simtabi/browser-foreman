@@ -161,6 +161,10 @@ type Workspace struct {
 	// Deleted: when it went to the workspace Trash (zero: it is not there). It keeps everything, history included,
 	// until it is restored or the Trash is emptied (PurgeWorkspace).
 	Deleted time.Time `json:"deleted,omitzero"`
+	// Color and Icon tell workspaces apart at a glance: a Tabler colour name ("blue", "teal", …) and a Tabler icon
+	// name ("briefcase", …); empty for the defaults. The API checks them (api.WorkspaceColors, api.validIcon).
+	Color string `json:"color,omitempty"`
+	Icon  string `json:"icon,omitempty"`
 }
 
 // Entry is one step in a workspace's history.

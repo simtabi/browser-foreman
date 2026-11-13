@@ -238,6 +238,7 @@ func TestLockedWorkspacesRefuseChanges(t *testing.T) {
 		{"POST", "/api/v1/workspaces/main/trash", `{"ids":["go"]}`},
 		{"PATCH", "/api/v1/workspaces/main", `{"name":"renamed while locked"}`},
 		{"PATCH", "/api/v1/workspaces/main", `{"archived":true}`},
+		{"PATCH", "/api/v1/workspaces/main", `{"color":"teal","name":"sneaked in with a colour"}`},
 	} {
 		if w := send(h, c.method, c.path, c.body); w.Code != 423 {
 			t.Errorf("%s %s %s on a locked workspace: %d", c.method, c.path, c.body, w.Code)
@@ -247,6 +248,15 @@ func TestLockedWorkspacesRefuseChanges(t *testing.T) {
 	body, _ := json.Marshal(tr)
 	if w := send(h, "PUT", "/api/v1/workspaces/main/tree", strings.Replace(string(body), "Golang", "Changed", 1)); w.Code != 423 {
 		t.Fatalf("whole-tree save on a locked workspace: %d", w.Code)
+	}
+	// Colour and icon only tell workspaces apart, so a locked one still takes them; bad values are refused.
+	if w := send(h, "PATCH", "/api/v1/workspaces/main", `{"color":"Teal","icon":"ti-briefcase"}`); w.Code != 200 || !strings.Contains(w.Body.String(), `"color":"teal","icon":"briefcase"`) {
+		t.Fatalf("looks on a locked workspace %d %s", w.Code, w.Body)
+	}
+	for _, bad := range []string{`{"color":"chartreuse"}`, `{"icon":"<svg>"}`, `{"icon":"a--b"}`} {
+		if w := send(h, "PATCH", "/api/v1/workspaces/main", bad); w.Code != 400 {
+			t.Errorf("%s: %d", bad, w.Code)
+		}
 	}
 	if w := send(h, "PATCH", "/api/v1/workspaces/main", `{"locked":false}`); w.Code != 200 {
 		t.Fatalf("unlock %d", w.Code)
