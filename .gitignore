@@ -7,6 +7,8 @@
 # Web interface
 /web/node_modules/
 /web/dist/
+# No lock file is tracked (a library resolves fresh); make web and CI run npm install.
+/web/package-lock.json
 # The web interface staged for embedding by `make web`; only the placeholder is tracked.
 /src/internal/webui/dist/*
 !/src/internal/webui/dist/.keep
