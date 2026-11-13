@@ -62,9 +62,9 @@ export class Pager {
     const foot = Dom.write(document.createElement("div"), "pager", this.opts.noun);
     foot.className = "card-footer d-flex align-items-center flex-wrap gap-2";
     const info = document.createElement("p");
-    info.className = "m-0 text-secondary";
+    info.className = "m-0 text-secondary small text-nowrap";
     info.textContent = this.count
-      ? `Showing ${this.start + 1} to ${this.end} of ${this.count.toLocaleString()} ${this.opts.noun}`
+      ? `${(this.start + 1).toLocaleString()}–${this.end.toLocaleString()} of ${this.count.toLocaleString()} ${this.opts.noun}`
       : `No ${this.opts.noun}`;
     const size = Dom.write(document.createElement("select"), "action", "page-size");
     size.className = "form-select form-select-sm w-auto";
@@ -79,7 +79,7 @@ export class Pager {
     foot.append(info, size);
     if (this.pages > 1) {
       const ul = document.createElement("ul");
-      ul.className = "pagination m-0 ms-auto";
+      ul.className = "pagination pagination-sm m-0 ms-auto";
       ul.setAttribute("aria-label", `Pages of ${this.opts.noun}`);
       ul.append(this.item("prev", "ti-chevron-left", "Previous page", this.current > 1, false, () => this.prev()));
       for (const p of this.numbers()) {
@@ -100,7 +100,7 @@ export class Pager {
     if (active) a.setAttribute("aria-current", "page");
     if (!enabled) { a.setAttribute("aria-disabled", "true"); a.tabIndex = -1; }
     const icon = ic ? Object.assign(document.createElement("i"), { className: `ti ${ic}` }) : null;
-    if (icon && text === "next") a.append(text, icon); else if (icon) a.append(icon, text); else a.textContent = text;
+    if (icon) a.append(icon); else a.textContent = text;  // prev and next are their chevrons, named by aria-label
     a.onclick = e => { e.preventDefault(); e.stopPropagation(); if (!enabled || active) return; go(); this.opts.onChange?.(this); };
     li.append(a);
     return li;

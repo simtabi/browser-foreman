@@ -5,6 +5,7 @@
 import { askConfirm, askText, hideModal, showModal, toast } from "./dialogs";
 import { closeDropdowns } from "./menu";
 import { el, fmtDate, icon } from "./ui";
+import { DataTable, avatar, by, nameCell } from "./datatable";
 
 interface Info { id: string; name: string; head: number; notes?: string; locked?: boolean; archived?: boolean; deleted?: string; bookmarks?: number }
 interface Entry { seq: number; at: string; op: string; summary: string }
@@ -26,57 +27,69 @@ function install(W: V1): void {
     try { await W.call("PATCH", ws(), body); if (reload) location.reload(); } catch (e) { fail(e); }
   };
 
-  function modal(id: string, title: string): { body: HTMLElement; foot: HTMLElement } {
+  function modal(id: string, title: string, size: "lg" | "xl" = "lg"): { body: HTMLElement; foot: HTMLElement; dock: HTMLElement } {
     document.getElementById(id)?.remove();
     const m = el("div", "modal modal-blur"); m.id = id; m.tabIndex = -1; m.setAttribute("role", "dialog"); m.setAttribute("aria-label", title);
-    const dlg = el("div", "modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"), box = el("div", "modal-content");
+    const dlg = el("div", `modal-dialog modal-dialog-top modal-dialog-scrollable modal-${size}`), box = el("div", "modal-content");
     const head = el("div", "modal-header"), close = el("button", "btn-close");
     close.type = "button"; close.setAttribute("aria-label", "Close"); close.onclick = () => hideModal("#" + id);
     head.append(el("h5", "modal-title", title), close);
-    const body = el("div", "modal-body"), foot = el("div", "modal-footer");
-    box.append(head, body, foot); dlg.append(box); m.append(dlg);
+    // dock: a strip between the scrolling body and the footer buttons, for a list's pager, so it is always in view.
+    const body = el("div", "modal-body"), dock = el("div", "modal-dock"), foot = el("div", "modal-footer");
+    box.append(head, body, dock, foot); dlg.append(box); m.append(dlg);
     m.addEventListener("mousedown", e => { if (e.target === m) hideModal("#" + id); });
     m.addEventListener("keydown", e => { if (e.key === "Escape") { e.stopPropagation(); hideModal("#" + id); } });
     document.body.append(m);
-    return { body, foot };
+    return { body, foot, dock };
   }
 
   async function history(): Promise<void> {
     let h: Entry[];
     try { h = (await W.call<{ history: Entry[] }>("GET", ws("/history"))).history; } catch (e) { return fail(e); }
-    const { body } = modal("v1History", `History of “${W.workspace.name}”`);
-    body.append(el("p", "text-secondary", "Every change is kept. Going back makes that point the newest state, as a new entry you can undo."));
-    const list = el("div", "list-group list-group-flush");
-    for (const e of [...h].reverse()) {
-      const row = el("div", "list-group-item d-flex align-items-center gap-2");
-      const text = el("div", "flex-fill min-w-0");
-      text.append(el("div", "text-truncate", `${e.seq}. ${e.summary}`), el("div", "text-secondary small", `${fmtDate(Date.parse(e.at) / 1000)} · ${e.op}`));
-      row.append(text);
-      if (e.seq < W.workspace.head && !W.locked) {
-        const b = el("button", "btn btn-sm", "Go back to this"); b.type = "button";
-        b.onclick = async () => {
-          if (!(await askConfirm({ title: `Go back to ${e.seq}?`, ok: "Go back", danger: false,
-            body: `The bookmarks become what they were after “${e.summary}”. This is a new entry, so Undo or History brings today's state back.` }))) return;
-          try { await W.call("POST", ws("/rollback"), { to: e.seq }); location.reload(); } catch (err) { fail(err); }
-        };
-        row.append(b);
-      }
-      list.append(row);
-    }
-    body.append(list);
+    const { body, dock } = modal("v1History", `History of “${W.workspace.name}”`, "xl");
+    body.classList.add("p-0");
+    const OPS: Record<string, [string, string]> = { import: ["imported", "bg-blue-lt"], merge: ["merged", "bg-blue-lt"], update: ["updated", "bg-blue-lt"],
+      trash: ["to the Trash", "bg-orange-lt"], restore: ["put back", "bg-green-lt"], purge: ["deleted", "bg-red-lt"], undo: ["undo", "bg-secondary-lt"],
+      redo: ["redo", "bg-secondary-lt"], rollback: ["went back", "bg-purple-lt"], reset: ["reset", "bg-purple-lt"], move: ["moved", "bg-azure-lt"],
+      edit: ["edited", "bg-azure-lt"], create: ["added", "bg-green-lt"], "save-links": ["saved tabs", "bg-green-lt"],
+      // Kinds the Python tool recorded, carried over by the migration.
+      start: ["started", "bg-blue-lt"], migrate: ["started", "bg-blue-lt"], delete: ["deleted", "bg-red-lt"], "put-back": ["put back", "bg-green-lt"],
+      refresh: ["re-checked", "bg-teal-lt"], "rename-folder": ["renamed", "bg-azure-lt"], reorder: ["reordered", "bg-azure-lt"],
+      "legacy-undo": ["undo", "bg-secondary-lt"], "legacy-redo": ["redo", "bg-secondary-lt"], explode: ["split", "bg-azure-lt"] };
+    const head = W.workspace.head;
+    const table = new DataTable<Entry>({
+      noun: "changes", size: 25, sizes: [25, 50, 100], placeholder: "Search changes…",
+      search: (e, q) => e.summary.toLowerCase().includes(q) || e.op.includes(q),
+      empty: { title: "No changes yet", text: "Every change made here is kept, and any of them can be gone back to.", icon: "ti-history" },
+      columns: [
+        { label: "#", cls: "w-1 text-secondary", sort: by(e => e.seq), cell: e => String(e.seq) },
+        { label: "Change", cls: "text-wrap", cell: e => {
+          const d = el("div", "d-flex align-items-center gap-2"), t = el("span", null, e.summary);
+          d.append(t); if (e.seq === head) d.append(el("span", "badge bg-primary-lt", "now")); return d;
+        } },
+        { label: "Kind", sort: by(e => e.op), cell: e => { const [label, cls] = OPS[e.op] ?? [e.op, "bg-secondary-lt"]; return el("span", `badge ${cls}`, label); } },
+        { label: "When", sort: by(e => Date.parse(e.at)), cell: e => el("span", "text-secondary", fmtDate(Date.parse(e.at) / 1000)) },
+      ],
+      primary: e => e.seq < head && !W.locked ? { label: "Go back here", icon: "ti-arrow-back-up", fn: async () => {
+        if (!(await askConfirm({ title: `Go back to change ${e.seq}?`, ok: "Go back", danger: false,
+          body: `The bookmarks become what they were after “${e.summary}”. This is a new entry, so Undo or History brings today's state back.` }))) return;
+        try { await W.call("POST", ws("/rollback"), { to: e.seq }); location.reload(); } catch (err) { fail(err); }
+      } } : null,
+    });
+    table.element.classList.add("border-0", "rounded-0", "shadow-none");
+    const note = el("div", "alert alert-info m-3 mb-0"); note.append(el("div", null, "Every change is kept. Going back makes that point the newest state, as a new entry you can undo."));
+    body.append(note, table.element); dock.append(table.foot);
+    table.rows([...h].reverse());
     showModal("#v1History");
   }
 
-  // Workspaces: the ones in use, and the workspace Trash (deleted ones, kept whole until it is emptied).
+
+  // Workspaces: the ones in use, and the workspace Trash (deleted ones, kept whole until it is emptied), as a Tabler
+  // data table with tabs, search, sorting and pages.
   function manage(tab: "use" | "trash" = "use"): void {
-    const { body, foot } = modal("v1Workspaces", "Workspaces");
-    const nav2 = el("ul", "nav nav-tabs mb-3"); nav2.setAttribute("role", "tablist");
-    const pane = el("div");
-    const tabBtn = (id: "use" | "trash", label: string, ic: string) => {
-      const li = el("li", "nav-item"), a = el("a", "nav-link" + (tab === id ? " active" : "")); a.href = "#"; a.setAttribute("role", "tab");
-      a.append(icon(ic, "me-1"), label); a.onclick = e => { e.preventDefault(); tab = id; void paint(); };
-      li.append(a); return li;
-    };
+    const { body, foot, dock } = modal("v1Workspaces", "Workspaces", "xl");
+    body.classList.add("p-0");
+    let inUse: Info[] = W.workspaces, trash: Info[] = [];
     const badge = (text: string, cls: string, ic?: string) => { const b = el("span", `badge ${cls}`); if (ic) b.append(icon(ic, "me-1")); b.append(text); return b; };
     const typed = async (title: string, id: string, ok: string): Promise<boolean> => {
       const v = await askText({ title, label: `Type the workspace id, ${id}, to go ahead`, ok, hint: "" });
@@ -84,68 +97,76 @@ function install(W: V1): void {
       if (v.trim() !== id) { toast("The id did not match, so nothing happened.", "info"); return false; }
       return true;
     };
-    const paint = async (): Promise<void> => {
-      let trash: Info[] = [], inUse: Info[] = W.workspaces;
-      try { inUse = (await W.call<{ workspaces: Info[] }>("GET", "workspaces")).workspaces; } catch { /* the page's own list will do */ }
-      try { trash = (await W.call<{ workspaces: Info[] }>("GET", "workspaces?trash=1")).workspaces; } catch { /* not an owner: no Trash tab */ }
-      nav2.replaceChildren(tabBtn("use", `In use (${inUse.length})`, "ti-stack-2"), tabBtn("trash", `Trash (${trash.length})`, "ti-trash"));
-      const list = el("div", "list-group list-group-flush border rounded");
-      const rows = tab === "use" ? inUse : trash;
-      if (!rows.length) {
-        const e = el("div", "empty py-4"); e.append(el("p", "empty-title", tab === "use" ? "No workspaces" : "The workspace Trash is empty"),
-          el("p", "empty-subtitle text-secondary", tab === "use" ? "Import bookmarks to make one." : "Deleted workspaces wait here, history and all, until you restore them or delete them for good."));
-        list.append(e);
-      }
-      for (const w of rows) {
-        const row = el("div", "list-group-item d-flex align-items-center gap-3");
-        const text = el("div", "flex-fill min-w-0"), title = el("div", "d-flex align-items-center gap-2 flex-wrap");
-        title.append(el("span", "fw-medium text-truncate", w.name));
-        if (w.id === W.id && tab === "use") title.append(badge("open", "bg-primary-lt"));
-        if (w.archived) title.append(badge("archived", "bg-secondary-lt", "ti-archive"));
-        if (w.locked) title.append(badge("locked", "bg-yellow-lt", "ti-lock"));
-        const facts = [w.bookmarks != null ? `${w.bookmarks.toLocaleString()} bookmarks` : "", `${w.head} change${w.head === 1 ? "" : "s"}`,
-          w.deleted ? `deleted ${fmtDate(Date.parse(w.deleted) / 1000)}` : ""].filter(Boolean).join(" · ");
-        text.append(title, el("div", "text-secondary small", `${w.id} · ${facts}`));
-        const acts = el("div", "btn-list flex-nowrap");
-        const btn = (label: string, ic: string, cls: string, fn: () => Promise<void> | void) => {
-          const b = el("button", `btn btn-sm ${cls}`); b.type = "button"; b.append(icon(ic, "me-1"), label);
-          b.onclick = async () => { b.disabled = true; try { await fn(); } catch (e) { fail(e); } finally { b.disabled = false; } };
-          acts.append(b);
-        };
-        const enc = encodeURIComponent(w.id);
-        if (tab === "use") {
-          if (w.id !== W.id) btn("Open", "ti-external-link", "", () => nav(w.id));
-          if (!w.locked) btn(w.archived ? "Bring back" : "Archive", w.archived ? "ti-archive-off" : "ti-archive", "btn-ghost-secondary", async () => {
-            await W.call("PATCH", `workspaces/${enc}`, { archived: !w.archived }); location.reload();
-          });
-          if (!w.locked && inUse.length > 1) btn("Delete…", "ti-trash", "btn-ghost-danger", async () => {
-            if (!(await typed(`Delete “${w.name}”?`, w.id, "Move to the Trash"))) return;
-            await W.call("POST", `workspaces/${enc}/delete`, { confirm: w.id });
-            toast("It is in the workspace Trash, history and all. Restore brings it back.", "success", "Workspace deleted");
-            setTimeout(() => (w.id === W.id ? nav(inUse.find(x => x.id !== w.id)!.id) : location.reload()), 700);
-          });
-        } else {
-          btn("Restore", "ti-restore", "btn-primary", async () => {
-            await W.call("POST", `workspaces/${enc}/restore`);
-            toast(`“${w.name}” is back.`, "success", "Workspace restored"); setTimeout(() => nav(w.id), 600);
-          });
-          btn("Delete for good…", "ti-trash-x", "btn-ghost-danger", async () => {
-            if (!(await askConfirm({ title: `Delete “${w.name}” for good?`, ok: "Continue", body: "Its bookmarks and every change in its history are removed from this computer. This cannot be undone. A backup made earlier still has it." }))) return;
-            if (!(await typed(`Delete “${w.name}” for good`, w.id, "Delete for good"))) return;
-            await W.call("POST", `workspaces/${enc}/purge`, { confirm: w.id });
-            toast(`“${w.name}” was removed for good.`, "success", "Deleted for good"); void paint();
-          });
-        }
-        row.append(text, acts); list.append(row);
-      }
-      pane.replaceChildren(list);
+    const run = (fn: () => Promise<void>) => async () => { try { await fn(); } catch (e) { fail(e); } };
+    const enc = (w: Info) => encodeURIComponent(w.id);
+    const table = new DataTable<Info>({
+      noun: "workspaces", size: 10, placeholder: "Search by name or id…",
+      search: (w, q) => w.name.toLowerCase().includes(q) || w.id.includes(q),
+      tabs: [], tab, onTab: id => { tab = id as "use" | "trash"; paint(); },
+      empty: { title: "No workspaces here", text: "Deleted workspaces wait in the Trash, history and all, until you restore them or delete them for good.", icon: "ti-stack-2" },
+      columns: [
+        { label: "Name", sort: by(w => w.name), cell: w => {
+          const t = el("span"); t.append(w.name);
+          return nameCell(t, w.id + (w.notes ? ` · ${w.notes.split("\n")[0]}` : ""), avatar(w.name));
+        } },
+        { label: "Bookmarks", cls: "text-end", sort: by(w => w.bookmarks ?? 0), cell: w => (w.bookmarks ?? 0).toLocaleString() },
+        { label: "Changes", cls: "text-end", sort: by(w => w.head), cell: w => w.head.toLocaleString() },
+        { label: "Status", cell: w => {
+          const d = el("div", "d-flex gap-1 flex-wrap");
+          if (w.deleted) d.append(badge(`deleted ${fmtDate(Date.parse(w.deleted) / 1000)}`, "bg-red-lt", "ti-trash"));
+          if (w.id === W.id && !w.deleted) d.append(badge("open", "bg-primary-lt", "ti-eye"));
+          if (w.archived) d.append(badge("archived", "bg-secondary-lt", "ti-archive"));
+          if (w.locked) d.append(badge("locked", "bg-yellow-lt", "ti-lock"));
+          if (!d.childElementCount) d.append(badge("in use", "bg-green-lt"));
+          return d;
+        } },
+      ],
+      primary: w => w.deleted
+        ? { label: "Restore", icon: "ti-restore", cls: "btn-primary", fn: run(async () => {
+          await W.call("POST", `workspaces/${enc(w)}/restore`);
+          toast(`“${w.name}” is back.`, "success", "Workspace restored"); setTimeout(() => nav(w.id), 600);
+        }) }
+        : w.id === W.id ? null : { label: "Open", icon: "ti-external-link", fn: () => nav(w.id) },
+      actions: w => w.deleted ? [
+        { l: "Delete for good…", ic: "ti-trash-x", danger: true, fn: run(async () => {
+          if (!(await askConfirm({ title: `Delete “${w.name}” for good?`, ok: "Continue", body: "Its bookmarks and every change in its history are removed from this computer. This cannot be undone. A backup made earlier still has it." }))) return;
+          if (!(await typed(`Delete “${w.name}” for good`, w.id, "Delete for good"))) return;
+          await W.call("POST", `workspaces/${enc(w)}/purge`, { confirm: w.id });
+          toast(`“${w.name}” was removed for good.`, "success", "Deleted for good"); await load();
+        }) },
+      ] : [
+        w.id !== W.id && { l: "Open", ic: "ti-external-link", fn: () => nav(w.id) },
+        !w.locked && { l: w.archived ? "Bring back from the archive" : "Archive", ic: w.archived ? "ti-archive-off" : "ti-archive", fn: run(async () => {
+          await W.call("PATCH", `workspaces/${enc(w)}`, { archived: !w.archived }); toast(w.archived ? "Back in the list." : "Archived: kept, out of the way.", "success"); await load();
+        }) },
+        { l: w.locked ? "Unlock" : "Lock (read-only)", ic: w.locked ? "ti-lock-open" : "ti-lock", fn: run(async () => {
+          await W.call("PATCH", `workspaces/${enc(w)}`, { locked: !w.locked }); await load();
+        }) },
+        "-",
+        !w.locked && inUse.length > 1 && { l: "Delete…", ic: "ti-trash", danger: true, fn: run(async () => {
+          if (!(await typed(`Delete “${w.name}”?`, w.id, "Move to the Trash"))) return;
+          await W.call("POST", `workspaces/${enc(w)}/delete`, { confirm: w.id });
+          toast("It is in the workspace Trash, history and all. Restore brings it back.", "success", "Workspace deleted");
+          if (w.id === W.id) setTimeout(() => nav(inUse.find(x => x.id !== w.id)!.id), 700); else await load();
+        }) },
+      ],
+    });
+    const paint = () => {
+      table.setTabs([{ id: "use", label: "In use", icon: "ti-stack-2", count: inUse.length }, { id: "trash", label: "Trash", icon: "ti-trash", count: trash.length }], tab);
+      table.rows(tab === "use" ? inUse : trash);
     };
-    body.append(nav2, pane);
-    const add = el("button", "btn btn-primary"); add.type = "button"; add.append(icon("ti-plus", "me-1"), "New workspace from bookmarks…");
+    const load = async () => {
+      try { inUse = (await W.call<{ workspaces: Info[] }>("GET", "workspaces")).workspaces; } catch { /* the page's own list will do */ }
+      try { trash = (await W.call<{ workspaces: Info[] }>("GET", "workspaces?trash=1")).workspaces; } catch { trash = []; }
+      paint();
+    };
+    table.element.classList.add("border-0", "rounded-0", "shadow-none");
+    body.append(table.element); dock.append(table.foot);
+    const add = el("button", "btn btn-primary"); add.type = "button"; add.append(icon("ti-plus", "me-1"), "New workspace");
     add.onclick = () => { hideModal("#v1Workspaces"); importer(); };
-    const close = el("button", "btn"); close.type = "button"; close.textContent = "Close"; close.onclick = () => hideModal("#v1Workspaces");
+    const close = el("button", "btn me-auto"); close.type = "button"; close.textContent = "Close"; close.onclick = () => hideModal("#v1Workspaces");
     foot.append(close, add);
-    void paint(); showModal("#v1Workspaces");
+    paint(); void load(); showModal("#v1Workspaces");
   }
 
   // Reset: back to how the workspace started, as one entry (undo brings today's back).
@@ -201,7 +222,8 @@ function install(W: V1): void {
       file.onchange = () => { if (nameIn && !nameIn.value && file.files?.[0]) nameIn.value = file.files[0].name.replace(/\.[^.]+$/, ""); };
     }
     body.append(file);
-    // Browsers on this computer: each profile's own bookmarks file, read where it is (owners; Update reads it again).
+    // Browsers on this computer: each profile's own bookmarks file, read where it is (owners; Update reads it again),
+    // as Tabler select-group boxes. Those the system keeps closed are named once, with the way to open them.
     const picks: HTMLInputElement[] = [];
     const found = el("div", "mb-3");
     body.append(found);
@@ -209,13 +231,29 @@ function install(W: V1): void {
       try {
         const { profiles } = await W.call<{ profiles: { browser: string; profile: string; name?: string; path: string; readable: boolean; why?: string }[] }>("GET", "profiles");
         if (!profiles.length) return;
-        found.append(el("div", "form-label", "Or read a browser on this computer"));
-        for (const p of profiles) {
-          const row = el("label", "form-check"), box = el("input", "form-check-input"); box.type = "checkbox"; box.value = p.path; box.disabled = !p.readable;
-          const label = p.browser + (p.name || p.profile ? ` · ${p.name || p.profile}` : "");
-          row.append(box, el("span", "form-check-label", label));
-          if (!p.readable) row.append(el("div", "text-secondary small", p.why ?? "cannot be read"));
-          row.title = p.path; found.append(row); picks.push(box);
+        found.append(el("label", "form-label", "Or read a browser on this computer"));
+        const readable = profiles.filter(p => p.readable), blocked = profiles.filter(p => !p.readable);
+        if (readable.length) {
+          const group = el("div", "form-selectgroup form-selectgroup-boxes d-flex flex-wrap");
+          for (const p of readable) {
+            const lab = el("label", "form-selectgroup-item flex-fill"), box = el("input", "form-selectgroup-input"); box.type = "checkbox"; box.value = p.path;
+            const inner = el("span", "form-selectgroup-label d-flex align-items-center p-3 gap-3");
+            const who = p.name || (p.profile && p.profile !== p.browser && p.profile !== "Default" ? p.profile : "");
+            const txt = el("span", "text-start"); txt.append(el("span", "d-block fw-medium", p.browser), el("span", "d-block text-secondary small", who || "Default profile"));
+            const mark = el("span", "form-selectgroup-check");
+            inner.append(mark, icon("browser:" + p.browser), txt); lab.append(box, inner); lab.title = p.path;
+            group.append(lab); picks.push(box);
+          }
+          found.append(group);
+        }
+        if (blocked.length) {
+          const names = [...new Set(blocked.map(p => p.browser))].join(", ");
+          const fda = blocked.some(p => (p.why ?? "").includes("Full Disk Access"));
+          const al = el("div", "alert alert-warning mt-2 mb-0"), d = el("div", "d-flex gap-2"), tx = el("div");
+          tx.append(el("h4", "alert-title", `${names} cannot be read here`),
+            el("div", "text-secondary", fda ? "macOS keeps their bookmarks behind Full Disk Access. Grant it to the app that runs Browser Foreman, or export the bookmarks from the browser and choose that file above."
+              : blocked[0]!.why ?? "The system does not let this program read them."));
+          d.append(icon("ti-lock", "alert-icon"), tx); al.append(d); found.append(al);
         }
       } catch { /* not an owner, or the server cannot look: the files above still work */ }
     })();
@@ -227,7 +265,7 @@ function install(W: V1): void {
     sepWrap.append(sep, el("span", "form-check-label", "Keep each file's folders apart, under a folder named after it"));
     body.append(sepWrap);
     const go = el("button", "btn btn-primary", into === "new" ? "Import" : "Add"); go.type = "button";
-    const cancel = el("button", "btn", "Cancel"); cancel.type = "button"; cancel.onclick = () => hideModal("#v1Sources");
+    const cancel = el("button", "btn me-auto", "Cancel"); cancel.type = "button"; cancel.onclick = () => hideModal("#v1Sources");
     foot.append(cancel, go);
     go.onclick = async () => {
       const files = [...(file.files ?? [])], paths = picks.filter(b => b.checked).map(b => b.value);
@@ -296,66 +334,53 @@ function install(W: V1): void {
   // can be saved, as a new folder in Saved tabs.
   type Visit = { url: string; title: string; last: string; visits: number; browser: string; profile?: string; bookmarked?: boolean };
   function browserHistory(): void {
-    const { body, foot } = modal("v1History2", "Browser history");
-    const bar = el("div", "row g-2 align-items-center mb-3");
-    const qWrap = el("div", "col-12 col-md"), qIcon = el("div", "input-icon");
-    const q = el("input", "form-control"); q.type = "search"; q.placeholder = "Search titles and addresses…"; q.setAttribute("aria-label", "Search history");
-    const qi = el("span", "input-icon-addon"); qi.append(icon("ti-search"));
-    qIcon.append(qi, q); qWrap.append(qIcon);
-    const days = el("select", "form-select"); days.setAttribute("aria-label", "How far back");
+    const { body, foot, dock } = modal("v1History2", "Browser history", "xl");
+    body.classList.add("p-0");
+    const days = el("select", "form-select w-auto"); days.setAttribute("aria-label", "How far back");
     for (const [v, t] of [["1", "Today"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 3 months"], ["365", "Last year"]]) days.append(new Option(t, v));
     days.value = "30";
-    const dWrap = el("div", "col-6 col-md-auto"); dWrap.append(days);
-    const sw = el("label", "form-check form-switch mb-0"), only = el("input", "form-check-input"); only.type = "checkbox"; only.checked = true;
+    const sw = el("label", "form-check form-switch m-0"), only = el("input", "form-check-input"); only.type = "checkbox"; only.checked = true;
     sw.append(only, el("span", "form-check-label", "Not bookmarked only"));
-    const sWrap = el("div", "col-6 col-md-auto"); sWrap.append(sw);
-    bar.append(qWrap, dWrap, sWrap);
-    const note = el("div"), list = el("div", "list-group list-group-flush border rounded"), status = el("div", "text-secondary small me-auto");
-    body.append(bar, note, list);
-    const save = el("button", "btn btn-primary"); save.type = "button"; save.disabled = true;
-    const close = el("button", "btn"); close.type = "button"; close.textContent = "Close"; close.onclick = () => hideModal("#v1History2");
-    foot.append(status, close, save);
-    const picked = new Set<string>();
-    let rows: Visit[] = [], timer: ReturnType<typeof setTimeout> | undefined, blockedAll = false;
-    const paintSave = () => { save.disabled = !picked.size || !!W.locked; save.replaceChildren(icon("ti-bookmark-plus", "me-1"), picked.size ? `Save ${picked.size} as bookmarks` : "Save as bookmarks"); };
+    const note = el("div"), status = el("div", "text-secondary small px-3 pt-3");
+    let rows: Visit[] = [], blockedAll = false;
+    const save = el("button", "btn btn-primary"); save.type = "button";
+    const paintSave = () => { save.disabled = !table.picked.size || !!W.locked; save.replaceChildren(icon("ti-bookmark-plus", "me-1"), table.picked.size ? `Save ${table.picked.size} as bookmarks` : "Save as bookmarks"); };
+    const table: DataTable<Visit> = new DataTable<Visit>({
+      noun: "pages", size: 25, sizes: [25, 50, 100, 250], placeholder: "Search titles and addresses…",
+      search: (r, q) => (r.title + " " + r.url).toLowerCase().includes(q), tools: [days, sw],
+      empty: { title: "No visits here", text: "Try a longer time, or turn off Not bookmarked only.", icon: "ti-history" },
+      pick: { key: r => r.url, disabled: r => !!r.bookmarked, onPick: () => paintSave() },
+      columns: [
+        { label: "Page", cls: "text-wrap", sort: by(r => r.title || r.url), cell: r => {
+          const a = el("a", "text-reset", r.title || r.url); a.href = r.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+          const t = el("span"); t.append(a);
+          if (r.bookmarked) { const b = el("span", "badge bg-green-lt ms-2"); b.append(icon("ti-bookmark", "me-1"), "bookmarked"); t.append(b); }
+          return nameCell(t, r.url);
+        } },
+        { label: "Browser", sort: by(r => r.browser), cell: r => el("span", "text-secondary", r.browser + (r.profile && r.profile !== "Default" ? ` · ${r.profile}` : "")) },
+        { label: "Visits", cls: "text-end", sort: by(r => r.visits), cell: r => r.visits.toLocaleString() },
+        { label: "Last visit", sort: by(r => Date.parse(r.last)), cell: r => el("span", "text-secondary", fmtDate(Date.parse(r.last) / 1000)) },
+      ],
+    });
+    table.element.classList.add("border-0", "rounded-0", "shadow-none");
     const paint = () => {
       const shown = only.checked ? rows.filter(r => !r.bookmarked) : rows;
-      list.replaceChildren();
-      if (!shown.length && blockedAll) { list.replaceChildren(); list.hidden = true; status.textContent = ""; return; }
-      list.hidden = false;
-      if (!shown.length) {
-        const e = el("div", "empty py-4"); e.append(el("div", "empty-icon"), el("p", "empty-title", rows.length ? "Every page here is bookmarked" : "No visits match"),
-          el("p", "empty-subtitle text-secondary", rows.length ? "Turn off Not bookmarked only to see them." : "Try other words or a longer time."));
-        e.querySelector(".empty-icon")?.append(icon("ti-history"));
-        list.append(e);
-      }
-      for (const r of shown.slice(0, 500)) {
-        const row = el("label", "list-group-item d-flex align-items-center gap-3");
-        const box = el("input", "form-check-input m-0 flex-none"); box.type = "checkbox"; box.checked = picked.has(r.url); box.disabled = !!r.bookmarked;
-        box.onchange = () => { if (box.checked) picked.add(r.url); else picked.delete(r.url); paintSave(); };
-        const txt = el("div", "min-w-0 flex-fill"), a = el("a", "text-reset d-block text-truncate", r.title || r.url);
-        a.href = r.url; a.target = "_blank"; a.rel = "noopener noreferrer";
-        txt.append(a, el("div", "text-secondary small text-truncate", r.url));
-        const meta = el("div", "text-end flex-none small");
-        meta.append(el("div", "text-secondary", fmtDate(Date.parse(r.last) / 1000)), el("div", "text-secondary", `${r.browser} · ${r.visits} visit${r.visits === 1 ? "" : "s"}`));
-        if (r.bookmarked) { const b = el("span", "badge bg-green-lt flex-none"); b.append(icon("ti-bookmark", "me-1"), "Bookmarked"); row.append(box, txt, b, meta); }
-        else row.append(box, txt, meta);
-        list.append(row);
-      }
-      status.textContent = `${shown.length.toLocaleString()} page${shown.length === 1 ? "" : "s"}` + (shown.length > 500 ? " (first 500 shown)" : "");
+      table.element.hidden = blockedAll;
+      table.rows(shown);
+      status.textContent = blockedAll ? "" : `${rows.filter(r => !r.bookmarked).length.toLocaleString()} of ${rows.length.toLocaleString()} pages not bookmarked here`;
+      paintSave();
     };
     const load = async () => {
-      list.replaceChildren(); const sp = el("div", "p-4 text-center text-secondary"); sp.append(el("span", "spinner-border spinner-border-sm me-2"), "Reading your browsers' history…"); list.append(sp);
+      note.replaceChildren(); const sp = el("div", "p-4 text-center text-secondary"); sp.append(el("span", "spinner-border spinner-border-sm me-2"), "Reading your browsers' history…"); note.append(sp);
       try {
-        const p = new URLSearchParams({ days: days.value, limit: "2000", workspace: W.id }); if (q.value.trim()) p.set("q", q.value.trim());
-        const j = await W.call<{ visits: Visit[]; read: number; skipped: { Browser: string; Profile: string; Why: string }[] }>("GET", `history?${p}`);
-        rows = j.visits; note.replaceChildren();
-        blockedAll = !j.read && j.skipped.length > 0;
+        const j = await W.call<{ visits: Visit[]; read: number; skipped: { Browser: string; Profile: string; Why: string }[] }>("GET",
+          `history?${new URLSearchParams({ days: days.value, limit: "5000", workspace: W.id })}`);
+        rows = j.visits; note.replaceChildren(); blockedAll = !j.read && j.skipped.length > 0;
         if (j.skipped.length) {
           // One line per reason, naming the browsers it applies to, and the way out where there is one.
           const byWhy = new Map<string, string[]>();
           for (const x of j.skipped) byWhy.set(x.Why, [...(byWhy.get(x.Why) ?? []), x.Browser + (x.Profile && x.Profile !== "Default" ? ` (${x.Profile})` : "")]);
-          const al = el("div", "alert alert-warning mb-3"), d = el("div", "d-flex gap-2"), tx = el("div", "min-w-0");
+          const al = el("div", "alert alert-warning m-3"), d = el("div", "d-flex gap-2"), tx = el("div", "min-w-0");
           tx.append(el("h4", "alert-title", blockedAll ? "Your browsers' history cannot be read yet" : `${j.skipped.length} browser profile${j.skipped.length === 1 ? "" : "s"} left out`));
           for (const [why, names] of byWhy) tx.append(el("div", "text-secondary", `${[...new Set(names)].join(", ")}: ${why}.`));
           const acts = el("div", "btn-list mt-2");
@@ -370,18 +395,19 @@ function install(W: V1): void {
           acts.append(again); tx.append(acts);
           d.append(icon("ti-lock", "alert-icon"), tx); al.append(d); note.append(al);
         }
-        if (!j.read && !j.skipped.length) note.append(el("div", "alert alert-info mb-3", "No browser history was found on this computer."));
+        if (!j.read && !j.skipped.length) note.append(el("div", "alert alert-info m-3", "No browser history was found on this computer."));
         paint();
-      } catch (e) { list.replaceChildren(el("div", "p-3 text-danger", e instanceof Error ? e.message : String(e))); }
+      } catch (e) { note.replaceChildren(el("div", "alert alert-danger m-3", e instanceof Error ? e.message : String(e))); }
     };
-    q.oninput = () => { clearTimeout(timer); timer = setTimeout(() => void load(), 350); };
     days.onchange = () => void load(); only.onchange = paint;
     save.onclick = async () => {
-      const links = rows.filter(r => picked.has(r.url)).map(r => ({ url: r.url, title: r.title }));
+      const links = rows.filter(r => table.picked.has(r.url)).map(r => ({ url: r.url, title: r.title }));
       try { await addLinks(`From history ${new Date().toLocaleDateString()}`, links, { parent: "Saved tabs", reload: true }); hideModal("#v1History2"); }
       catch (e) { fail(e); }
     };
-    paintSave(); showModal("#v1History2"); void load(); q.focus();
+    const close = el("button", "btn me-auto"); close.type = "button"; close.textContent = "Close"; close.onclick = () => hideModal("#v1History2");
+    body.append(note, status, table.element); dock.append(table.foot); foot.append(close, save);
+    paintSave(); showModal("#v1History2"); void load();
   }
 
   async function duplicatesCsv(): Promise<void> {
@@ -394,38 +420,52 @@ function install(W: V1): void {
   }
 
   // Browser extensions: a one-time pairing code, and the browsers already paired (each disconnects on its own).
+  // Browser extension: Tabler steps to connect one, the pairing code in a card, and the connected browsers as a table.
   async function extensions(): Promise<void> {
-    const { body } = modal("v1Extensions", "Browser extension");
-    body.append(el("p", "text-secondary", "The extension sends this browser's tabs and tab groups, reads its bookmarks into a workspace, and can write a workspace back. Install it from web/dist/extension (see docs › Browser extension), then connect it with a code."));
-    const codeBox = el("div", "mb-3");
-    const make = el("button", "btn btn-primary", "Make a pairing code"); make.type = "button";
+    const { body, foot, dock } = modal("v1Extensions", "Browser extension", "lg");
+    const steps = el("ul", "steps steps-vertical mb-3");
+    for (const [t, d] of [["Install it", "Load web/dist/extension in Chrome, Edge, Brave or Firefox (docs › Browser extension)."],
+      ["Make a pairing code", "It works once, for a few minutes."], ["Type it into the extension's popup", `With the server address ${location.origin}.`]]) {
+      const li = el("li", "step-item"); li.append(el("div", "h4 m-0", t), el("div", "text-secondary", d)); steps.append(li);
+    }
+    const codeBox = el("div");
+    const make = el("button", "btn btn-primary"); make.type = "button"; make.append(icon("ti-key", "me-1"), "Make a pairing code");
     make.onclick = async () => {
       try {
         const r = await W.call<{ code: string; expires: string }>("POST", "extension/pairings");
-        codeBox.replaceChildren(el("div", "h2 font-monospace mb-1", r.code),
-          el("div", "text-secondary small", `Type it into the extension's popup with the server ${location.origin}. It works once, until ${new Date(r.expires).toLocaleTimeString()}.`));
+        const card = el("div", "card card-sm bg-primary-lt mb-3"), cb = el("div", "card-body d-flex align-items-center gap-3");
+        const code = el("div", "h1 font-monospace m-0", r.code);
+        const copy = el("button", "btn btn-sm ms-auto"); copy.type = "button"; copy.append(icon("ti-copy", "me-1"), "Copy");
+        copy.onclick = async () => { try { await navigator.clipboard.writeText(r.code); toast("Pairing code copied.", "success"); } catch { toast("Copy it by hand.", "warning"); } };
+        cb.append(code, el("div", "text-secondary small", `Works once, until ${new Date(r.expires).toLocaleTimeString()}.`), copy);
+        card.append(cb); codeBox.replaceChildren(card);
       } catch (e) { fail(e); }
     };
-    body.append(make, codeBox);
-    const list = el("div", "list-group list-group-flush");
-    try {
-      const { extensions } = await W.call<{ extensions: { id: string; name: string; created: string; last_used?: string }[] }>("GET", "extension/status");
-      if (!extensions.length) list.append(el("div", "text-secondary", "No browser is connected yet."));
-      for (const x of extensions) {
-        const row = el("div", "list-group-item d-flex align-items-center gap-2");
-        const text = el("div", "flex-fill");
-        text.append(el("div", "fw-medium", x.name.replace(/^extension:/, "")),
-          el("div", "text-secondary small", x.last_used && !x.last_used.startsWith("0001") ? `last heard from ${fmtDate(Date.parse(x.last_used) / 1000)}` : "not heard from yet"));
-        const off = el("button", "btn btn-sm btn-ghost-danger", "Disconnect"); off.type = "button";
-        off.onclick = async () => {
-          if (!(await askConfirm({ title: "Disconnect this browser?", ok: "Disconnect", body: "Its extension stops being able to reach Browser Foreman until it is connected again with a new code." }))) return;
-          try { await W.call("DELETE", `tokens/${encodeURIComponent(x.id)}`); row.remove(); } catch (e) { fail(e); }
-        };
-        row.append(text, off); list.append(row);
-      }
-    } catch (e) { list.append(el("div", "text-danger", String((e as Error).message))); }
-    body.append(el("h4", "mt-2", "Connected browsers"), list);
-    showModal("#v1Extensions");
+    body.append(el("p", "text-secondary", "The extension sends this browser's tabs and tab groups, reads its bookmarks into a workspace, and can write a workspace back."),
+      steps, codeBox);
+    type Ext = { id: string; name: string; created: string; last_used?: string };
+    const table = new DataTable<Ext>({
+      noun: "browsers", size: 10,
+      empty: { title: "No browser is connected yet", text: "Make a pairing code above, then type it into the extension.", icon: "ti-puzzle" },
+      columns: [
+        { label: "Browser", cell: x => nameCell(x.name.replace(/^extension:/, ""), `connected ${fmtDate(Date.parse(x.created) / 1000)}`, icon("browser:" + x.name.replace(/^extension:/, ""))) },
+        { label: "Last heard from", cell: x => el("span", "text-secondary", x.last_used && !x.last_used.startsWith("0001") ? fmtDate(Date.parse(x.last_used) / 1000) : "not yet") },
+      ],
+      actions: x => [{ l: "Disconnect…", ic: "ti-plug-connected-x", danger: true, fn: async () => {
+        if (!(await askConfirm({ title: "Disconnect this browser?", ok: "Disconnect", body: "Its extension stops being able to reach Browser Foreman until it is connected again with a new code." }))) return;
+        try { await W.call("DELETE", `tokens/${encodeURIComponent(x.id)}`); toast("Disconnected.", "success"); await load(); } catch (e) { fail(e); }
+      } }],
+    });
+    const load = async () => {
+      try { table.rows((await W.call<{ extensions: Ext[] }>("GET", "extension/status")).extensions); }
+      catch (e) { table.rows([]); fail(e); }
+    };
+    const head = el("div", "card-header"); head.append(el("h3", "card-title", "Connected browsers"));
+    table.element.prepend(head);
+    body.append(table.element); dock.append(table.foot);
+    const close = el("button", "btn me-auto"); close.type = "button"; close.textContent = "Close"; close.onclick = () => hideModal("#v1Extensions");
+    foot.append(close, make);
+    await load(); showModal("#v1Extensions");
   }
 
   function menu(): HTMLElement {

@@ -11,6 +11,16 @@
 <link rel="stylesheet" href="assets/css/tabler.min.css">
 <link rel="stylesheet" href="assets/css/tabler-icons.min.css">
 <style>
+/* A dialog's dock holds its list's pager between the scrolling body and the buttons: always in view. */
+.modal-dock { flex: none; border-top: 1px solid var(--tblr-border-color); background: var(--tblr-bg-surface); }
+.modal-dock:not(:has(.card-footer)) { display: none; }
+.modal-dock .card-footer { border-top: 0; background: transparent; padding: .6rem var(--tblr-modal-padding, 1.5rem); }
+/* Pages of a list stay in reach: the pager sticks to the bottom of what scrolls (a dialog body or a pane), and a data
+   table's tabs and search to the top, so the rows scroll between them. */
+.pane-scroll .datatable-foot, .modal-body :not(.datatable-foot) > [data-brofo-pager], .pane-scroll :not(.datatable-foot) > [data-brofo-pager] { position: sticky; bottom: 0; z-index: 3; background: var(--tblr-bg-surface); box-shadow: 0 -1px 0 var(--tblr-border-color); }
+.modal-body .datatable-head, .pane-scroll .datatable-head { position: sticky; top: 0; z-index: 3; background: var(--tblr-bg-surface); }
+.modal-footer:empty { display: none; }
+.datatable th.text-end .table-sort { text-align: end; } .datatable td .empty { padding-inline: 0; }
 .bf-save-banner{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:3000;width:min(560px,calc(100vw - 32px))}
 /* Layout: the app fills the window; the tree and the detail pane scroll on their own. */
 html, body { height: 100%; }
@@ -429,7 +439,7 @@ body.no-tree-thumbs .bm-fav { position: static; padding: 0; box-shadow: none; ba
 @media (max-width: 600px) { .about-tiles { grid-template-columns: 1fr; } .about-contact { grid-template-columns: 1.25rem 1fr; } .about-contact-value, .about-contact-note { grid-column: 2; } }
 .about-h { margin: 1.1rem 0 .35rem; font-size: .95rem; }
 #aboutBody .about-h:first-child { margin-top: 0; }
-.about-licence { white-space: pre-wrap; font-size: .75rem; background: var(--tblr-bg-surface-secondary); border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius); padding: .75rem; max-height: 14rem; overflow: auto; }
+.about-licence { color: var(--tblr-body-color); white-space: pre-wrap; font-size: .75rem; background: var(--tblr-bg-surface-secondary); border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius); padding: .75rem; max-height: 14rem; overflow: auto; }
 #aboutTabs .nav-link { padding: .4rem .7rem; }
 .set-group { padding: .9rem 1.25rem; }
 .set-group + .set-group { border-top: 1px solid var(--tblr-border-color); }
@@ -494,7 +504,7 @@ body.no-tree-dates #list .bm-date { display: none !important; }
 #ctx .dropdown-header { padding-top: .35rem; padding-bottom: .15rem; }
 #ctx .dropdown-item:focus, #ctx .dropdown-item:hover, #ctx .dd-sub .dropdown-item:focus { background: var(--tblr-active-bg, rgba(32,107,196,.08)); color: var(--tblr-primary); outline: none; }
 #ctx .dd-has-sub .ti-chevron-right { margin-left: auto; }
-/* Browsers' own app icons (api/tabs/browser-icon): sized like a Tabler icon wherever they stand in for one. */
+/* Browsers' own app icons (api/v1/browsers/icon): sized like a Tabler icon wherever they stand in for one. */
 .browser-ico { width: 1.1em; height: 1.1em; object-fit: contain; vertical-align: -.2em; flex: none; }
 .dropdown-item > .browser-ico.me-2, .dropdown-item > .browser-ico { margin-right: .5rem; }
 .tab-win-icon .browser-ico { width: 1.25rem; height: 1.25rem; }
@@ -618,7 +628,7 @@ body { overflow-wrap: break-word; }
                   <tbody>
                     <template x-for="b in installed" :key="b.name">
                       <tr :class="!b.scriptable && 'text-secondary'">
-                        <td><div class="fw-medium d-flex align-items-center gap-2"><img class="browser-ico" :src="'api/tabs/browser-icon?name=' + encodeURIComponent(b.name)" alt="" width="20" height="20" @error="$el.style.visibility = 'hidden'"><span x-text="b.name"></span></div><div class="text-secondary small" x-text="can(b)"></div></td>
+                        <td><div class="fw-medium d-flex align-items-center gap-2"><img class="browser-ico" :src="'api/v1/browsers/icon?name=' + encodeURIComponent(b.name)" alt="" width="20" height="20" @error="$el.style.visibility = 'hidden'"><span x-text="b.name"></span></div><div class="text-secondary small" x-text="can(b)"></div></td>
                         <td class="text-center"><label class="form-check form-switch d-inline-block m-0" :data-tip="b.scriptable ? 'Save this browser\'s open tabs' : 'macOS gives no way to read this browser\'s tabs'">
                           <input type="checkbox" class="form-check-input" :checked="isTracked(b.name)" :disabled="!b.scriptable" @change="toggle(b)" :aria-label="'Track tabs in ' + b.name"></label></td>
                         <td class="text-center"><input type="checkbox" class="form-check-input" :checked="opensIn(b.name)" @change="toggleOpen(b.name); $event.target.checked = opensIn(b.name)" :aria-label="b.name + ' opens links'"></td>
@@ -975,7 +985,7 @@ body { overflow-wrap: break-word; }
     <div class="modal-body p-0" id="settingsBody"></div>
     <div class="modal-footer">
       <span class="text-secondary small me-auto">Saved as you change them, in this browser only.</span>
-      <button class="btn" id="settingsDefaults"><i class="ti ti-arrow-back-up me-1"></i>Restore default settings</button>
+      <button class="btn me-auto" id="settingsDefaults"><i class="ti ti-arrow-back-up me-1"></i>Restore default settings</button>
       <button class="btn btn-primary" data-close>Done</button>
     </div>
   </div></div>
@@ -1001,8 +1011,9 @@ body { overflow-wrap: break-word; }
         <input type="search" class="form-control form-control-sm" id="trashQ" placeholder="Filter the Trash…" aria-label="Filter the Trash">
       </div>
       <div class="list-group list-group-flush" id="trashList"></div>
-      <div class="mt-2" id="trashPager"></div>
+
     </div>
+    <div class="modal-dock" id="trashPager"></div>
     <div class="modal-footer">
       <span class="text-secondary small me-auto" id="trashSel"></span>
       <button type="button" class="btn" id="trashRestore"><i class="ti ti-restore me-1"></i>Put back</button>
@@ -1027,7 +1038,7 @@ body { overflow-wrap: break-word; }
 
 <!-- Edit text (rename, new folder, description) -->
 <div class="modal modal-blur" id="textModal" tabindex="-1" role="dialog" aria-label="Edit">
-  <div class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content">
+  <div class="modal-dialog modal-dialog-top" role="document"><div class="modal-content">
     <div class="modal-header"><h5 class="modal-title" id="textTitle"></h5><button type="button" class="btn-close" data-close></button></div>
     <div class="modal-body">
       <label class="form-label" id="textLabel"></label>
@@ -1035,13 +1046,13 @@ body { overflow-wrap: break-word; }
       <textarea id="textArea" class="form-control" rows="5" hidden></textarea>
       <div class="form-hint" id="textHint"></div>
     </div>
-    <div class="modal-footer"><button class="btn" data-close>Cancel</button><button class="btn btn-primary" id="textOk">Save</button></div>
+    <div class="modal-footer"><button class="btn me-auto" data-close>Cancel</button><button class="btn btn-primary" id="textOk">Save</button></div>
   </div></div>
 </div>
 
 <!-- Confirm: every destructive or irreversible action asks here first -->
 <div class="modal modal-blur" id="confirmModal" tabindex="-1" role="alertdialog" aria-label="Confirm">
-  <div class="modal-dialog modal-sm modal-dialog-centered" role="document"><div class="modal-content">
+  <div class="modal-dialog modal-sm modal-dialog-top" role="document"><div class="modal-content">
     <div class="modal-status" id="confirmBar"></div>
     <div class="modal-body text-center py-4">
       <i class="ti mb-2" id="confirmIcon" style="font-size: 2.5rem"></i>

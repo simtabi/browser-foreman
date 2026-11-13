@@ -116,4 +116,9 @@ ships.
   tabs shows a loading state, the Timeline drops "−0 closed" and names months, link health says Skipped for links
   it does not visit, same-named folders show their parent, the theme is set before the page paints, and texts that
   still named the Python server now name `browser-foreman serve`.
+- Dialogs and lists: a Tabler data table (search, sortable columns, tabs, row actions in a menu, pages) for
+  Workspaces, History, Browser history and the extension's connected browsers; every dialog opens from the top so it
+  grows downward instead of jumping, its pager sits in a fixed strip above the buttons, panes keep their pager in
+  view, footers follow one order (Close or Cancel left, actions right) and empty ones are hidden. The licence text
+  shows, and the credits list what the Go version is built with.
 - `GET /api/v1/events` now needs a viewer (a token or a session), like reading bookmarks.

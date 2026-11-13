@@ -981,10 +981,16 @@ const APP = {name: "Browser Foreman", version: "0.1.0", year: 2026, licence: "MI
   maintainer: "Imani Manyara", maintainerEmail: "imani@simtabi.com", contact: "opensource@simtabi.com", security: "security@simtabi.com",
   author: "Imani Manyara", org: "Simtabi LLC"};
 const CREDITS = [
+  ["Go", "1.26", "BSD-3-Clause", "https://go.dev", "The language the server is written in"],
+  ["SQLite (modernc.org/sqlite)", "1.62.0", "BSD-3-Clause", "https://gitlab.com/cznic/sqlite", "Stores workspaces, history and tab snapshots"],
+  ["MCP Go SDK", "1.8.0", "Apache-2.0 and MIT", "https://github.com/modelcontextprotocol/go-sdk", "Serves bookmarks to AI assistants"],
+  ["Cobra", "1.10.2", "Apache-2.0", "https://cobra.dev", "The command line"],
+  ["howett.net/plist", "1.0.1", "BSD-3-Clause", "https://howett.net/plist", "Reads Safari's bookmarks"],
+  ["golang.org/x/net", "0.62.0", "BSD-3-Clause", "https://pkg.go.dev/golang.org/x/net", "Reads exported bookmarks files"],
   ["Tabler", "1.7.3", "MIT", "https://tabler.io", "Interface components and styles"],
   ["Tabler Icons", "3.50.0", "MIT", "https://tabler.io/icons", "Icons"],
-  ["Playwright", "1.64.1", "Apache-2.0", "https://playwright.dev", "Drives the installed Chrome to take page snapshots"],
-  ["Google Chrome", "installed copy", "Google's terms", "https://www.google.com/chrome/", "Renders snapshots, in a throwaway profile with no sign-ins"],
+  ["Alpine.js", "3.17", "MIT", "https://alpinejs.dev", "Parts of the interface"],
+  ["Google Chrome", "installed copy", "Google's terms", "https://www.google.com/chrome/", "Takes page snapshots, headless, in a throwaway profile with no sign-ins"],
 ];
 const MIT_TEXT = `MIT License
 
@@ -1094,7 +1100,7 @@ function openAbout(tab = "about") {
       const pre = el("pre", "about-licence", MIT_TEXT); b.append(pre);
       h("Built with");
       const t2 = el("table", "table table-sm table-vcenter"), tb = el("tbody");
-      for (const [n, v, lic, url, what] of CREDITS) { const tr = el("tr"), nm = el("td"); nm.append(link(url, n)); tr.append(nm, el("td", "text-secondary", v), el("td", null, lic), el("td", "text-secondary small", what)); tb.append(tr); }
+      for (const [n, v, lic, url, what] of CREDITS) { const tr = el("tr"), nm = el("td", "text-nowrap"); nm.append(link(url, n)); tr.append(nm, el("td", "text-secondary text-nowrap", v), el("td", "text-nowrap", lic), el("td", "text-secondary small", what)); tb.append(tr); }
       t2.append(tb); b.append(t2);
       p("Site names, logos and favicons shown here belong to their owners and are shown only to help you recognise your own bookmarks. Snapshots are private pictures of public pages for your own use.", "text-secondary small");
       p("No warranty: link checks can be wrong (a site may block checks or be down for a moment). Review before deleting anything.", "text-secondary small");
