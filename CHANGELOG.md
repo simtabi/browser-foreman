@@ -156,8 +156,8 @@ ships.
 
 ### Changed
 
-- The workspace switcher is a pill tinted in the workspace's colour, and the Browsers menu shows each browser's state
-  as a pill: green with windows, grey when not running, amber when it needs attention.
+- The workspace switcher keeps its ordinary button, with the workspace's icon in its colour, and the Browsers menu shows
+  each browser's state as a pill: green with windows, grey when not running, amber when it needs attention.
 - List and grid switch instantly and keep the panes' widths: the grid is CSS on the same rows (nothing is rebuilt),
   and long lists lay out only what is near the screen (`content-visibility`).
 - Docs to the Simtabi and laranail standard: new reference pages for workspaces, labels and page snapshots, new

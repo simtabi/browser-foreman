@@ -574,7 +574,8 @@ function install(W: V1): void {
     const btn = el("button", "btn"); btn.type = "button"; btn.dataset.dd = ""; btn.setAttribute("aria-label", "Workspace");
     btn.dataset.tip = "Workspace: one bookmark set, with its history";
     const name = el("span", "text-truncate", W.workspace.name); name.dataset.tip = W.workspace.name;  // width: #hdrWs rules in template.html
-    btn.append(wsBadge(W.workspace, "avatar-xs me-2"), name);
+    // The button as it always was: an icon and the name. The icon is the workspace's own, in its colour.
+    btn.append(icon("ti-" + (W.workspace.icon || "stack-2"), "me-1" + (W.workspace.color ? ` text-${W.workspace.color}` : "")), name);
     if (W.locked) { const b = el("span", "badge bg-yellow-lt ms-2"); b.append(icon("ti-lock", "me-1"), "locked"); btn.append(b); }
     if (W.workspace.archived) btn.append(el("span", "badge bg-secondary-lt ms-2", "archived"));
     btn.append(icon("ti-chevron-down", "ms-1"));
