@@ -63,7 +63,7 @@ export class DataTable<T> {
   private fullFor = "";       // the page size and tab that height was measured for
 
   constructor(private readonly o: DataTableOptions<T>) {
-    this.element = el("div", "card");
+    this.element = el("div", "card datatable-card");
     this.tabsEl = el("div", "card-header");
     const bar = el("div", "card-body border-bottom py-3 d-flex flex-wrap gap-2 align-items-center");
     if (o.search) {
@@ -82,7 +82,11 @@ export class DataTable<T> {
     const head = el("div", "datatable-head");
     if (o.tabs) head.append(this.tabsEl);
     if (o.search || o.tools?.length) head.append(bar);
-    if (head.childElementCount) this.element.append(head);
+    if (head.childElementCount) {
+      this.element.append(head);
+      // The column header sticks under the toolbar when a dialog or pane scrolls, so it needs the toolbar's height.
+      new ResizeObserver(() => this.element.style.setProperty("--dt-head-h", `${head.offsetHeight}px`)).observe(head);
+    }
     this.element.append(scroll, this.foot);
     this.scroll = scroll;
   }

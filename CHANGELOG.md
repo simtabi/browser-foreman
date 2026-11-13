@@ -143,6 +143,8 @@ ships.
 
 ### Fixed
 
+- A table's column header (History, Workspaces and the other lists in dialogs and panes) stays in view under its
+  search bar while the rows scroll, instead of scrolling away with them.
 - Buttons and menus show a focus ring for the keyboard only, so a click (or a dialog focusing its safe choice, as the
   welcome's *Not now*) leaves no outline or grey block; workspace badges keep their size in menus and buttons; the
   welcome counts the workspace's own bookmarks and those in the Trash (it read 5,996 of 5,416).
