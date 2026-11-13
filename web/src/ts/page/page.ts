@@ -11,6 +11,7 @@ import { RangePicker } from "../rangepick";
 import { FoldCenter } from "../fold";
 import { cleanTags, starRating, tagEditor } from "../labels";
 import { api } from "../api";
+import { busy } from "../busy";
 import { ViewSearch } from "../search";
 import { UndoCenter } from "../undo";
 import { Poller } from "../poller";
@@ -368,7 +369,7 @@ function buildToolbar() {
     // A compact picker: the label, the chosen value, a chevron; the real select lies over it, invisible.
     const lab = el("label", "btn btn-sm tb-pick"), val = el("b", null, s.selectedOptions[0]?.text || "");
     const paint = () => { val.textContent = s.selectedOptions[0]?.text || ""; lab.classList.toggle("is-set", s.value !== VIEW_DEFAULT[k]); };
-    s.onchange = () => { setView(k, s.value); paint(); marked.clear(); sel = 0; build(); list.focus(); };
+    s.onchange = () => { setView(k, s.value); paint(); marked.clear(); sel = 0; void busy(`${l}: ${s.selectedOptions[0]?.text ?? s.value}…`, () => { build(); list.focus(); }); };
     s.setAttribute("aria-label", l);
     lab.append(el("span", "tb-pick-label", l), val, icon("ti-chevron-down", "text-secondary"), s); paint();
     $("#view").append(lab);
@@ -376,7 +377,7 @@ function buildToolbar() {
   DATES = new RangePicker({label: "Added", heading: "Bookmarks added…", defaultKey: "Any time", value: "Any time",
     options: DATE_PRESETS.map(([label]) => ({key: label, label})), columns: 1,
     onPick: key => { const p = DATE_PRESETS.find(x => x[0] === key); if (p) setDates(...p[1](), key); },
-    onRange: (from, to) => { datePreset = ""; setView("from", from); setView("to", to); sel = 0; build(); }});
+    onRange: (from, to) => { datePreset = ""; setView("from", from); setView("to", to); sel = 0; void busy("Applying the date range…", () => build()); }});
   $("#dates").replaceWith(DATES.el); DATES.el.id = "dates";
   $("#clearFilters").onclick = clearFilters;
   paintChips();
@@ -393,14 +394,19 @@ const DATE_PRESETS = [
   ["Before 2020", () => [null, new Date(2019, 11, 31, 23, 59)]],
   ["Any time", () => [null, null]],
 ];
-function setDates(from, to, preset = "") { datePreset = from || to ? preset : ""; setView("from", iso(from)); setView("to", iso(to)); sel = 0; build(); }
+function setDates(from, to, preset = "") { datePreset = from || to ? preset : ""; setView("from", iso(from)); setView("to", iso(to)); sel = 0; void busy("Applying the date range…", () => build()); }
 // The Added picker's label: the preset chosen, else the range typed, else "Any time".
 let datePreset = "", DATES = null;
 function paintDates() {
   if (!DATES) return;
   if (datePreset) DATES.set(datePreset); else DATES.setRange(view.from, view.to);
 }
-function setFilter(k) { filter = k; paintChips(); marked.clear(); sel = 0; build(); list.focus(); if (!restoringPlace) PLACE.update({filter: k === "all" ? "" : k}); }
+function setFilter(k) {
+  filter = k; paintChips(); marked.clear(); sel = 0;
+  const label = (FILTERS.find(f => f[0] === k) || [])[1] || k;
+  void busy(`Showing ${String(label).toLowerCase()}…`, () => { build(); list.focus(); });
+  if (!restoringPlace) PLACE.update({filter: k === "all" ? "" : k});
+}
 // The chips count what the tree holds now, outside the Trash (moved, renamed, trashed or deleted bookmarks included);
 // they used to count the original set, so "Dead links 470" stayed after every dead link had been deleted.
 function paintChipCounts() {
@@ -463,11 +469,13 @@ const forcedView = () => filtering() || readOnly();
 // Expand / collapse every folder: the toggle in the Folders card header, the command palette and the "-" key.
 // In a filtered view the folders' open state is the view's own (viewClosed); the Trash keeps its saved state in every
 // view, so both buttons set it too. They used to skip it: Collapse all left the Trash open.
-function expandAllFolders() {
+function expandAllFolders() { void busy("Expanding every folder…", expandAllNow); }
+function expandAllNow() {
   if (forcedView()) { viewClosed.clear(); const bin = trashFolder(); if (bin) { setOpen(bin, true); saveOpen(); } build(); return; }
   walkFolders(st().root, f => setOpen(f, true)); saveOpen(); build();
 }
-function collapseAllFolders() {
+function collapseAllFolders() { void busy("Collapsing every folder…", collapseAllNow); }
+function collapseAllNow() {
   if (forcedView()) {
     for (const r of rows) if (r.kind === "folder") { if (r.trash) setOpen(r.node, false); else viewClosed.add(r.key); }
     saveOpen(); sel = 0; build(); return;
@@ -1333,7 +1341,8 @@ const rowEl = k => Dom.one("row", String(k), list);
 let LAYOUT = store.get("layout") === "grid" ? "grid" : "list";
 // Switching is a class on the page and a new face on the toggle: nothing is rebuilt, and the panes keep their widths.
 function setLayout(k) {
-  LAYOUT = k; store.set("layout", k); list.classList.toggle("grid", k === "grid");  // on the list only: less to restyle
+  LAYOUT = k; store.set("layout", k);
+  void busy(k === "grid" ? "Showing thumbnails…" : "Showing the list…", () => { list.classList.toggle("grid", k === "grid"); void list.offsetHeight; });  // on the list only: less to restyle
   const b = document.querySelector(".layout-toggle"); if (b) paintLayoutToggle(b);
   rowEl(sel)?.scrollIntoView({block: "nearest"});
 }

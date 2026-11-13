@@ -10,6 +10,10 @@ ships.
 
 ### Added
 
+- Loading feedback (`ts/busy.ts`): slow actions (expanding or collapsing everything, filters, Group by and Sort, the
+  date range, list and grid, switching workspace) show a spinner with what is happening and a thin progress bar, only
+  when they take longer than a blink; the tree, the details, the Timeline and every list dialog (Workspaces, History,
+  Browser history, Browser extensions) open at once with skeleton rows and a message until their data arrives.
 - Workspace colour and icon: *Appearance…* picks one of 12 colours and an icon for each workspace, shown on its badge
   in the switcher, its menu and All workspaces, with the top bar tinted in the current workspace's colour
   (`color` and `icon` on `PATCH /api/v1/workspaces/{id}`, kept by both storage drivers and in backups).

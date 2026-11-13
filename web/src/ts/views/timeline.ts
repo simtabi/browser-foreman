@@ -9,6 +9,7 @@
 import { Dom } from "../dom";
 import { Pager } from "../pager";
 import { RangePicker } from "../rangepick";
+import { skeleton } from "../busy";
 import type { BrowserScope } from "../scope";
 import { el, icon, plural, svg } from "../ui";
 
@@ -67,7 +68,8 @@ export class TimelineView {
   async open(): Promise<void> {
     this.page = 1;
     this.paintControls();
-    this.part("feed")?.replaceChildren(el("div", "text-secondary", "Loading…"));
+    this.part("feed")?.replaceChildren(skeleton("Gathering tab snapshots, edits and bookmarks added…", 6));
+    for (const c of ["tabs-chart", "bm-chart"]) this.part(c)?.replaceChildren(skeleton("Drawing the chart…", 2));
     await this.load();
     this.paint();
   }

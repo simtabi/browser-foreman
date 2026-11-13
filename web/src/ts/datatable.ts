@@ -87,8 +87,13 @@ export class DataTable<T> {
     this.scroll = scroll;
   }
 
+  /** Show placeholder rows and `message` until rows() is called (a list being fetched). */
+  loading(message: string): this { this.busyMsg = message; this.paint(); return this; }
+  private busyMsg: string | null = null;
+
   /** Replace the rows (keeps the page, search and sort; ticks of rows no longer there are dropped). */
   rows(list: T[]): this {
+    this.busyMsg = null;
     this.all = list;
     if (this.o.pick) {
       const keys = new Set(list.map(this.o.pick.key));
@@ -144,6 +149,17 @@ export class DataTable<T> {
     if (this.o.primary || this.o.actions) tr.append(el("th", "w-1"));
     this.head.replaceChildren(tr);
     this.body.replaceChildren();
+    const span = this.o.columns.length + (this.o.pick ? 1 : 0) + (this.o.primary || this.o.actions ? 1 : 0);
+    if (!page.length && this.busyMsg) {
+      const msg = el("tr"), mtd = el("td", "text-secondary"); mtd.colSpan = span;
+      mtd.append(el("span", "spinner-border spinner-border-sm me-2"), this.busyMsg); msg.append(mtd); this.body.append(msg);
+      for (let k = 0; k < 5; k++) {
+        const row = el("tr", "placeholder-glow");
+        for (let c = 0; c < span; c++) { const td = el("td"); td.append(el("span", `placeholder col-${c === 0 ? [8, 6, 9, 7, 5][k] : 6}`)); row.append(td); }
+        this.body.append(row);
+      }
+      return;
+    }
     if (!page.length) {
       const td = el("td"); td.colSpan = this.o.columns.length + (this.o.pick ? 1 : 0) + (this.o.primary || this.o.actions ? 1 : 0);
       const e = el("div", "empty py-4"), ic = el("div", "empty-icon"); ic.append(icon(this.o.empty?.icon ?? "ti-mood-empty"));

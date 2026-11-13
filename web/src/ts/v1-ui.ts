@@ -8,6 +8,7 @@ import { el, fmtDate, icon } from "./ui";
 import { DataTable, avatar, by, nameCell } from "./datatable";
 import { RangePicker } from "./rangepick";
 import { lookPicker, wsBadge } from "./wslook";
+import { busy } from "./busy";
 
 interface Info { id: string; name: string; head: number; notes?: string; locked?: boolean; archived?: boolean; deleted?: string; bookmarks?: number; color?: string; icon?: string }
 interface Entry { seq: number; at: string; op: string; summary: string }
@@ -23,7 +24,10 @@ if (W?.v1) install(W);
 
 function install(W: V1): void {
   const ws = (p = "") => `workspaces/${encodeURIComponent(W.id)}${p}`;
-  const nav = (id: string) => { location.href = "./?ws=" + encodeURIComponent(id); };
+  const nav = (id: string) => {
+    const name = W.workspaces.find(w => w.id === id)?.name ?? id;
+    void busy(`Opening “${name}”…`, () => new Promise<void>(() => { location.href = "./?ws=" + encodeURIComponent(id); }));  // until the page goes
+  };
   const fail = (e: unknown) => toast(e instanceof Error ? e.message : String(e), "danger");
   const update = async (body: Record<string, unknown>, reload = true): Promise<void> => {
     try { await W.call("PATCH", ws(), body); if (reload) location.reload(); } catch (e) { fail(e); }
@@ -46,8 +50,6 @@ function install(W: V1): void {
   }
 
   async function history(): Promise<void> {
-    let h: Entry[];
-    try { h = (await W.call<{ history: Entry[] }>("GET", ws("/history"))).history; } catch (e) { return fail(e); }
     const { body, dock } = modal("v1History", `History of “${W.workspace.name}”`, "xl");
     body.classList.add("p-0");
     const OPS: Record<string, [string, string]> = { import: ["imported", "bg-blue-lt"], merge: ["merged", "bg-blue-lt"], update: ["updated", "bg-blue-lt"],
@@ -81,8 +83,11 @@ function install(W: V1): void {
     table.element.classList.add("border-0", "rounded-0", "shadow-none");
     const note = el("div", "alert alert-info m-3 mb-0"); note.append(el("div", null, "Every change is kept. Going back makes that point the newest state, as a new entry you can undo."));
     body.append(note, table.element); dock.append(table.foot);
-    table.rows([...h].reverse());
+    // Opens at once with placeholder rows; the history fills them in when it arrives.
+    table.loading("Loading every change in this workspace…");
     showModal("#v1History");
+    try { table.rows([...(await W.call<{ history: Entry[] }>("GET", ws("/history"))).history].reverse()); }
+    catch (e) { table.rows([]); fail(e); }
   }
 
 
@@ -191,7 +196,7 @@ function install(W: V1): void {
     add.onclick = () => { hideModal("#v1Workspaces"); importer(); };
     const close = el("button", "btn me-auto"); close.type = "button"; close.textContent = "Close"; close.onclick = () => hideModal("#v1Workspaces");
     foot.append(close, add);
-    paint(); void load(); showModal("#v1Workspaces");
+    table.loading("Loading workspaces and counting their bookmarks…"); void load(); showModal("#v1Workspaces");
   }
 
   // Reset: back to how the workspace started, as one entry (undo brings today's back).
@@ -423,7 +428,7 @@ function install(W: V1): void {
       paintSave();
     };
     const load = async () => {
-      note.replaceChildren(); const sp = el("div", "p-4 text-center text-secondary"); sp.append(el("span", "spinner-border spinner-border-sm me-2"), "Reading your browsers' history…"); note.append(sp);
+      note.replaceChildren(); table.loading("Reading your browsers' history (through copies; nothing is stored)…");
       try {
         const j = await W.call<{ visits: Visit[]; read: number; skipped: { Browser: string; Profile: string; Why: string }[] }>("GET",
           `history?${new URLSearchParams({ ...(days.range ? Object.fromEntries(Object.entries(days.range).filter(([, v]) => v)) : { days: days.key }), limit: "5000", workspace: W.id })}`);
@@ -561,7 +566,7 @@ function install(W: V1): void {
     body.append(tableWrap); dock.append(table.foot);
     const close = el("button", "btn me-auto"); close.type = "button"; close.textContent = "Close"; close.onclick = () => hideModal("#v1Extensions");
     foot.append(close, make);
-    await load(); showModal("#v1Extensions");
+    table.loading("Asking which browsers are connected…"); showModal("#v1Extensions"); await load();
   }
 
   function menu(): HTMLElement {
