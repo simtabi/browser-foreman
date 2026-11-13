@@ -49,7 +49,7 @@ web:  ## build the web interface (TypeScript) and stage it for embedding in the 
 	mkdir -p src/internal/webui/dist/assets/js
 	cp web/src/template.html src/internal/webui/dist/index.html
 	cp -R web/assets/css web/assets/fonts src/internal/webui/dist/assets/
-	cp web/dist/assets/js/app.js web/dist/assets/js/v1.js src/internal/webui/dist/assets/js/
+	cp web/dist/assets/js/app.js web/dist/assets/js/v1.js web/dist/assets/js/theme.js src/internal/webui/dist/assets/js/
 
 extension:  ## build the browser extension into web/dist/extension/{chromium,firefox,safari}
 	cd web && npm install --no-audit --no-fund && npm run build:extension

@@ -33,22 +33,41 @@ if (boot) {
   };
   const newId = (): string => "f" + Array.from(crypto.getRandomValues(new Uint8Array(6)), b => b.toString(16).padStart(2, "0")).join("");
 
-  const banner = (text: string, kind: "danger" | "warning"): void => {
-    let el = document.getElementById("bfSaveBanner");
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "bfSaveBanner";
-      el.setAttribute("role", "alert");
-      el.style.cssText = "position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:3000;max-width:min(560px,calc(100vw - 32px))";
-      document.body.append(el);
+  // A save the server refused stays on screen until it is dealt with: a Tabler alert with what happened and what to
+  // do, never a toast that times out over an unsaved edit.
+  type Act = { label: string; run: () => void; primary?: boolean };
+  const banner = (title: string, text: string, kind: "danger" | "warning", acts: Act[] = []): void => {
+    document.getElementById("bfSaveBanner")?.remove();
+    const el = document.createElement("div");
+    el.id = "bfSaveBanner"; el.setAttribute("role", "alert");
+    el.className = `alert alert-${kind} alert-dismissible bg-surface shadow-lg mb-0 bf-save-banner`;
+    const row = document.createElement("div"); row.className = "d-flex gap-3";
+    const ic = document.createElement("i"); ic.className = `ti ${kind === "danger" ? "ti-alert-circle" : "ti-alert-triangle"} alert-icon fs-2`;
+    const box = document.createElement("div"); box.className = "min-w-0";
+    const h = document.createElement("h4"); h.className = "alert-title"; h.textContent = title;
+    const d = document.createElement("div"); d.className = "text-secondary"; d.textContent = text;
+    box.append(h, d);
+    if (acts.length) {
+      const list = document.createElement("div"); list.className = "btn-list mt-3";
+      for (const a of acts) {
+        const b = document.createElement("button"); b.type = "button";
+        b.className = `btn btn-sm ${a.primary ? `btn-${kind}` : ""}`; b.textContent = a.label; b.onclick = a.run;
+        list.append(b);
+      }
+      box.append(list);
     }
-    el.className = `alert alert-${kind} shadow mb-0`;
-    el.textContent = text;
-    if (kind === "warning") {
-      const b = document.createElement("button");
-      b.className = "btn btn-sm ms-2"; b.textContent = "Reload"; b.onclick = () => location.reload();
-      el.append(b);
-    }
+    const x = document.createElement("button"); x.type = "button"; x.className = "btn-close"; x.setAttribute("aria-label", "Close"); x.onclick = () => el.remove();
+    row.append(ic, box); el.append(row, x);
+    document.body.append(el);
+  };
+  // Keep my change: the other change stays in the history (undo or History bring it back); this edit goes on top.
+  const keepMine = async (): Promise<void> => {
+    try {
+      const r = await fetch(base, { headers: headers() });
+      const j = await r.json() as { workspace?: { head: number } };
+      if (!r.ok || !j.workspace) throw new Error(`the server answered ${r.status}`);
+      head = j.workspace.head; document.getElementById("bfSaveBanner")?.remove(); flush();
+    } catch (e) { banner("Not saved", String(e), "danger"); }
   };
 
   let timer: ReturnType<typeof setTimeout> | undefined, sending: Promise<void> | null = null, dirty = false;
@@ -56,16 +75,17 @@ if (boot) {
     dirty = false;
     const body = JSON.stringify(fromPage(state, urls, page, newId));
     const r = await fetch(`${base}/tree`, { method: "PUT", headers: { ...headers(), "If-Match": `"${head}"` }, body, keepalive: body.length < 60_000 });
-    if (r.status === 412) return banner("These bookmarks were changed somewhere else since this page loaded. Reload to see them; your last edit was not saved.", "warning");
+    if (r.status === 412) return banner("Changed somewhere else", "Another window, the extension or the API changed these bookmarks after this page loaded, so your last edit was not saved yet.", "warning",
+      [{ label: "Reload", run: () => location.reload(), primary: true }, { label: "Keep my change", run: () => void keepMine() }]);
     const j = await r.json().catch(() => ({})) as { error?: string; entry?: { seq: number; summary: string } | null };
-    if (!r.ok) return banner(`Not saved: ${j.error ?? `the server answered ${r.status}`}`, "danger");
+    if (!r.ok) return banner("Not saved", j.error ?? `The server answered ${r.status}.`, "danger", [{ label: "Try again", run: () => flush(), primary: true }]);
     if (j.entry) { head = j.entry.seq; ws.can = { undo: j.entry.summary, redo: null }; }
     document.getElementById("bfSaveBanner")?.remove();
   };
   const flush = (): void => {
     clearTimeout(timer);
     if (sending) { dirty = true; return; }
-    sending = send().catch(e => banner(`Not saved: ${e}`, "danger")).finally(() => { sending = null; if (dirty) flush(); });
+    sending = send().catch(e => banner("Not saved", `The server could not be reached (${e}). Your edit is still on this page.`, "danger", [{ label: "Try again", run: () => flush(), primary: true }])).finally(() => { sending = null; if (dirty) flush(); });
   };
   const schedule = (): void => { clearTimeout(timer); timer = setTimeout(flush, 400); };
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && timer) flush(); });
@@ -75,7 +95,7 @@ if (boot) {
     const r = await fetch(`${base}/${verb}`, { method: "POST", headers: headers() });
     if (r.ok) return location.reload();
     const j = await r.json().catch(() => ({})) as { error?: string };
-    banner(j.error ?? `The server answered ${r.status}`, "danger");
+    banner(verb === "undo" ? "Nothing undone" : "Nothing redone", j.error ?? `The server answered ${r.status}.`, "danger");
   };
 
   const call = async <T>(method: string, path: string, body?: unknown): Promise<T> => {

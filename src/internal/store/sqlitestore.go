@@ -39,12 +39,12 @@ func OpenSQLite(dir string) (*SQLiteStore, error) {
 	} else {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=secure_delete(1)")
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1) // one writer; keeps every Commit's read-check-write in one connection
-	if _, err := db.Exec(schema + accountsSchema + linksSchema + prefsSchema + sourcesSchema); err != nil {
+	if _, err := db.Exec(schema + accountsSchema + linksSchema + prefsSchema + sourcesSchema + tabNotesSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("sqlite schema: %w", err)
 	}

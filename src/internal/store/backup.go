@@ -25,6 +25,8 @@ type Backup struct {
 	Tabs []TabSnapshot `json:"tabs,omitempty"`
 	// Prefs are the preferences document, as stored.
 	Prefs json.RawMessage `json:"prefs,omitempty"`
+	// TabNotes are the notes on tabs, windows and snapshots.
+	TabNotes []TabNote `json:"tab_notes,omitempty"`
 }
 
 type BackupWorkspace struct {
@@ -75,6 +77,9 @@ func MakeBackup(ctx context.Context, s Store, now time.Time) (Backup, error) {
 			bw.Sources = append(bw.Sources, BackupSource{Source: x, Body: body})
 		}
 		b.Workspaces = append(b.Workspaces, bw)
+	}
+	if b.TabNotes, err = s.TabNotes(ctx); err != nil {
+		return b, err
 	}
 	if b.Links, err = s.Links(ctx, nil); err != nil {
 		return b, err
@@ -171,6 +176,21 @@ func Restore(ctx context.Context, s Store, b Backup, now time.Time) (Restored, e
 	out.Links = len(newer)
 	if err := s.SaveLinks(ctx, newer); err != nil {
 		return out, err
+	}
+	notesHere, err := s.TabNotes(ctx)
+	if err != nil {
+		return out, err
+	}
+	mine := map[string]bool{}
+	for _, n := range notesHere {
+		mine[n.Kind+"\x00"+n.Key] = true
+	}
+	for _, n := range b.TabNotes { // a note already here on the same tab, window or snapshot is kept
+		if !mine[n.Kind+"\x00"+n.Key] {
+			if err := s.SetTabNote(ctx, n); err != nil {
+				return out, err
+			}
+		}
 	}
 	for _, t := range b.Tabs { // a snapshot already here (same id) is kept as it is
 		if _, err := s.TabSnapshot(ctx, t.ID); err == nil {

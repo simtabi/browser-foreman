@@ -38,6 +38,10 @@ how many links opened, never which.
 | `GET /api/v1/tabs/snapshots` | viewer | snapshots newest first, with browsers and counts, no pages; older than `keep_days` only with `?all=1` |
 | `GET /api/v1/tabs/snapshots/{id}` | viewer | one snapshot with its pages |
 | `POST /api/v1/tabs/snapshots/{id}/restore` | owner | reopen its windows, each in a new window of its browser (`{"windows": [0, 2]}` for some) |
+| `POST /api/v1/tabs/snapshots/delete` | owner | delete snapshots for good: `{"ids": [...]}`, `{"before": "2026-11-01"}` or `{"everything": true, "confirm": "DELETE ALL"}`; notes stay |
+| `POST /api/v1/tabs/purge` | owner | forget private windows: `{"level": "pages"}` keeps their counts, `"windows"` removes them; `older_than_hours` limits it to older snapshots |
+| `GET /api/v1/tabs/notes` | viewer | every note and tag on tabs (by address), windows and snapshots |
+| `PUT /api/v1/tabs/notes` | editor | `{"kind": "tab", "key": "https://…", "note": "…", "tags": ["work"]}`; an empty note with no tags removes it |
 | `POST /api/v1/tabs/close` | owner | close tabs, after a snapshot that brings them back; a tab that changed since it was read stays open |
 | `GET /api/v1/tabs/timeline` | viewer | the last `?days` of snapshots with what opened and closed at each |
 | `POST /api/v1/tabs/ages` | viewer | when each address was first seen open |
@@ -62,6 +66,7 @@ how many links opened, never which.
 | `autosave`, `save_mode` | `true`, `change` | snapshots on change, or every `interval_seconds` (`interval`) |
 | `interval_seconds`, `watch_seconds` | 300, 15 | 60–86400; 5–3600 |
 | `include_incognito` | `false` | keep private windows' pages |
+| `incognito_purge_hours` | `0` | after each save, remove the pages of private windows older than this (counts stay); `0` never |
 | `keep_days` | 14 | 1–3650 |
 | `recheck_days` | 7 | re-check links whose last check is older than this; 0 is off |
 

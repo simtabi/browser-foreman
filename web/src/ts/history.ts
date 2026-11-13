@@ -35,7 +35,7 @@ export class HistoryAccessPanel {
       this.render(await api.path("history", "access").get<AccessStatus>());
     } catch {
       this.root.replaceChildren(node("div", "set-title", "Browser history"),
-        node("div", "set-help", "Needs the local server (src/server/serve.py)."));
+        node("div", "set-help", "Needs the Browser Foreman server (browser-foreman serve)."));
     }
     return this;
   }

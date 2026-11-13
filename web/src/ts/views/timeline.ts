@@ -149,7 +149,9 @@ export class TimelineView {
       body.append(head);
       if (s.opened_n != null) {
         const diff = el("div", "tl-ev-diff");
-        diff.append(el("span", "tl-plus", `+${s.opened_n} opened`), el("span", "tl-minus", `−${s.closed_n ?? 0} closed`));
+        if (s.opened_n) diff.append(el("span", "tl-plus", `+${s.opened_n} opened`));
+        if (s.closed_n) diff.append(el("span", "tl-minus", `−${s.closed_n} closed`));
+        if (!s.opened_n && !s.closed_n) diff.append(el("span", "text-secondary", "no change"));
         body.append(diff);
         this.details(body, "Opened", s.opened ?? [], s.opened_n);
         this.details(body, "Closed", s.closed ?? [], s.closed_n ?? 0);
@@ -243,7 +245,7 @@ export class TimelineView {
     rows.forEach((r, k) => {
       const h = r.v / vmax * (H - P.t - P.b);
       const b = svg("rect", { x: P.l + k * bw + Math.min(2, bw * .15), y: H - P.b - h, width: Math.max(1, bw - Math.min(4, bw * .3)), height: h, rx: 2, class: "tl-bar", tabindex: 0 });
-      b.append(svg("title", {}, `${r.k}: ${plural(r.v, "bookmark")} added`));
+      b.append(svg("title", {}, `${byYear ? r.k : monthLabel(r.k, true)}: ${plural(r.v, "bookmark")} added`));
       b.addEventListener("click", () => {
         const [yy, mm] = r.k.split("-").map(Number) as [number, number];
         const from = new Date(yy, byYear ? 0 : mm - 1, 1), to = byYear ? new Date(yy + 1, 0, 1) : new Date(yy, mm, 1);
@@ -252,7 +254,13 @@ export class TimelineView {
       root.append(b);
     });
     const step = Math.ceil(n / 8);
-    rows.forEach((r, k) => { if (k % step === 0) root.append(svg("text", { x: P.l + k * bw + bw / 2, y: H - 6, class: "tl-axis", "text-anchor": "middle" }, byYear ? r.k : r.k.slice(2))); });
+    rows.forEach((r, k) => { if (k % step === 0) root.append(svg("text", { x: P.l + k * bw + bw / 2, y: H - 6, class: "tl-axis", "text-anchor": "middle" }, byYear ? r.k : monthLabel(r.k))); });
     return root;
   }
+}
+
+/** "2026-11" as people read it: "Nov 26" on the axis, "November 2026" in full. */
+function monthLabel(k: string, full = false): string {
+  const [y, m] = k.split("-").map(Number) as [number, number];
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, full ? { month: "long", year: "numeric" } : { month: "short", year: "2-digit" });
 }

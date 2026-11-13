@@ -146,6 +146,15 @@ func Migrate(ctx context.Context, src, dst Store) (workspaces, entries int, err 
 			return workspaces, entries, err
 		}
 	}
+	notes, err := src.TabNotes(ctx)
+	if err != nil {
+		return workspaces, entries, err
+	}
+	for _, n := range notes {
+		if err := dst.SetTabNote(ctx, n); err != nil {
+			return workspaces, entries, err
+		}
+	}
 	tabs, err := src.TabSnapshots(ctx, 0)
 	if err != nil {
 		return workspaces, entries, err

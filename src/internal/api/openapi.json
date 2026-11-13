@@ -1632,6 +1632,60 @@
           }
         }
       }
+    },
+    "/api/v1/tabs/snapshots/delete": {
+      "post": {
+        "summary": "Delete snapshots for good: {ids} or {before: \"YYYY-MM-DD\"} or {everything: true, confirm: \"DELETE ALL\"}; notes stay",
+        "tags": [
+          "Tabs"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/tabs/purge": {
+      "post": {
+        "summary": "Forget private windows in saved snapshots: {level: \"pages\" (counts stay) or \"windows\", older_than_hours}",
+        "tags": [
+          "Tabs"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/tabs/notes": {
+      "get": {
+        "summary": "Every note and tag on tabs, windows and snapshots, newest first",
+        "tags": [
+          "Tabs"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      },
+      "put": {
+        "summary": "Save a note and tags: {kind: \"tab\"|\"window\"|\"snapshot\", key, note, tags}; an empty one removes it",
+        "tags": [
+          "Tabs"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
     }
   }
 }

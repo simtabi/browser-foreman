@@ -91,8 +91,17 @@ ships.
   Safari's `Bookmarks.plist`. `GET /api/v1/profiles` finds every browser profile's bookmarks file on macOS, Linux
   and Windows (Chromium profiles by the names the browser shows), and says why one cannot be read (Full Disk Access
   on macOS). Owners can merge one in with `?path=`, which Update then reads again; only bookmarks file names open.
+- Tab notes, deleting snapshots and purging private pages: `GET/PUT /api/v1/tabs/notes`,
+  `POST /api/v1/tabs/snapshots/delete` and `POST /api/v1/tabs/purge` (owners), with `incognito_purge_hours` applied
+  after each automatic save; notes travel in backups, `storage migrate` and the Python migration. The page's notes,
+  delete and purge controls now work instead of answering "not available yet".
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed
 
+- The web interface: counts agree everywhere (the Trash is counted on its own), the tree header no longer wraps,
+  a save refused because the bookmarks changed elsewhere shows a Tabler alert with Reload and Keep my change, Open
+  tabs shows a loading state, the Timeline drops "−0 closed" and names months, link health says Skipped for links
+  it does not visit, same-named folders show their parent, the theme is set before the page paints, and texts that
+  still named the Python server now name `browser-foreman serve`.
 - `GET /api/v1/events` now needs a viewer (a token or a session), like reading bookmarks.

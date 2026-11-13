@@ -327,6 +327,12 @@ def tabs(root, backup):
                            "incognito_tabs": s["incognito_tabs"], "running": len(browsers)},
                "fingerprint": f"py-{s['fingerprint']}"}
         backup["tabs"].append({"id": s["id"], "at": at, "reason": s["reason"] or "auto", "windows": doc})
+    try:  # notes on tabs, windows and snapshots
+        for n in c.execute("SELECT kind, key, note, tags, updated FROM notes"):
+            backup.setdefault("tab_notes", []).append({"kind": n["kind"], "key": n["key"], "note": n["note"],
+                                                       "tags": json.loads(n["tags"] or "[]"), "updated": iso(n["updated"])})
+    except sqlite3.OperationalError:
+        pass  # a database from before notes existed
     c.close()
 
 

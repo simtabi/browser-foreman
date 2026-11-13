@@ -65,7 +65,7 @@ let mode = "g", filter = "all", rows = [], sel = 0, anchor = null;
 const marked = new Set();
 
 // ---------- storage (a per-viewer convenience; the page works without it) ----------
-// Served by src/server/serve.py, the edits (tree, link updates, refresh results) belong to a workspace kept on disk with its
+// Served by browser-foreman serve, the edits (tree, link updates, refresh results) belong to a workspace kept on disk with its
 // history (src/web/ts/ws_client.js); opened as a plain file, they stay in this browser as before.
 const WS = window.BM_WS && window.BM_WS.get ? window.BM_WS : null;
 const store = {
@@ -575,7 +575,7 @@ const TABS = (() => {
   async function open() {
     if (loading) return; loading = true;
     loadNotes();
-    if (cur === "live" && !READ.current?._got) placeholder();
+    if (!$("#tabsBody").childElementCount || (cur === "live" && !READ.current?._got)) placeholder();
     try { await Promise.all([refreshList(), loadLive()]); await select(cur); } finally { loading = false; }
   }
   async function select(id) {
@@ -910,7 +910,7 @@ async function tokenPost(url, body) {
 on("#tourBtn", () => tour(0));
 // ---------- import, export, history, workspaces: one place for everything that moves bookmarks in or out ----------
 const wsUI = () => (WS && WS.ui) || (window.BM_WS && window.BM_WS.ui) || null;
-const needServer = what => toast(`${what} needs the local server with workspaces. Start it with: python3 src/server/serve.py`, "warning", "Not available in this copy");
+const needServer = what => toast(`${what} needs the Browser Foreman server. Start it with: browser-foreman serve`, "warning", "Not available in this copy");
 const IO = {
   importer: () => wsUI() ? wsUI().importer() : needServer("Importing"),
   exportHtml: () => wsUI()?.download ? wsUI().download("html") : wsUI() ? wsDownload("html") : downloadFile(),
@@ -945,12 +945,12 @@ function paintIoMenu() {
   item("ti-file-zip", "Back up everything…", () => wsUI()?.backup ? wsUI().backup() : needServer("Backup"), "Workspaces, tab history and settings in one file");
   item("ti-restore", "Restore from a backup…", () => wsUI()?.restore ? wsUI().restore() : needServer("Restore"), "Your current state is kept aside first");
   // MCP access (Claude) is in Settings › Assistants.
-  if (!ws) m.append(el("div", "dropdown-item-text text-secondary small px-3 pb-2", "Import, history and workspaces need the local server (src/server/serve.py)."));
+  if (!ws) m.append(el("div", "dropdown-item-text text-secondary small px-3 pb-2", "Import, history and workspaces need the Browser Foreman server (browser-foreman serve)."));
 }
 setTimeout(paintIoMenu, 0);
 // ---------- footer: what this is, whether the local server is answering, where edits are kept, and the links ----------
 function paintFooter() {
-  $("#navBmCount").textContent = DATA.keep.length.toLocaleString();
+  $("#navBmCount").textContent = liveItems().length.toLocaleString();  // the Trash is counted on its own button
   $("#footName").textContent = APP.name; $("#footVer").textContent = "v" + APP.version;
   $("#footCopy").textContent = `© ${APP.year} ${APP.org} · MIT`;
   $("#footBuilt").textContent = DATA.built ? `Built ${fmtDate(Date.parse(DATA.built) / 1000)}` : "";
@@ -966,7 +966,7 @@ async function pingServer() {
     serverUp = up; const f = $("#footServer");
     f.querySelector(".status-dot").className = "status-dot " + (up ? "on" : "off");
     f.lastElementChild.textContent = up ? "Local server running" : "Local server off";
-    f.dataset.tip = up ? "Refresh, opening links in your browsers and saving work. It answers only this computer." : "Start src/server/serve.py to refresh links, open them in Chrome and save to a workspace. Browsing works without it.";
+    f.dataset.tip = up ? "Refresh, opening links in your browsers and saving work. It answers only this computer." : "Start browser-foreman serve to check links, open them in your browsers and save your changes. Browsing works without it.";
   }
   setTimeout(pingServer, up ? 30000 : 10000);
 }
@@ -1077,18 +1077,16 @@ function openAbout(tab = "about") {
       b.append(fg);
     } else if (t === "privacy") {
       h("Your data stays on this computer");
-      p("Your bookmarks, edits and notes are kept in files in this folder and in this browser's storage. Nothing is uploaded, and there is no tracking or analytics.");
+      p("Your bookmarks, their history, link checks and tab snapshots are kept by the Browser Foreman server on this computer (in ~/.local/state/browser-foreman unless you chose another place), and a few view settings in this browser's storage. Nothing is uploaded, and there is no tracking or analytics.");
       h("What the link checker does");
       p("To check a link it visits that page, as a browser would, a few at a time and politely, with no cookies and no sign-ins. Sign-out, delete and unsubscribe links are never visited. The sites you bookmarked see an ordinary visit from your internet address.");
-      h("Snapshots");
-      p("Page snapshots are taken by your installed Chrome in a throwaway profile, so no account, password or cookie of yours is used. They are saved as small pictures in the thumbs folder.");
       h("Open tabs");
-      p("To keep track of your tabs, the local server asks Chrome, Edge, Brave and Safari which windows and tabs are open, using macOS's own Automation permission, which you grant once per browser. It never opens, closes or changes a tab. Snapshots go into one database on this computer (sessions/tabs.sqlite3), which the server never serves.");
-      p("Incognito: you choose whether to keep incognito pages or only their counts, and whether to purge them automatically after an hour, a day, a week or a month. A purge overwrites the pages in the database file; it does not just hide them.");
-      h("The local server");
-      p("src/server/serve.py answers only on this computer (127.0.0.1) and only to this page. It can open links in Chrome and run refreshes; it cannot read or change anything outside this folder.");
+      p("To keep track of your tabs, the server asks your browsers which windows and tabs are open: on macOS through its Automation permission, which you grant once per browser, or through the Browser Foreman extension once you pair it. It opens or closes a tab only when you ask. Snapshots are kept with your other data on this computer.");
+      p("Private windows: you choose whether to keep their pages or only their counts. Unless you keep them, only the number of private windows and tabs is stored.");
+      h("The server");
+      p("browser-foreman serve answers only on this computer (127.0.0.1) unless you set it up for several people, and every change needs this page's token or a signed-in person. It reads your browsers' bookmarks files only when you ask it to, and only files named like bookmarks.");
       h("Backups and safety");
-      p("Your original export is kept read-only in the backup folder. Nothing is deleted for good without a confirmation, and Settings → Factory reset downloads your edits before clearing anything.");
+      p("Every change is an entry in the workspace's history, so undo and History bring back anything. Removed bookmarks go to the workspace's Trash first. Back up everything… writes one file with every workspace, its history, link checks, tab snapshots and settings, and never passwords or tokens.");
     } else {
       h(`${APP.name} ${APP.version}`);
       p(`Copyright © ${APP.year} ${APP.org}. Released under the MIT licence.`);
@@ -1182,14 +1180,15 @@ function dupesTree() {
 
 function build(keepView = false) {
   indexParents(st().root);
-  try { paintTrashBadge(); paintChipCounts(); updateAllLabel(); } catch {}
+  try { paintTrashBadge(); paintChipCounts(); updateAllLabel(); $("#navBmCount").textContent = liveItems().length.toLocaleString(); } catch {}
   const root = readOnly() ? dupesTree() : grouped() ? virtualTree() : st().root;
   if (readOnly()) indexParents(root);
   const match = matcher(), auto = filtering();
   const count = new Map();
   const cnt = f => { let c = 0; for (const x of f.c) c += isFolder(x) ? cnt(x) : (match(x) ? 1 : 0); count.set(f, c); return c; };
-  const total = cnt(root);
   const t = grouped() ? -1 : root.c.findIndex(x => isFolder(x) && x.n === TRASH);
+  // The title counts what is outside the Trash, as All bookmarks does; the Trash row shows its own count.
+  const total = cnt(root) - (t >= 0 ? count.get(root.c[t]) || 0 : 0);
   if (t >= 0 && t !== root.c.length - 1) root.c.push(...root.c.splice(t, 1));
   rows = [];
   // A filter, a search or the duplicates view opens every folder with a match; folders closed by hand while it is on
@@ -1212,9 +1211,17 @@ function build(keepView = false) {
   // The duplicates view is a read-only list (copies merged into the bookmarks kept): say so where the hints are, so a
   // drag that cannot happen there does not read as broken.
   const hint = $("#treeHint");
-  if (hint) { hint.textContent = readOnly() ? "Read-only: merged copies, not in your tree · → open · ← close" : "Drag to move · → open · ← close · Space select · . menu";
-    hint.dataset.tip = readOnly() ? "These copies were merged into the bookmarks you kept. Open, copy or look them up here; to move bookmarks, use All bookmarks." : ""; }
-  $("#treeTitle").textContent = (readOnly() ? "Removed duplicates" : grouped() ? "Grouped by " + $("#v-group").selectedOptions[0].text.toLowerCase() : "Folders") + ` · ${total.toLocaleString()}`;
+  if (hint) {
+    const keys = el("button", "btn btn-ghost-secondary btn-icon btn-sm"); keys.type = "button"; keys.setAttribute("aria-label", "Keyboard shortcuts"); keys.append(icon("ti-keyboard"));
+    keys.dataset.tip = (readOnly() ? "" : "Drag to move. ") + "→ open · ← close · Space select · . menu. Click for every shortcut.";
+    keys.onclick = () => openShortcuts();
+    const parts = [keys];
+    if (readOnly()) { const b = el("span", "badge bg-yellow-lt"); b.append(icon("ti-lock", "me-1"), "Read-only"); b.dataset.tip = "These copies were merged into the bookmarks you kept. Open, copy or look them up here; to move bookmarks, use All bookmarks."; parts.unshift(b); }
+    hint.replaceChildren(...parts);
+  }
+  const tt = $("#treeTitle");
+  tt.replaceChildren(readOnly() ? "Removed duplicates" : grouped() ? "Grouped by " + $("#v-group").selectedOptions[0].text.toLowerCase() : "Folders",
+    el("span", "badge bg-secondary-lt ms-2", total.toLocaleString()));
   sel = Math.min(sel, Math.max(rows.length - 1, 0));
   draw(); if (!keepView) show();
 }
@@ -1528,7 +1535,7 @@ async function refresh(all = false) {
     try {
       res = await fetch("api/refresh", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({items: ids.map(id => ({id, u: ITEM.get(id).u}))})});
       if (!res.ok) throw new Error(res.status);
-    } catch { return toast("Start it with src/server/serve.py, then try again.", "danger", "The preview server isn't answering"); }
+    } catch { return toast("Start it with browser-foreman serve, then try again.", "danger", "The server isn't answering"); }
     ({job, total} = await res.json());
   }
   jobRunning = true;

@@ -32,7 +32,7 @@ export class TabsSettingsPanel {
   paint(cfg: TabSettings | null, stat: TabStatus): this {
     this.cfg = cfg; this.stat = stat;
     const box = this.box; box.replaceChildren();
-    if (!cfg) { box.append(el("div", "text-secondary small", "Tab tracking needs the local server (src/server/serve.py).")); return this; }
+    if (!cfg) { box.append(el("div", "text-secondary small", "Tab tracking needs the Browser Foreman server (browser-foreman serve).")); return this; }
     box.append(el("div", "tabs-set-title", "Saving"),
       this.row(this.toggle("autosave", "Save automatically", "Snapshots open tabs in the background; an unchanged set is never stored again."), this.modeSelect()),
       cfg.save_mode === "interval"

@@ -22,6 +22,9 @@ type Prefs struct {
 	WatchSeconds    int    `json:"watch_seconds"`
 	// IncludeIncognito keeps private windows' pages in snapshots; otherwise only how many tabs they had.
 	IncludeIncognito bool `json:"include_incognito"`
+	// IncognitoPurgeHours removes the pages of private windows older than this many hours after each save (their
+	// counts stay); 0 never does.
+	IncognitoPurgeHours int `json:"incognito_purge_hours"`
 	// KeepDays: snapshots older than this are hidden from lists (never deleted).
 	KeepDays int `json:"keep_days"`
 	// RecheckDays re-checks every bookmarked link this often; 0 is off.
@@ -51,6 +54,8 @@ func (p Prefs) Validate() error {
 		return errors.New("keep_days: 1 to 3650")
 	case p.RecheckDays < 0 || p.RecheckDays > 365:
 		return errors.New("recheck_days: 0 (off) to 365")
+	case p.IncognitoPurgeHours < 0 || p.IncognitoPurgeHours > 24*365:
+		return errors.New("incognito_purge_hours: 0 (never) to 8760")
 	}
 	for _, n := range append(append([]string{}, p.OpenWith...), p.Tracked...) {
 		if n == "" || len(n) > 60 {

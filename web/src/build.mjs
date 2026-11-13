@@ -19,3 +19,9 @@ await build({
   outfile: join(root, "dist", "assets", "js", "v1.js"),
   bundle: true, format: "iife", target: "es2022", minify: true, sourcemap: true, legalComments: "eof", logLevel: "info",
 });
+// The theme, set before first paint (a classic script in <head>).
+await build({
+  entryPoints: [join(here, "ts", "theme-early.ts")],
+  outfile: join(root, "dist", "assets", "js", "theme.js"),
+  bundle: true, format: "iife", target: "es2022", minify: true, legalComments: "eof", logLevel: "info",
+});

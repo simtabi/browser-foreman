@@ -57,6 +57,9 @@ of that buffer, the stream starts with `: some events were missed; reload the st
 | `tabs.snapshot.saved` | `{id, reason, windows, tabs, incognito_windows, incognito_tabs}`; never pages |
 | `tabs.closed` | `{closed, skipped, undo_snapshot}` |
 | `tabs.restored` | `{id, windows}` |
+| `tabs.noted` | `{kind, key, removed}`; never the note itself |
+| `tabs.deleted` | `{deleted}` |
+| `tabs.purged` | `{level, snapshots, windows}` |
 | `links.opened` | `{count, how, browsers, ok}`; never the links |
 | `preferences.updated` | `{open_with, autosave}` |
 | `extension.paired` | `{browser, token}` (the token's id, never the secret) |

@@ -294,3 +294,43 @@ func TestSourcesFromAFileOnThisComputer(t *testing.T) {
 		t.Fatalf("editor listed profiles: %d", w.Code)
 	}
 }
+
+func TestTabNotesDeleteAndPurgeRoutes(t *testing.T) {
+	s := seeded(t)
+	h := s.Handler()
+	if w := send(h, "PUT", "/api/v1/tabs/notes", `{"kind":"tab","key":"https://go.dev/","note":" read ","tags":["b","a","a"," "]}`); w.Code != 200 || !strings.Contains(w.Body.String(), `"tags":["a","b"]`) {
+		t.Fatalf("note %d %s", w.Code, w.Body)
+	}
+	if w := send(h, "GET", "/api/v1/tabs/notes", ""); !strings.Contains(w.Body.String(), `"note":"read"`) {
+		t.Fatalf("notes %s", w.Body)
+	}
+	if w := send(h, "PUT", "/api/v1/tabs/notes", `{"kind":"bookmark","key":"x"}`); w.Code != 400 {
+		t.Fatalf("bad kind %d", w.Code)
+	}
+	for body, code := range map[string]int{
+		`{}`:                                  400,
+		`{"everything":true}`:                 400,
+		`{"ids":["a"],"before":"2026-11-01"}`: 400,
+		`{"everything":true,"confirm":"DELETE ALL"}`: 200,
+		`{"ids":["2026-11-01_000000"]}`:              200,
+	} {
+		if w := send(h, "POST", "/api/v1/tabs/snapshots/delete", body); w.Code != code {
+			t.Errorf("%s: %d, want %d (%s)", body, w.Code, code, w.Body)
+		}
+	}
+	if w := send(h, "POST", "/api/v1/tabs/purge", `{"level":"pages"}`); w.Code != 200 || !strings.Contains(w.Body.String(), `"level":"pages"`) {
+		t.Fatalf("purge %d %s", w.Code, w.Body)
+	}
+	if w := send(h, "POST", "/api/v1/tabs/purge", `{"level":"all"}`); w.Code != 400 {
+		t.Fatalf("bad level %d", w.Code)
+	}
+	s.Cfg.Server.Mode = "accounts"
+	p := pw(t)
+	addUser(t, s, "ed", store.RoleEditor, p)
+	_, ed := signIn(t, h, "ed", p)
+	for _, path := range []string{"/api/v1/tabs/purge", "/api/v1/tabs/snapshots/delete"} {
+		if w := ed.do(h, "POST", path, `{"level":"pages","before":"2026-11-01"}`, true); w.Code != 403 {
+			t.Errorf("editor %s: %d", path, w.Code)
+		}
+	}
+}

@@ -49,7 +49,9 @@ def make_root(tmp):
     c.executescript("""CREATE TABLE settings (key TEXT, value TEXT);
       CREATE TABLE snapshots (id TEXT, at TEXT, reason TEXT, fingerprint TEXT, windows INT, tabs INT, incognito_windows INT, incognito_tabs INT, browsers TEXT, hidden INT);
       CREATE TABLE windows (snapshot_id TEXT, seq INT, browser TEXT, idx INT, mode TEXT, active INT, tab_count INT, pages_kept INT);
-      CREATE TABLE tabs (snapshot_id TEXT, window_seq INT, pos INT, url TEXT, title TEXT);""")
+      CREATE TABLE tabs (snapshot_id TEXT, window_seq INT, pos INT, url TEXT, title TEXT);
+      CREATE TABLE notes (kind TEXT, key TEXT, note TEXT, tags TEXT, updated TEXT);""")
+    c.execute("INSERT INTO notes VALUES ('tab', 'https://go.dev/', 'read later', '[\"go\"]', '2026-11-12T07:30:00-0500')")
     c.executemany("INSERT INTO settings VALUES (?, ?)", [("interval", "120"), ("include_incognito", "false"), ("open_with", '"Safari"'), ("onboarded_browsers", "true")])
     c.execute("INSERT INTO snapshots VALUES ('2026-11-12_072137', '2026-11-12T07:21:37-0500', 'auto', 'fp', 1, 1, 1, 2, '[]', 0)")
     c.executemany("INSERT INTO windows VALUES (?,?,?,?,?,?,?,?)", [("2026-11-12_072137", 0, "Google Chrome", 1, "normal", 1, 1, 1), ("2026-11-12_072137", 1, "Google Chrome", 2, "incognito", 1, 2, 0)])
@@ -90,6 +92,7 @@ class ExportTest(unittest.TestCase):
             self.assertEqual(wins[0]["tabs"][0]["url"], "https://go.dev/")
             self.assertEqual((wins[1].get("tabs"), wins[1]["tab_count"], wins[1]["redacted"]), (None, 2, True), "pages not kept stay out")
             self.assertEqual(b["prefs"], {"interval_seconds": 120, "include_incognito": False, "open_with": ["Safari"]})
+            self.assertEqual(b["tab_notes"], [{"kind": "tab", "key": "https://go.dev/", "note": "read later", "tags": ["go"], "updated": "2026-11-12T07:30:00-05:00"}])
             with self.assertRaises(SystemExit):
                 X.main(["--root", tmp, "--out", out])  # never overwrites
 

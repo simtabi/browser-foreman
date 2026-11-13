@@ -9,13 +9,13 @@ export interface Answer { status: number; body: unknown }
 export function legacySettings(p: any): Record<string, unknown> {
   return { autosave: p.autosave, interval: p.interval_seconds, include_incognito: p.include_incognito, keep_days: p.keep_days,
     save_mode: p.save_mode, watch_seconds: p.watch_seconds, recheck_days: p.recheck_days, tracked_browsers: p.tracked ?? null,
-    open_with: p.open_with, onboarded_browsers: true };
+    open_with: p.open_with, incognito_purge_hours: p.incognito_purge_hours ?? 0, onboarded_browsers: true };
 }
 export function v1Settings(s: Record<string, any>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const map: Record<string, string> = { autosave: "autosave", interval: "interval_seconds", include_incognito: "include_incognito",
     keep_days: "keep_days", save_mode: "save_mode", watch_seconds: "watch_seconds", recheck_days: "recheck_days",
-    tracked_browsers: "tracked", open_with: "open_with" };
+    tracked_browsers: "tracked", open_with: "open_with", incognito_purge_hours: "incognito_purge_hours" };
   for (const [k, v] of Object.entries(s)) if (k in map) out[map[k]!] = k === "open_with" && typeof v === "string" ? [v] : v;
   return out;
 }
@@ -42,7 +42,7 @@ export async function legacy(method: string, path: string, query: string, body: 
       case "tabs": return ok(await call("GET", "tabs"));
       case "tabs/snapshots": return ok(await call("GET", "tabs/snapshots" + q));
       case "tabs/timeline": return ok(await call("GET", "tabs/timeline" + q));
-      case "tabs/notes": return ok({ notes: [] });
+      case "tabs/notes": return ok(await call("GET", "tabs/notes"));
       case "tabs/status": return ok({ settings: legacySettings(await call("GET", "preferences")), last_auto: null });
       case "tabs/browsers": {
         const b = await call("GET", "browsers");
@@ -57,7 +57,7 @@ export async function legacy(method: string, path: string, query: string, body: 
           newly_broken: r.newly_broken, fixed: r.fixed, state: r.done ? (r.state === "cancelled" ? "cancelled" : "done") : "running" })) });
       }
       case "history/access": return ok({ browsers: [] });
-      case "profiles": return ok({ profiles: [] });
+      case "profiles": return ok(await call("GET", "profiles"));
       case "token": return ok({ token: "" });
     }
     if (path.startsWith("tabs/snapshots/")) {
@@ -82,9 +82,9 @@ export async function legacy(method: string, path: string, query: string, body: 
       return ok({ closed: r.closed, skipped: (r.skipped ?? []).length, details: (r.skipped ?? []).map((why: string) => ({ why })), undo_snapshot: r.undo_snapshot });
     }
     case "tabs/ages": return ok(await call("POST", "tabs/ages", { urls: body?.urls ?? [] }));
-    case "tabs/note": return NOT_YET("Notes on tabs");
-    case "tabs/delete": return NOT_YET("Deleting snapshots");
-    case "tabs/purge": return NOT_YET("Purging private pages");
+    case "tabs/note": return ok((await call("PUT", "tabs/notes", { kind: body?.kind, key: body?.key, note: body?.note ?? "", tags: body?.tags ?? [] })).note);
+    case "tabs/delete": return ok({ ...(await call("POST", "tabs/snapshots/delete", body ?? {})), files: 0 });
+    case "tabs/purge": return ok(await call("POST", "tabs/purge", { level: body?.level ?? "pages", older_than_hours: Number(body?.older_than_hours) || 0 }));
     case "open": {
       const urls: string[] = body?.urls ?? [];
       const browsers = body?.browser ? [body.browser] : body?.browsers;

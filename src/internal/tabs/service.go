@@ -260,8 +260,13 @@ func (s *Service) Autosave(ctx context.Context, onSaved func(Saved)) {
 		if !p.Autosave {
 			continue
 		}
-		if saved, err := s.Take(ctx, "auto", false); err == nil && saved.Stored && onSaved != nil {
-			onSaved(saved)
+		if saved, err := s.Take(ctx, "auto", false); err == nil && saved.Stored {
+			if onSaved != nil {
+				onSaved(saved)
+			}
+			if p.IncognitoPurgeHours > 0 { // private pages older than the owner chose do not outlive a save
+				_, _ = s.Purge(ctx, "pages", time.Duration(p.IncognitoPurgeHours)*time.Hour)
+			}
 		}
 	}
 }

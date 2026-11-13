@@ -57,6 +57,12 @@ assert.deepEqual([a.body.recheck_days, a.body.runs[0].run_id, a.body.runs[0].new
 a = await run("POST", "rechecks/run", "", {});
 assert.equal(calls.at(-1), 'POST linkchecks {"workspace":"main"}');
 
-assert.equal((await run("POST", "tabs/delete", "", {})).status, 501, "unported features answer plainly");
+a = await run("POST", "tabs/delete", "", { before: "2026-11-01" });
+assert.equal(calls.at(-1), 'POST tabs/snapshots/delete {"before":"2026-11-01"}', "deleting snapshots goes to v1");
+a = await run("POST", "tabs/purge", "", { level: "windows", older_than_hours: "24" });
+assert.equal(calls.at(-1), 'POST tabs/purge {"level":"windows","older_than_hours":24}');
+a = await run("POST", "tabs/note", "", { kind: "tab", key: "https://go.dev/", note: "read" });
+assert.equal(calls.at(-1), 'PUT tabs/notes {"kind":"tab","key":"https://go.dev/","note":"read","tags":[]}');
+assert.equal((await run("POST", "history/access/open-settings", "", {})).status, 501, "unported features answer plainly");
 assert.equal(await run("GET", "ws/main/history", "", undefined), null, "unknown calls are not swallowed");
-console.log("v1-compat: 16 checks passed");
+console.log("v1-compat: 19 checks passed");

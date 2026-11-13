@@ -206,6 +206,7 @@ type Store interface {
 	Links
 	PrefsStore
 	Sources
+	TabExtras
 
 	Close() error
 }
