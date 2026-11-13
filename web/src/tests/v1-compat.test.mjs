@@ -63,6 +63,7 @@ a = await run("POST", "tabs/purge", "", { level: "windows", older_than_hours: "2
 assert.equal(calls.at(-1), 'POST tabs/purge {"level":"windows","older_than_hours":24}');
 a = await run("POST", "tabs/note", "", { kind: "tab", key: "https://go.dev/", note: "read" });
 assert.equal(calls.at(-1), 'PUT tabs/notes {"kind":"tab","key":"https://go.dev/","note":"read","tags":[]}');
-assert.equal((await run("POST", "history/access/open-settings", "", {})).status, 501, "unported features answer plainly");
+await run("POST", "history/access/open-settings", "", {});
+assert.equal(calls.at(-1), "POST history/access/open-settings", "opening System Settings goes to v1");
 assert.equal(await run("GET", "ws/main/history", "", undefined), null, "unknown calls are not swallowed");
 console.log("v1-compat: 19 checks passed");

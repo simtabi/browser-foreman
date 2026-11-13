@@ -95,6 +95,10 @@ ships.
   `POST /api/v1/tabs/snapshots/delete` and `POST /api/v1/tabs/purge` (owners), with `incognito_purge_hours` applied
   after each automatic save; notes travel in backups, `storage migrate` and the Python migration. The page's notes,
   delete and purge controls now work instead of answering "not available yet".
+- Browser history: `GET /api/v1/history` (owners) reads every Chromium, Firefox and Safari profile through copies,
+  one row per address, marking what a workspace already has; `GET /api/v1/history/access` and
+  `POST …/open-settings` check and open Full Disk Access on macOS. Nothing read is stored or published. The page has
+  a Browser history window that saves chosen pages as bookmarks.
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed

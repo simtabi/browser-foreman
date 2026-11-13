@@ -13,6 +13,7 @@ export interface AccessStatus {
   browsers: { browser: string; state: AccessState }[];
   granted: boolean;
   blocked: number;
+  /** The program that needs the access (the older Python panel called it python). */
   python: string;
   launched_by: string;
 }
@@ -46,18 +47,17 @@ export class HistoryAccessPanel {
     txt.append(
       node("div", "set-label", s.granted ? "Full Disk Access granted" : `${s.blocked} browser${s.blocked === 1 ? "" : "s"} blocked`),
       node("div", "set-help", s.granted
-        ? "The server can read your browsers' visit history. Nothing is read until the history view is built."
+        ? "The server can read your browsers' visit history. It is read only when you open Browser history, and never kept."
         : "macOS keeps every browser's history behind Full Disk Access. Add the app that runs the server"
           + (s.launched_by ? ` (${s.launched_by})` : "") + " in System Settings › Privacy & Security › Full Disk Access, "
-          + "then quit and reopen it and start the server again. Until then the history view stays off; the Go version "
-          + "will ask for this access by its own name."));
+          + "then quit and reopen it and start the server again. Until then those browsers are left out of Browser history."));
     const acts = node("div", "d-flex gap-2 flex-wrap");
     if (!s.granted) acts.append(this.button("Open Full Disk Access", "ti-shield-lock", "open-fda", () => this.openSettings(), "btn-primary"));
     acts.append(this.button("Check again", "ti-refresh", "recheck-access", () => void this.refresh(), "btn-outline-secondary"));
     head.append(txt, acts);
     const list = node("div", "set-help");
     list.textContent = present.map(b => `${b.browser}: ${LABEL[b.state]}`).join(" · ") || "No supported browser found.";
-    const py = node("div", "set-help text-truncate", `Python: ${s.python}`);
+    const py = node("div", "set-help text-truncate", `Program: ${s.python}`);
     py.title = s.python;
     this.root.replaceChildren(node("div", "set-title", "Browser history"), head, list, py);
   }

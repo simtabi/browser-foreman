@@ -226,6 +226,98 @@ function install(W: V1): void {
     } catch (e) { fail(e); }
   }
 
+  // Browser history: pages visited, across browsers, read when this opens and never kept. Pages not bookmarked here
+  // can be saved, as a new folder in Saved tabs.
+  type Visit = { url: string; title: string; last: string; visits: number; browser: string; profile?: string; bookmarked?: boolean };
+  function browserHistory(): void {
+    const { body, foot } = modal("v1History2", "Browser history");
+    const bar = el("div", "row g-2 align-items-center mb-3");
+    const qWrap = el("div", "col-12 col-md"), qIcon = el("div", "input-icon");
+    const q = el("input", "form-control"); q.type = "search"; q.placeholder = "Search titles and addresses…"; q.setAttribute("aria-label", "Search history");
+    const qi = el("span", "input-icon-addon"); qi.append(icon("ti-search"));
+    qIcon.append(qi, q); qWrap.append(qIcon);
+    const days = el("select", "form-select"); days.setAttribute("aria-label", "How far back");
+    for (const [v, t] of [["1", "Today"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 3 months"], ["365", "Last year"]]) days.append(new Option(t, v));
+    days.value = "30";
+    const dWrap = el("div", "col-6 col-md-auto"); dWrap.append(days);
+    const sw = el("label", "form-check form-switch mb-0"), only = el("input", "form-check-input"); only.type = "checkbox"; only.checked = true;
+    sw.append(only, el("span", "form-check-label", "Not bookmarked only"));
+    const sWrap = el("div", "col-6 col-md-auto"); sWrap.append(sw);
+    bar.append(qWrap, dWrap, sWrap);
+    const note = el("div"), list = el("div", "list-group list-group-flush border rounded"), status = el("div", "text-secondary small me-auto");
+    body.append(bar, note, list);
+    const save = el("button", "btn btn-primary"); save.type = "button"; save.disabled = true;
+    const close = el("button", "btn"); close.type = "button"; close.textContent = "Close"; close.onclick = () => hideModal("#v1History2");
+    foot.append(status, close, save);
+    const picked = new Set<string>();
+    let rows: Visit[] = [], timer: ReturnType<typeof setTimeout> | undefined, blockedAll = false;
+    const paintSave = () => { save.disabled = !picked.size || !!W.locked; save.replaceChildren(icon("ti-bookmark-plus", "me-1"), picked.size ? `Save ${picked.size} as bookmarks` : "Save as bookmarks"); };
+    const paint = () => {
+      const shown = only.checked ? rows.filter(r => !r.bookmarked) : rows;
+      list.replaceChildren();
+      if (!shown.length && blockedAll) { list.replaceChildren(); list.hidden = true; status.textContent = ""; return; }
+      list.hidden = false;
+      if (!shown.length) {
+        const e = el("div", "empty py-4"); e.append(el("div", "empty-icon"), el("p", "empty-title", rows.length ? "Every page here is bookmarked" : "No visits match"),
+          el("p", "empty-subtitle text-secondary", rows.length ? "Turn off Not bookmarked only to see them." : "Try other words or a longer time."));
+        e.querySelector(".empty-icon")?.append(icon("ti-history"));
+        list.append(e);
+      }
+      for (const r of shown.slice(0, 500)) {
+        const row = el("label", "list-group-item d-flex align-items-center gap-3");
+        const box = el("input", "form-check-input m-0 flex-none"); box.type = "checkbox"; box.checked = picked.has(r.url); box.disabled = !!r.bookmarked;
+        box.onchange = () => { if (box.checked) picked.add(r.url); else picked.delete(r.url); paintSave(); };
+        const txt = el("div", "min-w-0 flex-fill"), a = el("a", "text-reset d-block text-truncate", r.title || r.url);
+        a.href = r.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+        txt.append(a, el("div", "text-secondary small text-truncate", r.url));
+        const meta = el("div", "text-end flex-none small");
+        meta.append(el("div", "text-secondary", fmtDate(Date.parse(r.last) / 1000)), el("div", "text-secondary", `${r.browser} · ${r.visits} visit${r.visits === 1 ? "" : "s"}`));
+        if (r.bookmarked) { const b = el("span", "badge bg-green-lt flex-none"); b.append(icon("ti-bookmark", "me-1"), "Bookmarked"); row.append(box, txt, b, meta); }
+        else row.append(box, txt, meta);
+        list.append(row);
+      }
+      status.textContent = `${shown.length.toLocaleString()} page${shown.length === 1 ? "" : "s"}` + (shown.length > 500 ? " (first 500 shown)" : "");
+    };
+    const load = async () => {
+      list.replaceChildren(); const sp = el("div", "p-4 text-center text-secondary"); sp.append(el("span", "spinner-border spinner-border-sm me-2"), "Reading your browsers' history…"); list.append(sp);
+      try {
+        const p = new URLSearchParams({ days: days.value, limit: "2000", workspace: W.id }); if (q.value.trim()) p.set("q", q.value.trim());
+        const j = await W.call<{ visits: Visit[]; read: number; skipped: { Browser: string; Profile: string; Why: string }[] }>("GET", `history?${p}`);
+        rows = j.visits; note.replaceChildren();
+        blockedAll = !j.read && j.skipped.length > 0;
+        if (j.skipped.length) {
+          // One line per reason, naming the browsers it applies to, and the way out where there is one.
+          const byWhy = new Map<string, string[]>();
+          for (const x of j.skipped) byWhy.set(x.Why, [...(byWhy.get(x.Why) ?? []), x.Browser + (x.Profile && x.Profile !== "Default" ? ` (${x.Profile})` : "")]);
+          const al = el("div", "alert alert-warning mb-3"), d = el("div", "d-flex gap-2"), tx = el("div", "min-w-0");
+          tx.append(el("h4", "alert-title", blockedAll ? "Your browsers' history cannot be read yet" : `${j.skipped.length} browser profile${j.skipped.length === 1 ? "" : "s"} left out`));
+          for (const [why, names] of byWhy) tx.append(el("div", "text-secondary", `${[...new Set(names)].join(", ")}: ${why}.`));
+          const acts = el("div", "btn-list mt-2");
+          const fda = el("button", "btn btn-sm btn-warning"); fda.type = "button"; fda.append(icon("ti-shield-lock", "me-1"), "Open Full Disk Access");
+          fda.onclick = async () => {
+            try { const r = await W.call<{ ok: boolean; error?: string }>("POST", "history/access/open-settings");
+              toast(r.ok ? "Add the app that runs Browser Foreman, quit and reopen it, then press Check again." : r.error ?? "System Settings did not open", r.ok ? "info" : "danger", r.ok ? "System Settings opened" : "");
+            } catch (e) { fail(e); }
+          };
+          const again = el("button", "btn btn-sm"); again.type = "button"; again.append(icon("ti-refresh", "me-1"), "Check again"); again.onclick = () => void load();
+          if ([...byWhy.keys()].some(w => w.includes("Full Disk Access"))) acts.append(fda);
+          acts.append(again); tx.append(acts);
+          d.append(icon("ti-lock", "alert-icon"), tx); al.append(d); note.append(al);
+        }
+        if (!j.read && !j.skipped.length) note.append(el("div", "alert alert-info mb-3", "No browser history was found on this computer."));
+        paint();
+      } catch (e) { list.replaceChildren(el("div", "p-3 text-danger", e instanceof Error ? e.message : String(e))); }
+    };
+    q.oninput = () => { clearTimeout(timer); timer = setTimeout(() => void load(), 350); };
+    days.onchange = () => void load(); only.onchange = paint;
+    save.onclick = async () => {
+      const links = rows.filter(r => picked.has(r.url)).map(r => ({ url: r.url, title: r.title }));
+      try { await addLinks(`From history ${new Date().toLocaleDateString()}`, links, { parent: "Saved tabs", reload: true }); hideModal("#v1History2"); }
+      catch (e) { fail(e); }
+    };
+    paintSave(); showModal("#v1History2"); void load(); q.focus();
+  }
+
   async function duplicatesCsv(): Promise<void> {
     try {
       const r = await fetch(`api/v1/${ws("/duplicates.csv")}`, { headers: W.headers() });
@@ -329,7 +421,7 @@ function install(W: V1): void {
   }
 
   W.ui = {
-    history, manage, importer, addFiles, addLinks, updateWs, menu, download, toggleLock, backup, restore, extensions, duplicatesCsv,
+    history, manage, importer, addFiles, addLinks, updateWs, browserHistory, menu, download, toggleLock, backup, restore, extensions, duplicatesCsv,
   };
   const mount = () => { document.getElementById("wsMenu")?.remove(); document.querySelector("#edited")?.before(menu()); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount); else mount();

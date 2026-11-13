@@ -1686,6 +1686,48 @@
           }
         }
       }
+    },
+    "/api/v1/history/access": {
+      "get": {
+        "summary": "Whether each browser profile's visit history can be read (Full Disk Access on macOS); reads one byte of each, never visits",
+        "tags": [
+          "History"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/history/access/open-settings": {
+      "post": {
+        "summary": "Open System Settings at Full Disk Access (macOS)",
+        "tags": [
+          "History"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/history": {
+      "get": {
+        "summary": "Pages visited, newest first, one row per address across browsers: ?q=, ?days= (30), ?browser=, ?limit= (300), ?workspace= marks those already bookmarked. Read through copies, never stored",
+        "tags": [
+          "History"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
     }
   }
 }

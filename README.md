@@ -83,6 +83,7 @@ Hosted at <https://opensource.simtabi.com/documentation/simtabi/browser-foreman/
 - [REST API](docs/tools/rest-api.md) — every endpoint under `/api/v1`
 - [Events](docs/tools/events.md) — the event stream and every event type
 - [Webhooks](docs/tools/webhooks.md) — subscriptions, signatures, retries
+- [Browser history](docs/tools/browser-history.md) — find pages you visited but never bookmarked
 - [MCP server](docs/tools/mcp.md) — bookmarks and tabs for an AI assistant, read-only unless writes are on
 - [Storage](docs/tools/storage.md) — the sqlite and json drivers, history, undo and redo, migrating
 - [Link checks](docs/tools/link-checks.md) — what a check finds, politeness, safety, running one

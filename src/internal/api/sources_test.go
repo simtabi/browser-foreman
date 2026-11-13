@@ -214,7 +214,7 @@ func TestUpdateReadsTheSourcesAgain(t *testing.T) {
 func TestSaveLinksMakesOneFolderInOneEntry(t *testing.T) {
 	s := seeded(t)
 	h := s.Handler()
-	before := len(history(t, h))
+	before := len(entries(t, h))
 	body := `{"folder":"Research","links":[{"url":"https://a.example/","title":"  A   page "},{"url":"https://b.example/"}]}`
 	w := send(h, "POST", "/api/v1/workspaces/main/save-links", body)
 	if w.Code != 201 || !strings.Contains(w.Body.String(), `"path":"Saved tabs/Research"`) || !strings.Contains(w.Body.String(), `"type":"bookmark.created"`) {
@@ -223,7 +223,7 @@ func TestSaveLinksMakesOneFolderInOneEntry(t *testing.T) {
 	if w := send(h, "POST", "/api/v1/workspaces/main/save-links", body); !strings.Contains(w.Body.String(), `"path":"Saved tabs/Research (2)"`) {
 		t.Fatalf("the name is not made unique: %s", w.Body)
 	}
-	if n := len(history(t, h)); n != before+2 {
+	if n := len(entries(t, h)); n != before+2 {
 		t.Fatalf("%d entries, want one per save", n-before)
 	}
 	tr, _ := tree(t, h)
@@ -245,7 +245,7 @@ func TestSaveLinksMakesOneFolderInOneEntry(t *testing.T) {
 	}
 }
 
-func history(t *testing.T, h http.Handler) []store.Entry {
+func entries(t *testing.T, h http.Handler) []store.Entry {
 	t.Helper()
 	var out struct{ History []store.Entry }
 	if err := json.Unmarshal(send(h, "GET", "/api/v1/workspaces/main/history", "").Body.Bytes(), &out); err != nil {

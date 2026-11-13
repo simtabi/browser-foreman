@@ -934,6 +934,7 @@ function paintIoMenu() {
   m.append(el("h6", "dropdown-header", "Bring bookmarks in"));
   item("ti-file-import", "Import bookmarks…", IO.importer, "An HTML export from any browser, or a browser's own bookmarks file");
   if (wsUI()?.addFiles) item("ti-file-plus", "Add to this workspace…", () => wsUI().addFiles(), "Merge more files in; copies of a page you have go to the Trash");
+  if (wsUI()?.browserHistory) item("ti-history-toggle", "From browser history…", () => wsUI().browserHistory(), "Pages you visited but never bookmarked");
   m.append(el("div", "dropdown-divider"), el("h6", "dropdown-header", "Take them out"));
   item("ti-download", "Import file for any browser (HTML)", IO.exportHtml, "Chrome, Edge, Firefox, Safari: Bookmarks › Import");
   item("ti-braces", "Chrome bookmarks JSON", IO.exportChrome, "A copy in Chrome's own format, for tools and backups");
@@ -1733,6 +1734,7 @@ function commands() {
     ["tabs-save", "Save open tabs now", "ti-camera", "", () => true, () => { setAppView("tabs"); TABS.snapNow(); }, "Open tabs"],
     ["view-bookmarks", "Back to bookmarks", "ti-bookmarks", "", () => view_ !== "bookmarks", () => setAppView("bookmarks"), "Open tabs"],
     ["import", "Import bookmarks…", "ti-file-import", "", () => true, () => IO.importer(), "Import & export"],
+    ["browser-history", "Browser history…", "ti-history-toggle", "", () => !!wsUI()?.browserHistory, () => wsUI().browserHistory(), "Import & export"],
     ["add-files", "Add bookmarks to this workspace…", "ti-file-plus", "", () => !!wsUI()?.addFiles, () => wsUI().addFiles(), "Import & export"],
     ["export-html", "Export: import file for any browser (HTML)", "ti-download", "", () => true, () => IO.exportHtml(), "Import & export"],
     ["export-chrome", "Export: Chrome bookmarks JSON", "ti-braces", "", () => true, () => IO.exportChrome(), "Import & export"],

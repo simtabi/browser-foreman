@@ -56,7 +56,10 @@ export async function legacy(method: string, path: string, query: string, body: 
           run_id: r.id, started: r.started, finished: r.done ? r.ended : undefined, total: r.total, checked: r.checked,
           newly_broken: r.newly_broken, fixed: r.fixed, state: r.done ? (r.state === "cancelled" ? "cancelled" : "done") : "running" })) });
       }
-      case "history/access": return ok({ browsers: [] });
+      case "history/access": {
+        const a = await call("GET", "history/access");
+        return ok({ ...a, python: a.binary });  // the panel's older name for the program that needs the access
+      }
       case "profiles": return ok(await call("GET", "profiles"));
       case "token": return ok({ token: "" });
     }
@@ -106,7 +109,7 @@ export async function legacy(method: string, path: string, query: string, body: 
       const c = await call("GET", "linkchecks");
       return c.running ? ok(await call("POST", `linkchecks/${encodeURIComponent(c.running)}/cancel`)) : ok({});
     }
-    case "history/access/open-settings": return NOT_YET("Opening System Settings");
+    case "history/access/open-settings": return ok(await call("POST", "history/access/open-settings"));
   }
   return null;
 }
