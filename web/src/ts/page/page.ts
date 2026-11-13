@@ -1315,10 +1315,7 @@ function build(keepView = false) {
     keys.dataset.tip = (readOnly() ? "" : "Drag to move. ") + "→ open · ← close · Space select · . menu. Click for every shortcut.";
     keys.onclick = () => openShortcuts();
     // List or grid (thumbnail cards): one toggle showing the layout it switches to; the choice is kept in this browser.
-    const grid = LAYOUT === "grid", next = grid ? "list" : "grid", tip = grid ? "Show as a list" : "Show as a grid of thumbnails";
-    const lay = el("button", "btn btn-ghost-secondary btn-icon btn-sm layout-toggle"); lay.type = "button";
-    lay.dataset.tip = tip; lay.setAttribute("aria-label", tip); lay.setAttribute("aria-pressed", String(grid));
-    lay.append(icon(grid ? "ti-list" : "ti-layout-grid")); lay.onclick = () => setLayout(next);
+    const lay = el("button", "btn btn-ghost-secondary btn-icon btn-sm layout-toggle"); lay.type = "button"; paintLayoutToggle(lay);
     const parts = [lay, keys];
     if (readOnly()) { const b = el("span", "badge bg-yellow-lt"); b.append(icon("ti-lock", "me-1"), "Read-only"); b.dataset.tip = "These copies were merged into the bookmarks you kept. Open, copy or look them up here; to move bookmarks, use All bookmarks."; parts.unshift(b); }
     hint.replaceChildren(...parts);
@@ -1334,8 +1331,18 @@ function build(keepView = false) {
 const rowEl = k => Dom.one("row", String(k), list);
 // List or grid layout of the tree (the grid shows each folder's bookmarks as thumbnail cards).
 let LAYOUT = store.get("layout") === "grid" ? "grid" : "list";
-function setLayout(k) { LAYOUT = k; store.set("layout", k); document.body.classList.toggle("layout-grid", k === "grid"); build(true); }
-document.body.classList.toggle("layout-grid", LAYOUT === "grid");
+// Switching is a class on the page and a new face on the toggle: nothing is rebuilt, and the panes keep their widths.
+function setLayout(k) {
+  LAYOUT = k; store.set("layout", k); list.classList.toggle("grid", k === "grid");  // on the list only: less to restyle
+  const b = document.querySelector(".layout-toggle"); if (b) paintLayoutToggle(b);
+  rowEl(sel)?.scrollIntoView({block: "nearest"});
+}
+function paintLayoutToggle(b) {
+  const grid = LAYOUT === "grid", tip = grid ? "Show as a list" : "Show as a grid of thumbnails";
+  b.dataset.tip = tip; b.setAttribute("aria-label", tip); b.setAttribute("aria-pressed", String(grid));
+  b.replaceChildren(icon(grid ? "ti-list" : "ti-layout-grid")); b.onclick = () => setLayout(grid ? "list" : "grid");
+}
+list.classList.toggle("grid", LAYOUT === "grid");
 // What the row renderer needs from the page (src/web/ts/views/tree-rows.ts).
 const CARD_DEPS = {host, hue, shortUrl};  // what the Open tabs cards need (src/web/ts/views/tab-cards.ts)
 const ROW_DEPS = {readOnly: () => readOnly(), titleOf, descOf, ratingOf, tagsOf, host, shortUrl, thumb, favicon, item: id => ITEM.get(id),
@@ -1344,8 +1351,7 @@ function draw() {
   hideTip();
   list.replaceChildren();
   if (!rows.length) { const e = el("div", "empty py-5"); e.append(el("p", "empty-title", "Nothing matches"), el("p", "empty-subtitle text-secondary", "Clear the filters or the search to see everything.")); list.append(e); return; }
-  // Grid layout: each run of bookmarks in a folder is laid out as thumbnail cards; folders stay rows above them.
-  const grid = LAYOUT === "grid"; let box = null;
+  // The grid layout is CSS alone (#list.grid): the rows are the same either way, so switching is instant.
   rows.forEach((r, idx) => {
     // The row's element is built by src/web/ts/views/tree-rows.ts; selection, clicks, menus and drag are wired here.
     const {row: d, twisty} = rowElement(r, idx, {selected: idx === sel, marked: marked.has(r.node), draggable: !readOnly() && !r.trash && !grouped()}, ROW_DEPS);
@@ -1362,11 +1368,8 @@ function draw() {
     // A folder holding both subfolders and bookmarks: its loose bookmarks get their own labelled group after the
     // subfolders, so they do not read as part of the last subfolder.
     const group = looseGroupAt(rows, idx);
-    if (group) { box = null; list.append(looseLabel(r.depth, group.parent === st().root ? "this folder" : nice(group.parent.n), group.count)); }
-    if (grid && r.kind === "link") {
-      if (!box) { box = el("div", "bm-grid"); box.setAttribute("role", "group"); box.style.marginLeft = (6 + r.depth * 18) + "px"; list.append(box); }
-      d.style.marginLeft = ""; box.append(d);
-    } else { box = null; list.append(d); }
+    if (group) list.append(looseLabel(r.depth, group.parent === st().root ? "this folder" : nice(group.parent.n), group.count));
+    list.append(d);
   });
   rowEl(sel)?.scrollIntoView({block: "nearest"});
 }

@@ -253,6 +253,11 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .app-main > .card { min-height: 0; display: flex; flex-direction: column; margin: 0; }
 .pane-scroll { flex: 1; min-height: 0; overflow: auto; }
 #list { outline: none; padding: .25rem 0 3rem; }
+/* Thousands of rows: the browser lays out and paints only those near the screen, so expanding everything and switching
+   list and grid stay quick. The sizes are each row's usual height, used until it is drawn. */
+#list > .bm-row, #list > .bm-sep { content-visibility: auto; contain-intrinsic-size: auto 3.6rem; }
+#list > .bm-row.folder { contain-intrinsic-size: auto 2.4rem; }
+#list.grid > .bm-row:not(.folder) { contain-intrinsic-size: auto 13.5rem; }
 #list:focus-visible { box-shadow: inset 0 0 0 2px var(--tblr-primary); }
 /* Narrow: the page scrolls as a whole, so it grows with its content instead of holding the window's height (a fixed
    height let the content run under the footer). */
@@ -594,20 +599,30 @@ body.no-tree-dates #list .bm-date { display: none !important; }
 .snap-dir { display: flex; gap: .4rem; align-items: center; min-width: min(26rem, 100%); }
 .snap-dir .form-control { flex: 1; min-width: 0; font-family: var(--tblr-font-monospace); font-size: .8rem; }
 /* Grid layout (page.ts setLayout): the tree pane is wider, and bookmarks are cards with the snapshot on top. */
-body.layout-grid .app-main { grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr); }
-.bm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr)); gap: .65rem; padding: .35rem .5rem .85rem 0; }
-.bm-grid > .bm-row { flex-direction: column; gap: 0; margin: 0; padding: 0; border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-lg); overflow: hidden; background: var(--tblr-bg-surface); }
-.bm-grid > .bm-row > .bm-vis { order: -1; width: 100%; }
-.bm-grid > .bm-row .bm-vis .th { width: 100%; height: 7.25rem; border: 0; border-bottom: 1px solid var(--tblr-border-color); border-radius: 0; }
-.bm-grid > .bm-row .bm-fav { left: .5rem; bottom: -.6rem; }
-.bm-grid > .bm-row .bm-vis:has(> .th.ph.letter) > .bm-fav:has(> .fvd) { display: none; }
-.bm-grid > .bm-row > .bm-body { padding: .75rem .75rem .65rem; width: 100%; min-width: 0; }
-.bm-grid > .bm-row .bm-top { flex-direction: column; align-items: stretch; gap: .3rem; }
-.bm-grid > .bm-row .bm-aside { justify-content: flex-start; flex-wrap: wrap; }
-.bm-grid > .bm-row .bm-path, .bm-grid > .bm-row .bm-desc { display: none; }
-.bm-grid > .bm-row.sel { border-color: var(--tblr-primary); box-shadow: 0 0 0 1px var(--tblr-primary); }
-.bm-grid > .bm-row:hover { border-color: var(--tblr-border-color-dark, var(--tblr-border-color)); }
-@media (max-width: 900px) { body.layout-grid .app-main { grid-template-columns: 1fr; } }
+#list.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr)); gap: .65rem; padding: .35rem .75rem 3rem; align-content: start; }
+#list.grid > .bm-row.folder, #list.grid > .bm-sep, #list.grid > .empty { grid-column: 1 / -1; }
+#list.grid > .bm-row:not(.folder) { flex-direction: column; gap: 0; margin: 0 !important; padding: 0; border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-lg); overflow: hidden; background: var(--tblr-bg-surface); }
+#list.grid > .bm-row:not(.folder) > .bm-vis { order: -1; width: 100%; }
+#list.grid > .bm-row:not(.folder) .bm-vis .th { width: 100%; height: 7.25rem; border: 0; border-bottom: 1px solid var(--tblr-border-color); border-radius: 0; }
+#list.grid > .bm-row:not(.folder) .bm-fav { left: .5rem; bottom: -.6rem; }
+#list.grid > .bm-row:not(.folder) > .bm-body { padding: .75rem .75rem .65rem; width: 100%; min-width: 0; }
+#list.grid > .bm-row:not(.folder) .bm-top { flex-direction: column; align-items: stretch; gap: .3rem; }
+#list.grid > .bm-row:not(.folder) .bm-aside { justify-content: flex-start; flex-wrap: wrap; }
+#list.grid > .bm-row:not(.folder) .bm-path, #list.grid > .bm-row:not(.folder) .bm-desc { display: none; }
+#list.grid > .bm-row.sel:not(.folder) { border-color: var(--tblr-primary); box-shadow: 0 0 0 1px var(--tblr-primary); }
+#list.grid > .bm-row:not(.folder):hover { border-color: var(--tblr-border-color-dark, var(--tblr-border-color)); }
+.layout-toggle:focus:not(:focus-visible), .layout-toggle:active { background: transparent; color: inherit; box-shadow: none; }  /* no dark block after a click */
+/* Workspace looks (ts/wslook.ts): the badge, the menu rows, the Appearance picker, and the top bar's strip in the
+   colour of the workspace you are in. */
+.app-head { box-shadow: inset 0 3px 0 var(--ws-accent, transparent); }
+.ws-badge { flex: none; } .ws-badge .ti { font-size: 1rem; } .avatar-sm.ws-badge .ti { font-size: 1.15rem; } .avatar-md.ws-badge .ti { font-size: 1.5rem; }
+.ws-item { display: flex; align-items: center; }
+#wsMenu > .btn { display: inline-flex; align-items: center; }
+.ws-look-preview { display: flex; align-items: center; gap: .75rem; padding: .75rem; border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-lg); }
+.ws-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.75rem, 1fr)); gap: .4rem; }
+.ws-icons .form-selectgroup-item { margin: 0; }
+.ws-icons .form-selectgroup-label { display: flex; align-items: center; justify-content: center; height: 2.75rem; padding: 0; }
+.ws-icons .form-selectgroup-label .ti { font-size: 1.35rem; }
 /* Browser extension dialog (v1-ui.ts extensions): supported browsers as cards, the pairing code, the connected list. */
 .ext-section { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tblr-secondary); margin: 1.25rem 0 .6rem; }
 .ext-section:first-of-type { margin-top: 0; }

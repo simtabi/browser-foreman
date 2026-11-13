@@ -7,8 +7,9 @@ import { closeDropdowns } from "./menu";
 import { el, fmtDate, icon } from "./ui";
 import { DataTable, avatar, by, nameCell } from "./datatable";
 import { RangePicker } from "./rangepick";
+import { lookPicker, wsBadge } from "./wslook";
 
-interface Info { id: string; name: string; head: number; notes?: string; locked?: boolean; archived?: boolean; deleted?: string; bookmarks?: number }
+interface Info { id: string; name: string; head: number; notes?: string; locked?: boolean; archived?: boolean; deleted?: string; bookmarks?: number; color?: string; icon?: string }
 interface Entry { seq: number; at: string; op: string; summary: string }
 interface V1 {
   v1: true; id: string; locked: boolean; workspace: Info; workspaces: Info[];
@@ -109,7 +110,7 @@ function install(W: V1): void {
       columns: [
         { label: "Name", sort: by(w => w.name), cell: w => {
           const t = el("span"); t.append(w.name);
-          return nameCell(t, w.id + (w.notes ? ` · ${w.notes.split("\n")[0]}` : ""), avatar(w.name));
+          return nameCell(t, w.id + (w.notes ? ` · ${w.notes.split("\n")[0]}` : ""), wsBadge(w, "avatar-sm"));
         } },
         { label: "Bookmarks", cls: "text-end", sort: by(w => w.bookmarks ?? 0), cell: w => w.bookmarks == null ? el("span", "placeholder col-6") : w.bookmarks.toLocaleString() },
         { label: "Changes", cls: "text-end d-none d-md-table-cell", sort: by(w => w.head), cell: w => w.head.toLocaleString() },
@@ -147,6 +148,7 @@ function install(W: V1): void {
           if (w.id === W.id) { W.workspace.name = name; remount(); }
           toast(`Renamed to “${name}”.`, "success"); await load();
         }) },
+        { l: "Appearance…", ic: "ti-palette", fn: run(async () => { await appearance(w, load); }) },
         !w.locked && { l: "Notes…", ic: "ti-notes", fn: run(async () => {
           const v = await askText({ title: `Notes on “${w.name}”`, label: "What this set is, what is left to do", value: w.notes ?? "", multiline: true, hint: "⌘Enter saves" });
           if (v == null || v === (w.notes ?? "")) return;
@@ -199,6 +201,33 @@ function install(W: V1): void {
     try { const j = await W.call<{ entry: Entry }>("POST", ws("/reset")); toast(j.entry.summary, "success", "Reset"); setTimeout(() => location.reload(), 700); }
     catch (e) { fail(e); }
   }
+
+  // Appearance: a workspace's colour and icon, saved as you pick them (they apply even to a locked workspace).
+  async function appearance(w: Info, after?: () => Promise<void>): Promise<void> {
+    const { body, foot } = modal("v1Look", `Appearance of “${w.name}”`);
+    body.append(el("p", "text-secondary", "A colour and an icon tell workspaces apart in the top bar, its menu and All workspaces. The top bar takes the colour of the workspace you are in."));
+    let saving: Promise<unknown> = Promise.resolve();
+    body.append(lookPicker(w, look => {
+      saving = saving.then(async () => {
+        try {
+          await W.call("PATCH", `workspaces/${encodeURIComponent(w.id)}`, look);
+          w.color = look.color; w.icon = look.icon;
+          const here = W.workspaces.find(x => x.id === w.id); if (here) { here.color = look.color; here.icon = look.icon; }
+          if (w.id === W.id) { W.workspace.color = look.color; W.workspace.icon = look.icon; paintAccent(); remount(); }
+        } catch (e) { fail(e); }
+      });
+    }));
+    const done = el("button", "btn btn-primary ms-auto"); done.type = "button"; done.textContent = "Done";
+    done.onclick = async () => { await saving; hideModal("#v1Look"); await after?.(); };
+    foot.append(done);
+    showModal("#v1Look");
+  }
+  // The top bar's strip in the colour of the workspace you are in.
+  function paintAccent(): void {
+    const c = W.workspace.color;
+    document.documentElement.style.setProperty("--ws-accent", c ? `var(--tblr-${c})` : "transparent");
+  }
+  paintAccent();
 
   async function rename(): Promise<void> {
     const name = await askText({ title: "Rename workspace", label: "Name", value: W.workspace.name });
@@ -545,16 +574,23 @@ function install(W: V1): void {
     const btn = el("button", "btn"); btn.type = "button"; btn.dataset.dd = ""; btn.setAttribute("aria-label", "Workspace");
     btn.dataset.tip = "Workspace: one bookmark set, with its history";
     const name = el("span", "text-truncate", W.workspace.name); name.dataset.tip = W.workspace.name;  // width: #hdrWs rules in template.html
-    btn.append(icon("ti-stack-2", "me-1"), name);
+    btn.append(wsBadge(W.workspace, "avatar-xs me-2"), name);
     if (W.locked) { const b = el("span", "badge bg-yellow-lt ms-2"); b.append(icon("ti-lock", "me-1"), "locked"); btn.append(b); }
     if (W.workspace.archived) btn.append(el("span", "badge bg-secondary-lt ms-2", "archived"));
     btn.append(icon("ti-chevron-down", "ms-1"));
     const dm = el("div", "dropdown-menu");
     dm.append(el("h6", "dropdown-header", "Switch workspace"));
     const live = W.workspaces.filter(w => !w.archived), archived = W.workspaces.length - live.length;
-    for (const w of live) dm.append(item(w.id === W.id ? "ti-check" : "ti-point", w.name, () => { if (w.id !== W.id) nav(w.id); }, w.id === W.id ? "active" : ""));
+    for (const w of live) {
+      const a = el("a", "dropdown-item ws-item" + (w.id === W.id ? " active" : "")); a.href = "#";
+      a.append(wsBadge(w, "avatar-xs me-2"), el("span", "flex-fill text-truncate", w.name));
+      if (w.id === W.id) a.append(icon("ti-check", "ms-2"));
+      a.onclick = e => { e.preventDefault(); closeDropdowns(); if (w.id !== W.id) nav(w.id); };
+      dm.append(a);
+    }
     dm.append(item("ti-list-details", "All workspaces" + (archived ? ` (${archived} archived)` : "") + "…", manage),
       el("div", "dropdown-divider"), el("h6", "dropdown-header", "This workspace"),
+      item("ti-palette", "Appearance…", () => void appearance({ ...W.workspace, id: W.id })),
       item("ti-history", "History and progress…", () => void history()),
       item("ti-refresh-dot", "Update from source…", () => void updateWs()));
     if (W.locked) dm.append(item("ti-lock-open", "Unlock", () => void toggleLock(false)));

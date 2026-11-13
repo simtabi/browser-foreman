@@ -5,7 +5,7 @@
 import { type Media, toPage, fromPage, linkFields, type V1Tree, type V1Link, type PageState } from "./v1";
 import { legacy } from "./v1-compat";
 
-export interface WorkspaceInfo { id: string; name: string; head: number; notes?: string; locked?: boolean; archived?: boolean }
+export interface WorkspaceInfo { id: string; name: string; head: number; notes?: string; locked?: boolean; archived?: boolean; color?: string; icon?: string }
 interface Boot {
   workspace: WorkspaceInfo;
   workspaces: WorkspaceInfo[];
