@@ -14,7 +14,7 @@ const tree = () => ({
     { id: "bar", kind: "folder", title: "Bookmarks Bar", children: [
       { id: "go", kind: "bookmark", title: "Go", url: "https://go.dev/", added: 1700000000, note: "start here" },
       { id: "dev", kind: "folder", title: "Dev / Ops", note: "tools", children: [
-        { id: "gh", kind: "bookmark", title: "GitHub", url: "https://github.com/" }] }] },
+        { id: "gh", kind: "bookmark", title: "GitHub", url: "https://github.com/", rating: 4, tags: ["code", "work"] }] }] },
     { id: "other", kind: "folder", title: "Other bookmarks", children: [] }] },
   trash: [{ node: { id: "old", kind: "bookmark", title: "Old", url: "https://old.example/" }, from: "dev", index: 1, at: 1600000000, reason: "dead" }],
 });
@@ -82,4 +82,11 @@ const linked = V.toPage(tree(), "", {
 assert.deepEqual([linked.data.keep[0].s, linked.data.keep[0].nu, linked.data.keep[0].n], ["moved", "https://go.dev/home", "redirects"]);
 assert.deepEqual([linked.data.keep[1].s, linked.data.keep[1].dk, linked.data.keep[1].nu], ["dead", "host", undefined]);
 assert.equal(linked.data.keep[2].s, "unchecked");
-console.log("v1: 20 checks passed");
+// Rating and tags: read into the page's state by bookmark id, and only set ones written back.
+assert.equal(page.state.ratings[2], 4);
+assert.deepEqual(page.state.tags[2], ["code", "work"]);
+assert.equal(page.state.ratings[1], undefined);
+const rated = structuredClone(page.state); rated.ratings[1] = 5; delete rated.tags[2];
+const back = V.fromPage(rated, {}, page, newId).root.children[0].children;
+assert.deepEqual([back[0].rating, back[1].children[0].rating, back[1].children[0].tags], [5, 4, undefined]);
+console.log("v1: 22 checks passed");

@@ -7,6 +7,7 @@ import type { TreeRow } from "../tree-rules";
 import type { BookmarkId, Folder } from "../tree";
 import { isFolder, nice } from "../tree";
 import { badge, el, fmtDate, fmtDay, icon, plural } from "../ui";
+import { starsText } from "../labels";
 
 /** A bookmark as the page's data carries it (only the fields rows show). */
 export interface Bookmark { id: BookmarkId; u: string; s: string; dk?: string; a?: number; m?: number; nu?: string; applied?: boolean; p?: number }
@@ -16,6 +17,9 @@ export interface RowDeps {
   readOnly: () => boolean;
   titleOf: (id: BookmarkId) => string;
   descOf: (id: BookmarkId) => string;
+  /** Your stars (0: none) and tags, shown small on the row. */
+  ratingOf?: (id: BookmarkId) => number;
+  tagsOf?: (id: BookmarkId) => string[];
   host: (url: string) => string;
   shortUrl: (url: string) => string;
   thumb: (i: Bookmark, cls: string) => HTMLElement;
@@ -69,6 +73,8 @@ export function rowElement(r: BookmarkRow, idx: number, st: RowState, d: RowDeps
   }
   if (pendingUpdate(i)) aside.append(badge("update ready", "bg-yellow-lt", "ti-arrow-forward-up"));
   if (i.m) aside.append(badge("matched", "bg-green-lt", "ti-arrow-merge"));
+  const stars = d.ratingOf?.(id) ?? 0;
+  if (stars) { const r = el("span", "stars-inline", starsText(stars)); r.dataset.tip = `Rated ${stars} of 5`; r.setAttribute("aria-label", `Rated ${stars} of 5`); aside.append(r); }
   if (i.a) { const dt = el("span", "bm-date", fmtDay(i.a)); dt.dataset.tip = "Added " + fmtDate(i.a); aside.append(dt); }
   if (aside.childNodes.length) top.append(aside);
   const h = d.host(i.u), path = d.shortUrl(i.u).replace(/^(?:www\.)?[^/]+/, "");
@@ -76,6 +82,8 @@ export function rowElement(r: BookmarkRow, idx: number, st: RowState, d: RowDeps
   sub.append(el("span", "bm-host", h || i.u), path && path !== "/" ? el("span", "bm-path", path) : "");
   body.append(top, sub);
   const ds = d.descOf(id); if (ds) body.append(el("div", "bm-desc", ds));
+  const tags = d.tagsOf?.(id) ?? [];
+  if (tags.length) { const tg = el("div", "bm-tags"); for (const t of tags.slice(0, 4)) tg.append(el("span", "badge bg-azure-lt", t)); if (tags.length > 4) tg.append(el("span", "text-secondary small", `+${tags.length - 4}`)); body.append(tg); }
   const vis = el("span", "bm-vis"), fav = el("span", "bm-fav"); fav.append(d.favicon(i)); vis.append(d.thumb(i, "th"), fav);
   row.append(vis, body);
   return { row, twisty: null };

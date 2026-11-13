@@ -5,6 +5,11 @@
 export type Call = (method: string, path: string, body?: unknown) => Promise<any>;
 export interface Answer { status: number; body: unknown }
 
+/** The page snapshot preferences (Settings › Page snapshots): only these pass, both ways. */
+const SNAPSHOT_KEYS = ["snapshot_width", "snapshot_height", "snapshot_wait_seconds", "snapshot_dir"] as const;
+export function snapshotSettings(p: any): Record<string, unknown> {
+  return Object.fromEntries(SNAPSHOT_KEYS.map(k => [k, p[k]]));
+}
 /** v1 preferences ⇄ the page's older setting names. */
 export function legacySettings(p: any): Record<string, unknown> {
   return { autosave: p.autosave, interval: p.interval_seconds, include_incognito: p.include_incognito, keep_days: p.keep_days,
@@ -43,6 +48,8 @@ export async function legacy(method: string, path: string, query: string, body: 
       case "tabs/snapshots": return ok(await call("GET", "tabs/snapshots" + q));
       case "tabs/timeline": return ok(await call("GET", "tabs/timeline" + q));
       case "tabs/notes": return ok(await call("GET", "tabs/notes"));
+      case "opened": return ok(await call("GET", `workspaces/${encodeURIComponent(workspace)}/opened`));
+      case "snapshot-settings": return ok(snapshotSettings(await call("GET", "preferences")));
       case "tabs/status": return ok({ settings: legacySettings(await call("GET", "preferences")), last_auto: null });
       case "tabs/browsers": {
         const b = await call("GET", "browsers");
@@ -110,6 +117,11 @@ export async function legacy(method: string, path: string, query: string, body: 
       return c.running ? ok(await call("POST", `linkchecks/${encodeURIComponent(c.running)}/cancel`)) : ok({});
     }
     case "history/access/open-settings": return ok(await call("POST", "history/access/open-settings"));
+    case "snapshot-settings": {
+      const want: Record<string, unknown> = {};
+      for (const k of SNAPSHOT_KEYS) if (body && k in body) want[k] = body[k];
+      return ok(snapshotSettings(await call("PUT", "preferences", want)));
+    }
   }
   return null;
 }

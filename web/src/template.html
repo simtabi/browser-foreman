@@ -577,6 +577,53 @@ body.no-tree-dates #list .bm-date { display: none !important; }
 .tb-pick:has(select:focus-visible) { box-shadow: 0 0 0 .25rem rgba(var(--tblr-primary-rgb), .25); }
 .tb-pick.is-set { border-color: var(--tblr-primary); }
 .tb-pick.is-set b { color: var(--tblr-primary); }
+.snap-dir { display: flex; gap: .4rem; align-items: center; min-width: min(26rem, 100%); }
+.snap-dir .form-control { flex: 1; min-width: 0; font-family: var(--tblr-font-monospace); font-size: .8rem; }
+/* Grid layout (page.ts setLayout): the tree pane is wider, and bookmarks are cards with the snapshot on top. */
+body.layout-grid .app-main { grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr); }
+.bm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr)); gap: .65rem; padding: .35rem .5rem .85rem 0; }
+.bm-grid > .bm-row { flex-direction: column; gap: 0; margin: 0; padding: 0; border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-lg); overflow: hidden; background: var(--tblr-bg-surface); }
+.bm-grid > .bm-row > .bm-vis { order: -1; width: 100%; }
+.bm-grid > .bm-row .bm-vis .th { width: 100%; height: 7.25rem; border: 0; border-bottom: 1px solid var(--tblr-border-color); border-radius: 0; }
+.bm-grid > .bm-row .bm-fav { left: .5rem; bottom: -.6rem; }
+.bm-grid > .bm-row .bm-vis:has(> .th.ph.letter) > .bm-fav:has(> .fvd) { display: none; }
+.bm-grid > .bm-row > .bm-body { padding: .75rem .75rem .65rem; width: 100%; min-width: 0; }
+.bm-grid > .bm-row .bm-top { flex-direction: column; align-items: stretch; gap: .3rem; }
+.bm-grid > .bm-row .bm-aside { justify-content: flex-start; flex-wrap: wrap; }
+.bm-grid > .bm-row .bm-path, .bm-grid > .bm-row .bm-desc { display: none; }
+.bm-grid > .bm-row.sel { border-color: var(--tblr-primary); box-shadow: 0 0 0 1px var(--tblr-primary); }
+.bm-grid > .bm-row:hover { border-color: var(--tblr-border-color-dark, var(--tblr-border-color)); }
+.layout-toggle .btn.active { background: var(--tblr-bg-surface-secondary); color: var(--tblr-primary); }
+@media (max-width: 900px) { body.layout-grid .app-main { grid-template-columns: 1fr; } }
+/* Browser extension dialog (v1-ui.ts extensions): supported browsers as cards, the pairing code, the connected list. */
+.ext-section { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tblr-secondary); margin: 1.25rem 0 .6rem; }
+.ext-section:first-of-type { margin-top: 0; }
+.ext-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: .75rem; }
+.ext-card { border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-lg); padding: .85rem 1rem; background: var(--tblr-bg-surface); }
+.ext-card.is-connected { border-color: color-mix(in srgb, var(--tblr-success) 45%, var(--tblr-border-color)); }
+.ext-head { display: flex; align-items: center; gap: .75rem; }
+.ext-head .ext-ico { width: 2rem; height: 2rem; flex: none; }
+.ext-status { color: var(--tblr-secondary); display: flex; align-items: center; }
+.ext-how { margin-top: .6rem; font-size: .85rem; }
+.ext-how > summary { cursor: pointer; color: var(--tblr-primary); list-style: none; }
+.ext-how > summary::-webkit-details-marker { display: none; }
+.ext-how > summary::after { content: " ▾"; } .ext-how[open] > summary::after { content: " ▴"; }
+.ext-steps { margin: .5rem 0 0; padding-left: 1.1rem; display: grid; gap: .35rem; }
+.ext-steps li { display: list-item; } .ext-steps li > span { margin-right: .25rem; }
+.ext-steps .btn { vertical-align: middle; width: 1.5rem; height: 1.5rem; padding: 0; }
+.ext-code { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem 1rem; padding: .85rem 1rem; border-radius: var(--tblr-border-radius-lg); background: var(--tblr-primary-lt); }
+/* Labels (ts/labels.ts): the star rating and the tag editor. A star is grey until set, amber when set or hovered. */
+.star-rating { display: inline-flex; gap: 0; }
+.star-rating .btn { font-size: 1.35rem; line-height: 1; width: 2rem; height: 2rem; padding: 0; color: var(--tblr-border-color-dark, #c8d1dc); }
+.star-rating .btn.on, .star-rating .btn.hover { color: #f59f00; }
+.star-rating .btn:disabled { opacity: 1; }
+.stars-inline { color: #f59f00; letter-spacing: .05em; font-size: .8rem; white-space: nowrap; }
+.bm-tags { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .25rem; } .bm-tags .badge { font-weight: 500; font-size: .7rem; }
+.bm-labels { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
+.tag-editor { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.tag-badge { display: inline-flex; align-items: center; gap: .15rem; font-weight: 500; }
+.tag-x { width: .5rem; height: .5rem; margin-left: .25rem; padding: 0; background-size: .5rem; }
+.tag-input { width: auto; flex: 1 1 9rem; min-width: 9rem; max-width: 16rem; }
 /* RangePicker (ts/rangepick.ts): the period menu, the same everywhere. With a custom range the quick ranges sit on
    the left and the From / To form on the right, stacking on a phone. */
 .range-menu { min-width: 12rem; }
@@ -1035,7 +1082,7 @@ body { overflow-wrap: break-word; }
     <div class="modal-header"><h5 class="modal-title"><i class="ti ti-settings me-2"></i>Settings</h5><button type="button" class="btn-close" data-close aria-label="Close"></button></div>
     <div class="modal-body p-0" id="settingsBody"></div>
     <div class="modal-footer">
-      <span class="text-secondary small me-auto">Saved as you change them, in this browser only.</span>
+      <span class="text-secondary small me-auto">Saved as you change them: in this browser, except Page snapshots, which the server keeps.</span>
       <button class="btn me-auto" id="settingsDefaults"><i class="ti ti-arrow-back-up me-1"></i>Restore default settings</button>
       <button class="btn btn-primary" data-close>Done</button>
     </div>

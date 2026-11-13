@@ -420,34 +420,76 @@ function install(W: V1): void {
     } catch (e) { fail(e); }
   }
 
-  // Browser extensions: a one-time pairing code, and the browsers already paired (each disconnects on its own).
-  // Browser extension: Tabler steps to connect one, the pairing code in a card, and the connected browsers as a table.
+  // Browser extension: the supported browsers first (the five major ones always shown, with whether each is on this
+  // computer and connected, and how to install it there), then the pairing code, then the connected browsers.
+  // Reached from the Browsers menu, beside Browsers and access (it was in the workspace menu until 2026-11-13).
+  type Ext = { id: string; name: string; created: string; last_used?: string };
+  const EXT_MAJOR = ["Google Chrome", "Microsoft Edge", "Firefox", "Safari", "Brave Browser"];
+  const EXT_ENGINE: Record<string, "chromium" | "firefox" | "safari"> = {
+    "Google Chrome": "chromium", "Google Chrome Canary": "chromium", Chromium: "chromium", "Brave Browser": "chromium", "Microsoft Edge": "chromium",
+    Vivaldi: "chromium", Opera: "chromium", Arc: "chromium", Firefox: "firefox", Zen: "firefox", Safari: "safari" };
+  const EXT_PAGE: Record<string, string> = { "Microsoft Edge": "edge://extensions", "Brave Browser": "brave://extensions", Opera: "opera://extensions", Vivaldi: "vivaldi://extensions" };
+  const extSteps = (name: string): [string, string?][] => {
+    const engine = EXT_ENGINE[name];
+    if (engine === "firefox") return [["Open about:debugging, then This Firefox", "about:debugging#/runtime/this-firefox"], ["Click Load Temporary Add-on…"],
+      ["Choose web/dist/extension/firefox/manifest.json", "web/dist/extension/firefox/manifest.json"], ["Allow it to reach 127.0.0.1 when asked. It stays until the browser restarts."]];
+    if (engine === "safari") return [["Build the Safari app: make extension-safari (needs Xcode)", "make extension-safari"],
+      ["Build and run web/dist/extension/safari-xcode in Xcode", "web/dist/extension/safari-xcode"], ["Turn it on in Safari › Settings › Extensions"]];
+    const page = EXT_PAGE[name] ?? "chrome://extensions";
+    return [[`Open ${page}`, page], ["Turn on Developer mode"], ["Click Load unpacked and choose web/dist/extension/chromium", "web/dist/extension/chromium"]];
+  };
   async function extensions(): Promise<void> {
-    const { body, foot, dock } = modal("v1Extensions", "Browser extension", "lg");
-    const steps = el("ul", "steps steps-vertical mb-3");
-    for (const [t, d] of [["Install it", "Load web/dist/extension in Chrome, Edge, Brave or Firefox (docs › Browser extension)."],
-      ["Make a pairing code", "It works once, for a few minutes."], ["Type it into the extension's popup", `With the server address ${location.origin}.`]]) {
-      const li = el("li", "step-item"); li.append(el("div", "h4 m-0", t), el("div", "text-secondary", d)); steps.append(li);
-    }
-    const codeBox = el("div");
+    const { body, foot, dock } = modal("v1Extensions", "Browser extensions", "lg");
+    let connected: Ext[] = [], installed = new Set<string>();
+    const copy = (text: string) => async () => { try { await navigator.clipboard.writeText(text); toast("Copied.", "success"); } catch { toast("Copy it by hand.", "warning"); } };
+    body.append(el("p", "text-secondary mb-3", "The extension sends a browser's tabs and tab groups, reads its bookmarks into a workspace, and can write a workspace back. Install it in each browser you use, then connect it with a pairing code."));
+    // Supported browsers: one card each.
+    const grid = el("div", "ext-grid"), more = el("div", "text-secondary small mt-2");
+    const paintCards = () => {
+      const byName = new Map(connected.map(x => [x.name.replace(/^extension:/, ""), x]));
+      const names = [...EXT_MAJOR, ...[...installed].filter(n => EXT_ENGINE[n] && !EXT_MAJOR.includes(n))];
+      grid.replaceChildren(...names.map(name => {
+        const c = byName.get(name), card = el("div", "ext-card" + (c ? " is-connected" : ""));
+        const head = el("div", "ext-head"), title = el("div", "min-w-0");
+        title.append(el("div", "fw-medium text-truncate", name));
+        const st = el("div", "ext-status small");
+        if (c) st.append(el("span", "status-dot status-green me-1"), "Connected" + (c.last_used && !c.last_used.startsWith("0001") ? ` · heard from ${fmtDate(Date.parse(c.last_used) / 1000)}` : ""));
+        else st.append(el("span", "status-dot status-secondary me-1"), installed.has(name) ? "On this computer · not connected" : "Not on this computer");
+        title.append(st);
+        head.append(icon("browser:" + name, "ext-ico"), title);
+        const how = el("details", "ext-how"); const sum = el("summary", null, c ? "Install again" : "How to install");
+        const ol = el("ol", "ext-steps");
+        for (const [t, val] of extSteps(name)) {
+          const li = el("li"); li.append(el("span", null, t));
+          if (val) { const b = el("button", "btn btn-sm btn-ghost-secondary btn-icon"); b.type = "button"; b.setAttribute("aria-label", "Copy " + val); b.dataset.tip = "Copy " + val; b.append(icon("ti-copy")); b.onclick = copy(val); li.append(b); }
+          ol.append(li);
+        }
+        how.append(sum, ol);
+        card.append(head, how);
+        return card;
+      }));
+      more.textContent = "Also works in Vivaldi, Opera and Arc (as in Chrome) and in Zen (as in Firefox); those appear here when they are on this computer.";
+    };
+    body.append(el("div", "ext-section", "Supported browsers"), grid, more);
+    // Connect: the pairing code.
+    const codeBox = el("div", "mt-2");
     const make = el("button", "btn btn-primary"); make.type = "button"; make.append(icon("ti-key", "me-1"), "Make a pairing code");
     make.onclick = async () => {
       try {
         const r = await W.call<{ code: string; expires: string }>("POST", "extension/pairings");
-        const card = el("div", "card card-sm bg-primary-lt mb-3"), cb = el("div", "card-body d-flex align-items-center gap-3");
-        const code = el("div", "h1 font-monospace m-0", r.code);
-        const copy = el("button", "btn btn-sm ms-auto"); copy.type = "button"; copy.append(icon("ti-copy", "me-1"), "Copy");
-        copy.onclick = async () => { try { await navigator.clipboard.writeText(r.code); toast("Pairing code copied.", "success"); } catch { toast("Copy it by hand.", "warning"); } };
-        cb.append(code, el("div", "text-secondary small", `Works once, until ${new Date(r.expires).toLocaleTimeString()}.`), copy);
-        card.append(cb); codeBox.replaceChildren(card);
+        const card = el("div", "ext-code"), code = el("div", "h1 font-monospace m-0", r.code);
+        const cp = el("button", "btn btn-sm ms-auto"); cp.type = "button"; cp.append(icon("ti-copy", "me-1"), "Copy"); cp.onclick = copy(r.code);
+        card.append(code, el("div", "text-secondary small", `Type it into the extension's popup with the server address ${location.origin}. Works once, until ${new Date(r.expires).toLocaleTimeString()}.`), cp);
+        codeBox.replaceChildren(card);
       } catch (e) { fail(e); }
     };
-    body.append(el("p", "text-secondary", "The extension sends this browser's tabs and tab groups, reads its bookmarks into a workspace, and can write a workspace back."),
-      steps, codeBox);
-    type Ext = { id: string; name: string; created: string; last_used?: string };
+    const connect = el("div", "ext-connect");
+    connect.append(el("div", "small text-secondary", "Installed it? Make a code, then type it into the extension's popup with the server address " + location.origin + "."));
+    body.append(el("div", "ext-section", "Connect a browser"), connect, codeBox);
+    // Connected browsers, each with Disconnect.
     const table = new DataTable<Ext>({
       noun: "browsers", size: 10,
-      empty: { title: "No browser is connected yet", text: "Make a pairing code above, then type it into the extension.", icon: "ti-puzzle" },
+      empty: { title: "No browser is connected yet", text: "Install the extension, make a pairing code, then type it into the extension.", icon: "ti-puzzle" },
       columns: [
         { label: "Browser", cell: x => nameCell(x.name.replace(/^extension:/, ""), `connected ${fmtDate(Date.parse(x.created) / 1000)}`, icon("browser:" + x.name.replace(/^extension:/, ""))) },
         { label: "Last heard from", cell: x => el("span", "text-secondary", x.last_used && !x.last_used.startsWith("0001") ? fmtDate(Date.parse(x.last_used) / 1000) : "not yet") },
@@ -457,13 +499,15 @@ function install(W: V1): void {
         try { await W.call("DELETE", `tokens/${encodeURIComponent(x.id)}`); toast("Disconnected.", "success"); await load(); } catch (e) { fail(e); }
       } }],
     });
+    const tableWrap = el("div"); tableWrap.append(el("div", "ext-section", "Connected"), table.element);
     const load = async () => {
-      try { table.rows((await W.call<{ extensions: Ext[] }>("GET", "extension/status")).extensions); }
-      catch (e) { table.rows([]); fail(e); }
+      const [ext, br] = await Promise.allSettled([W.call<{ extensions: Ext[] }>("GET", "extension/status"), W.call<{ installed?: { name: string }[] }>("GET", "browsers")]);
+      connected = ext.status === "fulfilled" ? ext.value.extensions : [];
+      installed = new Set(br.status === "fulfilled" ? (br.value.installed ?? []).map(b => b.name) : []);
+      if (ext.status === "rejected") fail(ext.reason);
+      table.rows(connected); tableWrap.hidden = !connected.length; paintCards();
     };
-    const head = el("div", "card-header"); head.append(el("h3", "card-title", "Connected browsers"));
-    table.element.prepend(head);
-    body.append(table.element); dock.append(table.foot);
+    body.append(tableWrap); dock.append(table.foot);
     const close = el("button", "btn me-auto"); close.type = "button"; close.textContent = "Close"; close.onclick = () => hideModal("#v1Extensions");
     foot.append(close, make);
     await load(); showModal("#v1Extensions");
@@ -488,7 +532,6 @@ function install(W: V1): void {
     const live = W.workspaces.filter(w => !w.archived), archived = W.workspaces.length - live.length;
     for (const w of live) dm.append(item(w.id === W.id ? "ti-check" : "ti-point", w.name, () => { if (w.id !== W.id) nav(w.id); }, w.id === W.id ? "active" : ""));
     dm.append(item("ti-list-details", "All workspaces" + (archived ? ` (${archived} archived)` : "") + "…", manage),
-      item("ti-puzzle", "Browser extension…", () => void extensions()),
       el("div", "dropdown-divider"), el("h6", "dropdown-header", "This workspace"),
       item("ti-history", "History and progress…", () => void history()),
       item("ti-refresh-dot", "Update from source…", () => void updateWs()));

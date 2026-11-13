@@ -5,7 +5,7 @@
 
 import { TRASH, type SavedFolder, type BookmarkId } from "./tree";
 
-export interface V1Node { id: string; kind: "folder" | "bookmark"; title: string; url?: string; note?: string; added?: number; children?: V1Node[] }
+export interface V1Node { id: string; kind: "folder" | "bookmark"; title: string; url?: string; note?: string; added?: number; rating?: number; tags?: string[]; children?: V1Node[] }
 export interface V1Trashed { node: V1Node; from: string; index: number; at: number; reason?: string }
 export interface V1Tree { root: V1Node; trash?: V1Trashed[] }
 /** The last link check of an address (store.LinkResult). */
@@ -35,6 +35,9 @@ export interface PageState {
   root: SavedFolder;
   titles: Record<string, string>;
   notes: Record<string, string>;
+  /** 1–5 stars and labels by bookmark id (absent from saves made before they existed). */
+  ratings?: Record<string, number>;
+  tags?: Record<string, string[]>;
   gone: BookmarkId[];
   trashFrom: Record<string, From>;
 }
@@ -63,7 +66,7 @@ export function hostOf(u: string): string {
 export function toPage(t: V1Tree, built = "", links: Record<string, V1Link> = {}, media: Media = { icons: {}, thumbs: {} }): Page {
   const keep: PageItem[] = [], ids: string[] = [], folders: string[] = [], pathOf = new Map<string, string>(), placed = new Map<string, string>();
   const trashed: Page["trashed"] = {};
-  const state: PageState = { root: { n: "", c: [], k: t.root.id }, titles: {}, notes: {}, gone: [], trashFrom: {} };
+  const state: PageState = { root: { n: "", c: [], k: t.root.id }, titles: {}, notes: {}, ratings: {}, tags: {}, gone: [], trashFrom: {} };
   const bookmark = (b: V1Node, path: string): BookmarkId => {
     const id = keep.length + 1;
     const item: PageItem = { id, u: b.url ?? "", t: b.title, s: "unchecked", g: path, o: path };
@@ -75,6 +78,8 @@ export function toPage(t: V1Tree, built = "", links: Record<string, V1Link> = {}
     if (h) item.h = h;
     keep.push(item); ids.push(b.id); placed.set(b.id, path);
     if (b.note) state.notes[id] = b.note;
+    if (b.rating) state.ratings![id] = b.rating;
+    if (b.tags?.length) state.tags![id] = [...b.tags];
     return id;
   };
   const folder = (f: V1Node, path: string): SavedFolder => {
@@ -137,6 +142,9 @@ export function fromPage(state: PageState, urls: Record<string, string>, page: P
       const b: V1Node = { id, kind: "bookmark", title: state.titles[x] ?? i.t, url: urls[x] ?? i.u };
       const note = state.notes[x];
       if (note) b.note = note;
+      const rating = state.ratings?.[x], tags = state.tags?.[x];
+      if (rating) b.rating = rating;
+      if (tags?.length) b.tags = tags;
       if (i.a) b.added = i.a;
       return b;
     }

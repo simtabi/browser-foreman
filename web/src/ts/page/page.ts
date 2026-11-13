@@ -5,9 +5,12 @@
 import { Dom } from "../dom";
 import { PlaceMemory } from "../place";
 import { HistoryAccessPanel } from "../history";
+import { SnapshotSettingsPanel } from "../snapshot-settings";
 import { Pager } from "../pager";
 import { RangePicker } from "../rangepick";
 import { FoldCenter } from "../fold";
+import { starRating, tagEditor } from "../labels";
+import { api } from "../api";
 import { ViewSearch } from "../search";
 import { UndoCenter } from "../undo";
 import { Poller } from "../poller";
@@ -121,11 +124,11 @@ const defaultTree = m => defaultTreeOf(DATA.folders || [], DATA.keep.map(i => ({
 // and anything emptied from the trash stays gone.
 function loadState(m) {
   const saved = store.get("tree-" + m), openSaved = store.get("open-" + m);
-  const base = {titles: {}, notes: {}, open: new Set(openSaved || ["Bookmarks Bar"]), gone: new Set(), trashFrom: {}, edited: false};
+  const base = {titles: {}, notes: {}, ratings: {}, tags: {}, open: new Set(openSaved || ["Bookmarks Bar"]), gone: new Set(), trashFrom: {}, edited: false};
   if (!saved) return {...base, root: defaultTree(m)};
   const gone = new Set(saved.gone || []);
   const root = restoreTree(saved.root, {valid: id => ITEM.has(id) && !DUPE.has(id), gone, items: DATA.keep.map(i => ({id: i.id, path: i[m]}))});
-  return {...base, root, titles: saved.titles || {}, notes: saved.notes || {}, open: new Set(openSaved || saved.open || ["Bookmarks Bar"]), gone, trashFrom: saved.trashFrom || {}, edited: true};
+  return {...base, root, titles: saved.titles || {}, notes: saved.notes || {}, ratings: saved.ratings || {}, tags: saved.tags || {}, open: new Set(openSaved || saved.open || ["Bookmarks Bar"]), gone, trashFrom: saved.trashFrom || {}, edited: true};
 }
 const S = {g: loadState("g")};
 const undoStack = {g: []}, redoStack = {g: []};  // used only when no workspace is attached (the page opened as a file)
@@ -144,11 +147,11 @@ function persist() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     const s = st();
-    if (s.edited) store.set("tree-" + mode, {root: plain(s.root), titles: s.titles, notes: s.notes, gone: [...s.gone], trashFrom: s.trashFrom});
+    if (s.edited) store.set("tree-" + mode, {root: plain(s.root), titles: s.titles, notes: s.notes, ratings: s.ratings, tags: s.tags, gone: [...s.gone], trashFrom: s.trashFrom});
   }, 300);
 }
 // Never lose the last half-second of edits: when the page is hidden or closed, write at once.
-function persistNow() { clearTimeout(saveTimer); const s = st(); if (s.edited) store.set("tree-" + mode, {root: plain(s.root), titles: s.titles, notes: s.notes, gone: [...s.gone], trashFrom: s.trashFrom}); }
+function persistNow() { clearTimeout(saveTimer); const s = st(); if (s.edited) store.set("tree-" + mode, {root: plain(s.root), titles: s.titles, notes: s.notes, ratings: s.ratings, tags: s.tags, gone: [...s.gone], trashFrom: s.trashFrom}); }
 addEventListener("pagehide", persistNow);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") persistNow(); });
 function save() { st().edited = true; persist(); $("#edited").textContent = "Edited · kept in this browser"; }
@@ -157,15 +160,15 @@ const saveOpen = () => { store.set("open-" + mode, [...st().open]); };
 
 function snapshot() {
   const s = st();
-  undoStack[mode].push(JSON.stringify({root: plain(s.root), titles: s.titles, notes: s.notes, gone: [...s.gone], trashFrom: s.trashFrom}));
+  undoStack[mode].push(JSON.stringify({root: plain(s.root), titles: s.titles, notes: s.notes, ratings: s.ratings, tags: s.tags, gone: [...s.gone], trashFrom: s.trashFrom}));
   if (undoStack[mode].length > 60) undoStack[mode].shift();
   redoStack[mode] = [];  // a new edit ends what could be redone
   setTimeout(() => UNDO.refresh(), 0);
 }
 // Bookmarks: with a workspace, its history is the undo stack (server-side, redo included); opened as a file, the
 // page keeps its own two stacks.
-const pageState = () => { const s = st(); return JSON.stringify({root: plain(s.root), titles: s.titles, notes: s.notes, gone: [...s.gone], trashFrom: s.trashFrom}); };
-function applyPageState(u) { const o = JSON.parse(u), s = st(); s.root = revive(o.root); s.titles = o.titles; s.notes = o.notes || {}; s.gone = new Set(o.gone); s.trashFrom = o.trashFrom; save(); build(); }
+const pageState = () => { const s = st(); return JSON.stringify({root: plain(s.root), titles: s.titles, notes: s.notes, ratings: s.ratings, tags: s.tags, gone: [...s.gone], trashFrom: s.trashFrom}); };
+function applyPageState(u) { const o = JSON.parse(u), s = st(); s.root = revive(o.root); s.titles = o.titles; s.notes = o.notes || {}; s.ratings = o.ratings || {}; s.tags = o.tags || {}; s.gone = new Set(o.gone); s.trashFrom = o.trashFrom; save(); build(); }
 function undo() {
   if (WS) return WS.undo();
   const u = undoStack[mode].pop(); if (!u) return toast("Nothing to undo");
@@ -189,7 +192,7 @@ const UNDO_LABEL = k => UNDO.label(k);
 let FOLD = null;
 function setupFold() {
   FOLD = new FoldCenter($("#foldBtn")).register("bookmarks", {
-    anyOpen: () => rows.some(r => r.kind === "folder" && !r.trash) ? rows.some(r => r.kind === "folder" && !r.trash && r.open) : null,
+    anyOpen: () => rows.some(r => r.kind === "folder") ? rows.some(r => r.kind === "folder" && r.open) : null,
     expand: () => { expandAllFolders(); list.focus(); }, collapse: () => { collapseAllFolders(); list.focus(); }})
     .register("tabs", TABS.fold).show(view_);
 }
@@ -202,6 +205,32 @@ document.addEventListener("click", e => {
 // ---------- items ----------
 const titleOf = id => st().titles[id] ?? ITEM.get(id).t;
 const noteOf = id => st().notes[id];
+// Last opened: from the browsers' own history, read when the page opens (owner only; never saved). Keyed by the
+// bookmark's address as the server holds it. OPENED_READ is how many history files could be read (0: none).
+let OPENED = new Map(), OPENED_READ = 0, OPENED_BLOCKED = 0;
+const openedOf = u => OPENED.get(u);
+async function loadOpened() {
+  if (!WS || !window.BM_WS?.id) return;
+  try {
+    const j = await api.path("opened").get();  // v1-compat: GET /api/v1/workspaces/{id}/opened
+    OPENED = new Map(Object.entries(j.opened || {}).map(([u, v]) => [u, {t: Math.floor(Date.parse(v.last) / 1000), n: v.visits}]));
+    OPENED_READ = j.read || 0; OPENED_BLOCKED = (j.skipped || []).length;
+    build(true); if (rows[sel]?.kind === "link") show();
+  } catch { /* not the owner, or the server has no history access: the column stays empty */ }
+}
+function openedBucket(t) {
+  if (!t) return OPENED_READ ? "Never opened" : "Unknown (history not readable)";
+  const days = (Date.now() / 1000 - t) / 86400;
+  return days < 1 ? "Today" : days < 7 ? "This week" : days < 31 ? "This month" : days < 365 ? "This year" : "Over a year ago";
+}
+const ratingOf = id => st().ratings?.[id] || 0;
+const tagsOf = id => st().tags?.[id] || [];
+// Every tag in use, most used first (the tag field suggests these).
+function allTags() {
+  const n = new Map();
+  for (const ts of Object.values(st().tags || {})) for (const t of ts) n.set(t, (n.get(t) || 0) + 1);
+  return [...n.keys()].sort((a, b) => n.get(b) - n.get(a) || a.localeCompare(b));
+}
 const descOf = id => noteOf(id) ?? ITEM.get(id).ds ?? "";
 function host(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } }
 function hue(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
@@ -246,8 +275,8 @@ const readOnly = () => filter === "dupes" || !!WS?.locked;
 const grouped = () => !readOnly() && view.group !== "folder";
 const vopen = new Set();
 const VIEW_OPTS = [
-  ["group", "Group by", [["folder", "Folders"], ["site", "Site"], ["status", "Status"], ["year", "Year added"], ["month", "Month added"], ["flat", "One list"]]],
-  ["sort", "Sort", [["manual", "Manual"], ["name", "Name A–Z"], ["name-desc", "Name Z–A"], ["new", "Newest first"], ["old", "Oldest first"], ["site", "Site"], ["status", "Status"]]],
+  ["group", "Group by", [["folder", "Folders"], ["site", "Site"], ["status", "Status"], ["year", "Year added"], ["month", "Month added"], ["rating", "Rating"], ["tag", "Tag"], ["opened", "Last opened"], ["flat", "One list"]]],
+  ["sort", "Sort", [["manual", "Manual"], ["name", "Name A–Z"], ["name-desc", "Name Z–A"], ["new", "Newest first"], ["old", "Oldest first"], ["site", "Site"], ["status", "Status"], ["rating", "Highest rated"], ["opened", "Recently opened"]]],
   ["folders", "Folders", [["first", "First"], ["last", "Last"], ["mixed", "Mixed with links"]]],
 ];
 function setView(k, v) { view[k] = v; store.set("view", view); const s = $("#v-" + k); if (s) s.value = v; }
@@ -260,6 +289,8 @@ function cmpLinks(a, b) {
     case "old": return (A.a || 0) - (B.a || 0) || byTitle();
     case "site": return host(A.u).localeCompare(host(B.u)) || byTitle();
     case "status": return (STATUS_ORDER[A.s] ?? 9) - (STATUS_ORDER[B.s] ?? 9) || byTitle();
+    case "rating": return ratingOf(b) - ratingOf(a) || byTitle();
+    case "opened": return (openedOf(B.u)?.t || 0) - (openedOf(A.u)?.t || 0) || byTitle();
     default: return byTitle();
   }
 }
@@ -289,6 +320,10 @@ function virtualTree() {
     if (view.group === "site") return host(i.u) || "(no site)";
     if (view.group === "status") return i.s === "ok" ? "Working" : i.s === "dead" ? (i.dk === "host" ? "Dead: whole site gone" : "Dead: page gone") : (LABEL[i.s] || i.s);
     if (view.group === "month") return i.a ? new Date(i.a * 1000).toISOString().slice(0, 7) : "Unknown date";
+    // One folder per bookmark: a bookmark with several tags sits under its first (they are sorted).
+    if (view.group === "tag") return tagsOf(id)[0] || "(no tags)";
+    if (view.group === "rating") { const r = ratingOf(id); return r ? `${"★".repeat(r)} ${r} star${r === 1 ? "" : "s"}` : "Not rated"; }
+    if (view.group === "opened") return openedBucket(openedOf(i.u)?.t);
     return i.a ? String(new Date(i.a * 1000).getFullYear()) : "Unknown year";
   };
   const by = new Map();
@@ -306,7 +341,10 @@ function matcher() {
     if (filter === "moved" && !pendingUpdate(i)) return false;  // "Moved (update ready)": not those already updated
     if (from != null && !(i.a && i.a >= from)) return false;
     if (to != null && !(i.a && i.a <= to)) return false;
-    return !q || (titleOf(id) + " " + i.u + " " + i.ou + " " + nice(i.o) + " " + descOf(id)).toLowerCase().includes(q);
+    if (!q) return true;
+    // "#work" matches the tag exactly; any other words also search the tags.
+    if (q.startsWith("#") && !q.includes(" ")) return tagsOf(id).some(t => t.toLowerCase() === q.slice(1));
+    return (titleOf(id) + " " + i.u + " " + i.ou + " " + nice(i.o) + " " + descOf(id) + " " + tagsOf(id).join(" ")).toLowerCase().includes(q);
   };
 }
 const filtering = () => filter !== "all" || $("#q").value.trim() || view.from || view.to;
@@ -421,8 +459,19 @@ const on = (id, fn) => { $(id).onclick = e => { e.preventDefault(); closeDropdow
 // While a filter, search or the duplicates view forces folders open, these act on that view's own closed set.
 const forcedView = () => filtering() || readOnly();
 // Expand / collapse every folder: the toggle in the Folders card header, the command palette and the "-" key.
-function expandAllFolders() { if (forcedView()) { viewClosed.clear(); build(); return; } walkFolders(st().root, f => setOpen(f, true)); saveOpen(); build(); }
-function collapseAllFolders() { if (forcedView()) { for (const r of rows) if (r.kind === "folder" && !r.trash) viewClosed.add(r.key); sel = 0; build(); return; } st().open.clear(); saveOpen(); sel = 0; build(); }
+// In a filtered view the folders' open state is the view's own (viewClosed); the Trash keeps its saved state in every
+// view, so both buttons set it too. They used to skip it: Collapse all left the Trash open.
+function expandAllFolders() {
+  if (forcedView()) { viewClosed.clear(); const bin = trashFolder(); if (bin) { setOpen(bin, true); saveOpen(); } build(); return; }
+  walkFolders(st().root, f => setOpen(f, true)); saveOpen(); build();
+}
+function collapseAllFolders() {
+  if (forcedView()) {
+    for (const r of rows) if (r.kind === "folder") { if (r.trash) setOpen(r.node, false); else viewClosed.add(r.key); }
+    saveOpen(); sel = 0; build(); return;
+  }
+  st().open.clear(); saveOpen(); sel = 0; build();
+}
 // Open a folder and everything inside it, in the saved tree or the forced view.
 function expandInside(r) {
   if (forcedView()) { for (const k of [...viewClosed]) if (k === r.key || k.startsWith(r.key + "/")) viewClosed.delete(k); build(true); return; }
@@ -1161,6 +1210,8 @@ function openSettings() {
   // Browser history: Full Disk Access status and the way to grant it.
   const ha = Dom.write(el("div", "set-group"), "panel", "history-access"); new HistoryAccessPanel(ha).refresh();
   const extra = [ha];
+  // Page snapshots: window size, wait and folder (server preferences; owner only).
+  if (WS) extra.push(new SnapshotSettingsPanel().element);
   // Assistants: where Claude can reach Browser Foreman, and whether it may change things.
   if (wsUI()?.mcpAccess) extra.push(settingsGroup("Assistants", [
     actionRow("MCP access (Claude)", "Where Claude can reach Browser Foreman, and whether it may change things. Off by default.", "Open…", "ti-plug-connected", "", closing(() => wsUI().mcpAccess()))]));
@@ -1256,7 +1307,13 @@ function build(keepView = false) {
     const keys = el("button", "btn btn-ghost-secondary btn-icon btn-sm"); keys.type = "button"; keys.setAttribute("aria-label", "Keyboard shortcuts"); keys.append(icon("ti-keyboard"));
     keys.dataset.tip = (readOnly() ? "" : "Drag to move. ") + "→ open · ← close · Space select · . menu. Click for every shortcut.";
     keys.onclick = () => openShortcuts();
-    const parts = [keys];
+    // List or grid (thumbnail cards), kept in this browser.
+    const lay = el("div", "btn-group btn-group-sm layout-toggle"); lay.setAttribute("role", "group"); lay.setAttribute("aria-label", "Layout");
+    for (const [k, ic, tip] of [["list", "ti-list", "List"], ["grid", "ti-layout-grid", "Grid: thumbnails"]]) {
+      const b = el("button", "btn btn-icon" + (LAYOUT === k ? " active" : "")); b.type = "button"; b.dataset.tip = tip; b.setAttribute("aria-label", tip);
+      b.setAttribute("aria-pressed", String(LAYOUT === k)); b.append(icon(ic)); b.onclick = () => setLayout(k); lay.append(b);
+    }
+    const parts = [lay, keys];
     if (readOnly()) { const b = el("span", "badge bg-yellow-lt"); b.append(icon("ti-lock", "me-1"), "Read-only"); b.dataset.tip = "These copies were merged into the bookmarks you kept. Open, copy or look them up here; to move bookmarks, use All bookmarks."; parts.unshift(b); }
     hint.replaceChildren(...parts);
   }
@@ -1269,14 +1326,20 @@ function build(keepView = false) {
 
 // A row's element by its index in `rows` (separators sit between rows, so position in the list is not the index).
 const rowEl = k => Dom.one("row", String(k), list);
+// List or grid layout of the tree (the grid shows each folder's bookmarks as thumbnail cards).
+let LAYOUT = store.get("layout") === "grid" ? "grid" : "list";
+function setLayout(k) { LAYOUT = k; store.set("layout", k); document.body.classList.toggle("layout-grid", k === "grid"); build(true); }
+document.body.classList.toggle("layout-grid", LAYOUT === "grid");
 // What the row renderer needs from the page (src/web/ts/views/tree-rows.ts).
 const CARD_DEPS = {host, hue, shortUrl};  // what the Open tabs cards need (src/web/ts/views/tab-cards.ts)
-const ROW_DEPS = {readOnly: () => readOnly(), titleOf, descOf, host, shortUrl, thumb, favicon, item: id => ITEM.get(id),
+const ROW_DEPS = {readOnly: () => readOnly(), titleOf, descOf, ratingOf, tagsOf, host, shortUrl, thumb, favicon, item: id => ITEM.get(id),
   isNewFolder: f => newMine.has(pathOf(f)), filtering: () => !!filtering(), label: LABEL, help: HELP, statusIcon: STATUS_ICON};
 function draw() {
   hideTip();
   list.replaceChildren();
   if (!rows.length) { const e = el("div", "empty py-5"); e.append(el("p", "empty-title", "Nothing matches"), el("p", "empty-subtitle text-secondary", "Clear the filters or the search to see everything.")); list.append(e); return; }
+  // Grid layout: each run of bookmarks in a folder is laid out as thumbnail cards; folders stay rows above them.
+  const grid = LAYOUT === "grid"; let box = null;
   rows.forEach((r, idx) => {
     // The row's element is built by src/web/ts/views/tree-rows.ts; selection, clicks, menus and drag are wired here.
     const {row: d, twisty} = rowElement(r, idx, {selected: idx === sel, marked: marked.has(r.node), draggable: !readOnly() && !r.trash && !grouped()}, ROW_DEPS);
@@ -1293,8 +1356,11 @@ function draw() {
     // A folder holding both subfolders and bookmarks: its loose bookmarks get their own labelled group after the
     // subfolders, so they do not read as part of the last subfolder.
     const group = looseGroupAt(rows, idx);
-    if (group) list.append(looseLabel(r.depth, group.parent === st().root ? "this folder" : nice(group.parent.n), group.count));
-    list.append(d);
+    if (group) { box = null; list.append(looseLabel(r.depth, group.parent === st().root ? "this folder" : nice(group.parent.n), group.count)); }
+    if (grid && r.kind === "link") {
+      if (!box) { box = el("div", "bm-grid"); box.setAttribute("role", "group"); box.style.marginLeft = (6 + r.depth * 18) + "px"; list.append(box); }
+      d.style.marginLeft = ""; box.append(d);
+    } else { box = null; list.append(d); }
   });
   rowEl(sel)?.scrollIntoView({block: "nearest"});
 }
@@ -1851,6 +1917,12 @@ function paintScope() {
   const manage = el("a", "dropdown-item"); manage.href = "#"; manage.append(icon("ti-settings", "me-2"), "Browsers and access…");
   manage.onclick = e => { e.preventDefault(); closeDropdowns(); window.BF?.browsers(); };
   m.append(manage);
+  // Everything about the browser extension lives here too: install it per browser, connect, disconnect.
+  if (wsUI()?.extensions) {
+    const ext = el("a", "dropdown-item"); ext.href = "#"; ext.append(icon("ti-puzzle", "me-2"), "Browser extensions…");
+    ext.onclick = e => { e.preventDefault(); closeDropdowns(); void wsUI().extensions(); };
+    m.append(ext);
+  }
   wrap.replaceChildren(b, m);
 }
 // One chosen browser is named ("New Brave Browser window"); none yet, or several at once, reads "browser"
@@ -2224,6 +2296,13 @@ function showLink(i, id) {
   }
   const ds = descOf(id);
   if (ds) info.append(el("p", "lead-text mb-3", ds));
+  // Your own labels: a 1–5 star rating and tags, saved with your edits (and onto the server's bookmark).
+  if (!readOnly()) {
+    const lab = el("div", "bm-labels mb-3");
+    const stars = starRating(ratingOf(id), v => { snapshot(); if (v) st().ratings[id] = v; else delete st().ratings[id]; save(); build(true); });
+    const tg = tagEditor(tagsOf(id), t => { snapshot(); if (t.length) st().tags[id] = t; else delete st().tags[id]; save(); build(true); }, allTags());
+    lab.append(stars, tg); info.append(lab);
+  }
   const al = statusAlert(i, id); if (al) info.append(al);
   const tags = el("div", "d-flex flex-wrap gap-2 mb-3");
   for (const [text, cls, ic, tip] of linkBadges(i, !!noteOf(id))) { const b = badge(text, cls, ic); if (tip) b.dataset.tip = HELP[tip]; tags.append(b); }
@@ -2236,7 +2315,10 @@ function showLink(i, id) {
   a.append(la, cp);
   info.append(sectionCard("Details", (() => { const g = datagrid([
     ["Link", a], ["Updated from", i.applied ? i.prev : ""],
-    ["Added", fmtDate(i.a)], ["Was in", nice(i.o)], ["Why it is here", i.p ? "Kept exactly where you had it" : i.w],
+    ["Added", fmtDate(i.a)],
+    ["Last opened", (o => o ? `${fmtDate(o.t)} · ${o.n.toLocaleString()} visit${o.n === 1 ? "" : "s"}` : OPENED_READ ? "Not in your browsers' history"
+      : OPENED_BLOCKED ? "Unknown: macOS blocks reading browser history (Browsers › Allow reading)" : "")(openedOf(i.u))],
+    ["Was in", nice(i.o)], ["Why it is here", i.p ? "Kept exactly where you had it" : i.w],
     ["Original title", st().titles[id] != null ? i.t : ""],
     ["Page's own description", noteOf(id) && i.ds ? i.ds : ""],
     ["In the Trash", !readOnly() && inTrash(id) ? "from " + (nice((st().trashFrom[id] || {}).path || "") || "top level") : ""],
@@ -2310,6 +2392,7 @@ document.addEventListener("keydown", e => {
 
 setupFold();
 buildToolbar();
+setTimeout(() => void loadOpened(), 0);
 summary();
 tipsFromTitles();
 updateAllLabel();

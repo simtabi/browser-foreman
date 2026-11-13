@@ -29,6 +29,15 @@ assert.deepEqual(a.body.installed.map(x => x.path), [undefined, undefined], "pat
 assert.deepEqual(a.body.tracked, ["Safari"], "nothing chosen tracks every scriptable browser");
 assert.equal(a.body.system_default, "Safari");
 
+// Snapshot settings: only those four keys reach PUT preferences, whatever else is sent.
+a = await run("POST", "snapshot-settings", "", { snapshot_width: 1440, snapshot_height: 900, autosave: false });
+assert.equal(calls.at(-1), 'PUT preferences {"snapshot_width":1440,"snapshot_height":900}');
+
+// Last opened goes to this workspace's route (the page knows no workspace id in its own calls).
+a = await run("GET", "opened", "", undefined);
+assert.equal(calls.at(-1), "GET workspaces/main/opened");
+assert.equal(a.body.passthrough, "workspaces/main/opened");
+
 a = await run("POST", "open", "", { urls: ["https://go.dev/", "https://pkg.go.dev/"], how: "window", browser: "Safari" });
 assert.equal(a.body.opened, 2);
 assert.equal(calls.at(-1), 'POST open {"urls":["https://go.dev/","https://pkg.go.dev/"],"how":"window","browsers":["Safari"]}');
