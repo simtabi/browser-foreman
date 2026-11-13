@@ -15,7 +15,7 @@ export const STATUS_BG: Record<string, string> = { ok: "bg-success", moved: "bg-
   unverified: "bg-secondary", dead: "bg-danger", local: "bg-dark-lt", skipped: "bg-dark-lt", unchecked: "bg-secondary-lt", "n/a": "bg-dark-lt" };
 /** Short labels where space is tight (the folder summary); the full name stays in the tooltip. */
 export const STATUS_SHORT: Record<string, string> = { ok: "Working", moved: "Moved", "moved-elsewhere": "Other site", "needs-login": "Needs login",
-  unverified: "Unverified", dead: "Dead", local: "Local", skipped: "Skipped", unchecked: "Not checked yet", "n/a": "Not a web link" };
+  unverified: "Unverified", dead: "Dead", local: "Local", skipped: "Skipped", unchecked: "Unchecked", "n/a": "Not a link" };
 export const STATUS_NAME: Record<string, string> = { ok: "Working", moved: "Moved, update ready", "moved-elsewhere": "Redirects to another site", "needs-login": "Requires login",
   unverified: "Could not be verified", dead: "Dead", local: "Local or staging", skipped: "Not checked (action link)", unchecked: "Not checked yet", "n/a": "Not a web link" };
 

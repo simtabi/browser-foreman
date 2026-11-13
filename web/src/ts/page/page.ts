@@ -238,7 +238,7 @@ const vopen = new Set();
 const VIEW_OPTS = [
   ["group", "Group by", [["folder", "Folders"], ["site", "Site"], ["status", "Status"], ["year", "Year added"], ["month", "Month added"], ["flat", "One list"]]],
   ["sort", "Sort", [["manual", "Manual"], ["name", "Name A–Z"], ["name-desc", "Name Z–A"], ["new", "Newest first"], ["old", "Oldest first"], ["site", "Site"], ["status", "Status"]]],
-  ["folders", "Folders", [["first", "Folders first"], ["last", "Folders last"], ["mixed", "Mixed with links"]]],
+  ["folders", "Folders", [["first", "First"], ["last", "Last"], ["mixed", "Mixed with links"]]],
 ];
 function setView(k, v) { view[k] = v; store.set("view", view); const s = $("#v-" + k); if (s) s.value = v; }
 const STATUS_ORDER = {dead: 0, "moved-elsewhere": 1, unverified: 2, "needs-login": 3, moved: 4, ok: 5};
@@ -315,17 +315,21 @@ function buildToolbar() {
     const s = el("select", "form-select form-select-sm"); s.id = "v-" + k;
     for (const [v, t] of opts) { const o = el("option", null, t); o.value = v; s.append(o); }
     s.value = view[k];
-    s.onchange = () => { setView(k, s.value); marked.clear(); sel = 0; build(); list.focus(); };
-    const lab = el("label", "tb-field"); lab.append(el("span", null, l), s);
+    // A compact picker: the label, the chosen value, a chevron; the real select lies over it, invisible.
+    const lab = el("label", "btn btn-sm tb-pick"), val = el("b", null, s.selectedOptions[0]?.text || "");
+    const paint = () => { val.textContent = s.selectedOptions[0]?.text || ""; lab.classList.toggle("is-set", s.value !== VIEW_DEFAULT[k]); };
+    s.onchange = () => { setView(k, s.value); paint(); marked.clear(); sel = 0; build(); list.focus(); };
+    s.setAttribute("aria-label", l);
+    lab.append(el("span", "tb-pick-label", l), val, icon("ti-chevron-down", "text-secondary"), s); paint();
     $("#view").append(lab);
   }
   $("#dFrom").value = view.from; $("#dTo").value = view.to;
-  $("#dFrom").onchange = () => { setView("from", $("#dFrom").value); sel = 0; build(); };
-  $("#dTo").onchange = () => { setView("to", $("#dTo").value); sel = 0; build(); };
+  $("#dFrom").onchange = () => { datePreset = ""; setView("from", $("#dFrom").value); sel = 0; build(); };
+  $("#dTo").onchange = () => { datePreset = ""; setView("to", $("#dTo").value); sel = 0; build(); };
   for (const [label, fn] of DATE_PRESETS) {
-    const a = el("a", "dropdown-item", label); a.href = "#";
-    a.onclick = e => { e.preventDefault(); closeDropdowns(); setDates(...fn()); };
-    $("#datePresets").append(a);
+    const a = el("a", "dropdown-item", label); a.href = "#"; a.dataset.preset = label;
+    a.onclick = e => { e.preventDefault(); closeDropdowns(); setDates(...fn(), label); };
+    $("#datePresetList").append(a);
   }
   $("#clearFilters").onclick = clearFilters;
   paintChips();
@@ -342,7 +346,16 @@ const DATE_PRESETS = [
   ["Before 2020", () => [null, new Date(2019, 11, 31, 23, 59)]],
   ["Any time", () => [null, null]],
 ];
-function setDates(from, to) { setView("from", iso(from)); setView("to", iso(to)); $("#dFrom").value = view.from; $("#dTo").value = view.to; sel = 0; build(); }
+function setDates(from, to, preset = "") { datePreset = from || to ? preset : ""; setView("from", iso(from)); setView("to", iso(to)); $("#dFrom").value = view.from; $("#dTo").value = view.to; sel = 0; build(); }
+// The Added picker's label: the preset chosen, else the range typed, else "Any time".
+let datePreset = "";
+function paintDates() {
+  const day = v => v ? new Date(v).toLocaleDateString(undefined, {day: "numeric", month: "short", year: "numeric"}) : "";
+  const f = day(view.from), t = day(view.to);
+  $("#dateLabel").textContent = datePreset || (f && t ? `${f} – ${t}` : f ? `Since ${f}` : t ? `Before ${t}` : "Any time");
+  $("#dateBtn").classList.toggle("is-set", !!(view.from || view.to));
+  for (const a of $("#datePresetList").children) a.classList.toggle("active", !!datePreset && a.dataset.preset === datePreset);
+}
 function setFilter(k) { filter = k; paintChips(); marked.clear(); sel = 0; build(); list.focus(); if (!restoringPlace) PLACE.update({filter: k === "all" ? "" : k}); }
 // The chips count what the tree holds now, outside the Trash (moved, renamed, trashed or deleted bookmarks included);
 // they used to count the original set, so "Dead links 470" stayed after every dead link had been deleted.
@@ -1200,6 +1213,8 @@ function build(keepView = false) {
   const root = readOnly() ? dupesTree() : grouped() ? virtualTree() : st().root;
   if (readOnly()) indexParents(root);
   const match = matcher(), auto = filtering();
+  $("#clearFilters").disabled = !auto;  // nothing to clear: the button says so
+  paintDates();
   const count = new Map();
   const cnt = f => { let c = 0; for (const x of f.c) c += isFolder(x) ? cnt(x) : (match(x) ? 1 : 0); count.set(f, c); return c; };
   const t = grouped() ? -1 : root.c.findIndex(x => isFolder(x) && x.n === TRASH);
@@ -1743,7 +1758,7 @@ function commands() {
     ...VIEW_OPTS[0][2].map(([v, t]) => ["group-" + v, "Group by: " + t, "ti-category", "", () => true, () => { setView("group", v); build(); }, "View"]),
     ...VIEW_OPTS[1][2].map(([v, t]) => ["sort-" + v, "Sort: " + t, "ti-arrows-sort", "", () => true, () => { setView("sort", v); build(); }, "View"]),
     ...VIEW_OPTS[2][2].map(([v, t]) => ["folders-" + v, t, "ti-folders", "", () => true, () => { setView("folders", v); build(); }, "View"]),
-    ...DATE_PRESETS.map(([l, fn]) => ["date-" + l, "Added: " + l, "ti-calendar-time", "", () => true, () => setDates(...fn()), "Filter"]),
+    ...DATE_PRESETS.map(([l, fn]) => ["date-" + l, "Added: " + l, "ti-calendar-time", "", () => true, () => setDates(...fn(), l), "Filter"]),
     ["select-all", "Select everything shown", "ti-checks", "⌘A", () => rows.length > 0, () => { rows.forEach(x => marked.add(x.node)); draw(); show(); }, "View"],
     ["undo", "Undo" + (UNDO_LABEL("undo") ? `: ${UNDO_LABEL("undo")}` : ""), "ti-arrow-back-up", "⌘Z", () => !!UNDO_LABEL("undo"), () => UNDO.undo(), "General"],
     ["redo", "Redo" + (UNDO_LABEL("redo") ? `: ${UNDO_LABEL("redo")}` : ""), "ti-arrow-forward-up", "⇧⌘Z", () => !!UNDO_LABEL("redo"), () => UNDO.redo(), "General"],

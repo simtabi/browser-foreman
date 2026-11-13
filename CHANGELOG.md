@@ -114,6 +114,10 @@ ships.
 
 ### Changed
 
+- The View row is one line: Group by, Sort and Folders are compact pickers showing their value (outlined when not the
+  default), and the two date-time fields and Presets became one Added dropdown with presets and a custom range. Clear
+  filters sits at the end of that row and is disabled when nothing is filtered. Tree rows no longer show their letter
+  twice, and Link health's labels are short enough not to be cut.
 - The toolbar: Show is one Tabler segmented control on a single row with short labels (full names in the tooltips),
   the Download button and its menu arrow follow Bootstrap's nested button group (both outer corners rounded, a
   bright divider, no outline after a click), and Expand / Collapse all folders moved from the app menu to one toggle

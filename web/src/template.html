@@ -286,6 +286,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .bm-vis { position: relative; flex: none; display: block; }
 .bm-vis .th { width: 72px; height: 46px; display: flex; }
 .bm-fav { position: absolute; left: -5px; bottom: -5px; display: inline-flex; padding: 2px; border-radius: 7px; background: var(--tblr-bg-surface); box-shadow: 0 0 0 1px var(--tblr-border-color); line-height: 0; }
+.bm-vis:has(> .th.ph.letter) > .bm-fav:has(> .fvd) { display: none; }
 .bm-fav > * { width: 16px !important; height: 16px !important; margin: 0 !important; border-radius: 4px; font-size: .6rem; line-height: 16px; }
 body.no-tree-thumbs .bm-fav { position: static; padding: 0; box-shadow: none; background: transparent; }
 .bm-top { display: flex; align-items: center; gap: .5rem; min-width: 0; }
@@ -552,6 +553,20 @@ body.no-tree-dates #list .bm-date { display: none !important; }
 .tb-fields { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; }
 .tb-field { display: inline-flex; align-items: center; gap: .4rem; margin: 0; font-size: .8rem; color: var(--tblr-secondary); white-space: nowrap; }
 .tb-sep { width: 1px; align-self: stretch; background: var(--tblr-border-color); }
+/* View: each choice is a compact picker reading "Label  Value ▾"; the select sits invisibly over it, so the browser's
+   own list opens and the keyboard works as usual. */
+.tb-pick { position: relative; display: inline-flex; align-items: center; gap: .4rem; font-weight: 400; }
+.tb-pick .tb-pick-label { color: var(--tblr-secondary); }
+.tb-pick b { font-weight: 500; }
+.tb-pick select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.tb-pick:has(select:focus-visible) { box-shadow: 0 0 0 .25rem rgba(var(--tblr-primary-rgb), .25); }
+.tb-pick.is-set { border-color: var(--tblr-primary); }
+.tb-pick.is-set b { color: var(--tblr-primary); }
+.date-menu { min-width: 16rem; }
+.date-presets { display: grid; grid-template-columns: 1fr 1fr; }
+.date-presets .dropdown-item { white-space: nowrap; }
+.date-presets .dropdown-item.active { font-weight: 500; }
+.date-custom { padding: .25rem 1rem .75rem; }
 @media (max-width: 991px) { .tb-sep { display: none; } .tb-label { width: 100%; } }
 #jobPanel { position: fixed; right: 1rem; bottom: 1rem; width: 380px; z-index: 1085; }
 #toastBox { position: fixed; bottom: 1rem; right: 1rem; z-index: 1090; display: flex; flex-direction: column; gap: .5rem; width: min(380px, calc(100vw - 2rem)); pointer-events: none; }
@@ -724,16 +739,21 @@ body { overflow-wrap: break-word; }
       <div class="tb-row">
         <span class="tb-label">View</span>
         <div class="tb-fields" id="view"></div>
-        <div class="tb-sep"></div>
-        <div class="tb-fields" id="dates">
-          <label class="tb-field"><span>Added from</span><input type="datetime-local" class="form-control form-control-sm" id="dFrom"></label>
-          <label class="tb-field"><span>to</span><input type="datetime-local" class="form-control form-control-sm" id="dTo"></label>
-          <div class="dropdown">
-            <button class="btn btn-sm" data-dd><i class="ti ti-calendar-time me-1"></i>Presets<i class="ti ti-chevron-down ms-1"></i></button>
-            <div class="dropdown-menu" id="datePresets"><h6 class="dropdown-header">Bookmarks added…</h6></div>
+        <!-- When bookmarks were added: one dropdown holding the presets and a custom range, so the row stays one line. -->
+        <div class="dropdown" id="dates">
+          <button class="btn btn-sm tb-pick" data-dd aria-expanded="false" id="dateBtn"><i class="ti ti-calendar-time text-secondary"></i><span class="tb-pick-label">Added</span><b id="dateLabel">Any time</b><i class="ti ti-chevron-down text-secondary"></i></button>
+          <div class="dropdown-menu date-menu" id="datePresets">
+            <h6 class="dropdown-header">Bookmarks added…</h6>
+            <div class="date-presets" id="datePresetList"></div>
+            <div class="dropdown-divider"></div>
+            <h6 class="dropdown-header">Custom range</h6>
+            <div class="date-custom">
+              <label class="form-label small mb-1" for="dFrom">From</label><input type="datetime-local" class="form-control form-control-sm" id="dFrom">
+              <label class="form-label small mb-1 mt-2" for="dTo">To</label><input type="datetime-local" class="form-control form-control-sm" id="dTo">
+            </div>
           </div>
         </div>
-        <button class="btn btn-sm btn-ghost-secondary ms-auto" id="clearFilters"><i class="ti ti-filter-off me-1"></i>Clear filters</button>
+        <button class="btn btn-sm btn-ghost-secondary ms-auto" id="clearFilters" disabled><i class="ti ti-filter-off me-1"></i>Clear filters</button>
       </div>
     </div>
   </div>
