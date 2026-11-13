@@ -27,7 +27,11 @@ html, body { overflow-x: clip; }
 /* The column header stays in view while the rows scroll: the table's own wrapper must not scroll (it would trap the
    sticky header), so the dialog or pane does, and the header sits just under the sticky toolbar. */
 .modal-body .datatable-card > .table-responsive, .pane-scroll .datatable-card > .table-responsive { overflow: visible; }
-.modal-body .datatable thead th, .pane-scroll .datatable thead th { position: sticky; top: var(--dt-head-h, 0px); z-index: 2; background: var(--tblr-bg-surface-tertiary, var(--tblr-bg-surface)); box-shadow: inset 0 -1px 0 var(--tblr-border-color); }
+.modal-body .datatable thead th, .pane-scroll .datatable thead th { position: sticky; top: calc(var(--dt-head-h, 0px) - 1px); z-index: 2;
+  /* Opaque: the tertiary tint is translucent, so it is laid over the solid surface, or the rows show through. */
+  background-color: var(--tblr-bg-surface); background-image: linear-gradient(var(--tblr-bg-surface-tertiary), var(--tblr-bg-surface-tertiary));
+  box-shadow: inset 0 -1px 0 var(--tblr-border-color), inset 0 1px 0 var(--tblr-border-color); }
+.modal-body .datatable thead th .table-sort, .pane-scroll .datatable thead th .table-sort { background: transparent; }
 .modal-footer:empty { display: none; }
 .datatable th.text-end .table-sort { text-align: end; } .datatable th, .datatable td:not(.text-wrap) { white-space: nowrap; } .datatable td:first-child { white-space: normal; } .dt-name { max-width: min(28rem, 52vw); }
 @media (max-width: 575.98px) { .dt-name { max-width: 30vw; } .dt-name .avatar { display: none; } .datatable .table-sort { padding-inline: .5rem; } .datatable td, .datatable th { padding-inline: .5rem; } } .datatable td .empty { padding-inline: 0; }
