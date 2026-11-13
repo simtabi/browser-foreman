@@ -83,6 +83,23 @@ func TestExistingBookmarksAlwaysWin(t *testing.T) {
 	}
 }
 
+// Merging the same file again adds nothing new: its copies are already in the Trash as duplicates of the same kept
+// bookmark. (A test workspace merged ~60 times held 617,515 such copies and froze the page.)
+func TestMergingAgainDoesNotRefillTheTrash(t *testing.T) {
+	base := tree(folder("bar", "Bookmarks Bar", bm("keep", "Go", "https://go.dev/", 500)))
+	src := func() store.Tree {
+		return tree(folder("x", "Bookmarks Bar", bm("n1", "Go docs", "https://www.go.dev", 100)))
+	}
+	first, err := Merge(base, []Source{{Name: "a.html", Tree: src()}}, false, 1)
+	if err != nil || len(first.Tree.Trash) != 1 {
+		t.Fatalf("%v %d", err, len(first.Tree.Trash))
+	}
+	again, err := Merge(first.Tree, []Source{{Name: "a.html", Tree: src()}}, false, 2)
+	if err != nil || len(again.Tree.Trash) != 1 || len(again.Dups) != 0 || again.Again != 1 || again.Added != 0 {
+		t.Fatalf("trash %d, dups %d, again %d, added %d", len(again.Tree.Trash), len(again.Dups), again.Again, again.Added)
+	}
+}
+
 func TestDeepestCopyWinsAndTakesTheEarliestDateAndATitle(t *testing.T) {
 	a := tree(bm("a1", "https://x.example/p", "https://x.example/p", 300))
 	b := tree(folder("f", "Other", folder("g", "Reading", bm("b1", "", "https://x.example/p/", 900))))

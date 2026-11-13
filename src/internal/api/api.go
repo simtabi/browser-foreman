@@ -141,6 +141,8 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/tabs/snapshots", s.require(store.RoleViewer, s.listSnapshots))
 	m.HandleFunc("GET /api/v1/tabs/timeline", s.require(store.RoleViewer, s.timeline))
 	m.HandleFunc("GET /api/v1/tabs/stored", s.require(store.RoleViewer, s.tabsStored))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/open", s.require(store.RoleEditor, s.openWorkspace))
+	m.HandleFunc("PUT /api/v1/workspaces/{id}/tabs", s.require(store.RoleOwner, s.setWorkspaceTabs))
 	m.HandleFunc("POST /api/v1/tabs/ages", s.require(store.RoleViewer, s.ages))
 	m.HandleFunc("POST /api/v1/tabs/snapshots", s.require(store.RoleEditor, s.takeSnapshot))
 	m.HandleFunc("GET /api/v1/tabs/snapshots/{id}", s.require(store.RoleViewer, s.getSnapshot))

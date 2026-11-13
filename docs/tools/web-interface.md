@@ -49,6 +49,15 @@ Show chips with a count on each. The footer shows whether the server is running 
 | Open tabs | every window per browser, normal and incognito, live or as saved; reopen what a crash closed |
 | Timeline | everything that happened, by day: tab snapshots, bookmark edits, link checks |
 
+## Workspaces
+
+The workspace switcher sits in the top bar beside the logo, so it is there in every view: a workspace scopes
+Bookmarks, Open tabs and Timeline (its edits, its history and, when it keeps its own, its tab snapshots). The ⋮ menu
+has *All workspaces…*, *Rename this workspace…* and *Notes…*; *All workspaces…* renames, archives, locks, deletes and
+restores any of them, and chooses for each whether it keeps its **own tab snapshots** or uses the **shared** ones.
+Shared is the default: every workspace that does not keep its own reads and saves one central set. Switching a
+workspace to its own starts it empty; snapshots already taken stay where they were saved.
+
 ## It remembers where you were
 
 The address carries the view, filter, search, selected folder or bookmark and tab snapshot, for example

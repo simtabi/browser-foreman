@@ -42,6 +42,12 @@ how many links opened, never which.
 
 ## Open tabs and snapshots
 
+Snapshots live in **pools**. A workspace that keeps its own tab snapshots (`PUT /api/v1/workspaces/{id}/tabs`
+`{"own": true}`) has a pool of its own; every other workspace shares one. New snapshots go into the pool of the
+workspace last opened (`POST /api/v1/workspaces/{id}/open`, which the web interface sends as it loads), and the
+listing, timeline and counts below read the pool of `?workspace=` (default: the workspace last opened). The choices
+are the `tabs_own` and `active_workspace` preferences.
+
 | Route | Role | Does |
 |---|---|---|
 | `GET /api/v1/tabs` | viewer | every tracked browser's windows and tabs now |

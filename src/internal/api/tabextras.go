@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/simtabi/browser-foreman/src/internal/store"
+	"github.com/simtabi/browser-foreman/src/internal/tabs"
 )
 
 // listTabNotes is every note on tabs, windows and snapshots, newest first.
@@ -122,10 +124,90 @@ func (s *Server) purgeTabs(w http.ResponseWriter, r *http.Request) {
 
 // tabsStored says how many snapshots tab history keeps and how many private-window pages they still hold.
 func (s *Server) tabsStored(w http.ResponseWriter, r *http.Request) {
-	n, pages, err := s.Tabs.Stored(r.Context())
+	n, pages, err := s.Tabs.Stored(r.Context(), s.tabPool(r))
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}
 	writeJSON(w, 200, map[string]int{"snapshots": n, "incognito_pages": pages})
+}
+
+// tabPool is the tab-snapshot pool a request reads: that of ?workspace= when given, else of the workspace last
+// opened; a workspace that keeps its own snapshots has its own pool, every other one shares one (tabs.PoolFor).
+func (s *Server) tabPool(r *http.Request) string {
+	p, _ := store.LoadPrefs(r.Context(), s.Data)
+	ws := r.URL.Query().Get("workspace")
+	if ws == "" {
+		ws = p.ActiveWorkspace
+	}
+	return tabs.PoolFor(p, ws)
+}
+
+// openWorkspace records the workspace in use, so background tab snapshots are saved into its pool.
+func (s *Server) openWorkspace(w http.ResponseWriter, r *http.Request) {
+	x, err := s.Data.Workspace(r.Context(), r.PathValue("id"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, 404, "no workspace with that id")
+		return
+	} else if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	p, err := store.LoadPrefs(r.Context(), s.Data)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	if p.ActiveWorkspace != x.ID {
+		p.ActiveWorkspace = x.ID
+		if err := store.SavePrefs(r.Context(), s.Data, p); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+	}
+	writeJSON(w, 200, map[string]any{"active": x.ID, "own_tabs": tabs.PoolFor(p, x.ID) != ""})
+}
+
+// setWorkspaceTabs chooses whether a workspace keeps its own tab snapshots ({"own": true}) or uses the shared pool.
+// Snapshots already taken stay in the pool they were saved in.
+func (s *Server) setWorkspaceTabs(w http.ResponseWriter, r *http.Request) {
+	x, err := s.Data.Workspace(r.Context(), r.PathValue("id"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, 404, "no workspace with that id")
+		return
+	} else if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	var in struct {
+		Own *bool `json:"own"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	if in.Own == nil {
+		writeErr(w, 400, `give "own": true or false`)
+		return
+	}
+	p, err := store.LoadPrefs(r.Context(), s.Data)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	keep := []string{}
+	for _, id := range p.TabsOwn {
+		if id != x.ID {
+			keep = append(keep, id)
+		}
+	}
+	if *in.Own {
+		keep = append(keep, x.ID)
+	}
+	p.TabsOwn = keep
+	if err := store.SavePrefs(r.Context(), s.Data, p); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	_, _ = s.Bus.Publish("preferences.updated", map[string]any{"tabs_own": p.TabsOwn})
+	writeJSON(w, 200, map[string]any{"workspace": x.ID, "own_tabs": *in.Own})
 }

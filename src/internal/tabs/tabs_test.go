@@ -164,7 +164,7 @@ func TestTimelineAndFirstSeen(t *testing.T) {
 	_, _ = s.Take(ctx, "auto", false)
 	r.state["Google Chrome"][0].Tabs = []Tab{{URL: "https://pkg.go.dev/", Title: "Pkg"}}
 	_, _ = s.Take(ctx, "auto", false)
-	steps, err := s.Timeline(ctx, 30, nil, 40)
+	steps, err := s.Timeline(ctx, 30, nil, 40, "")
 	if err != nil || len(steps) != 3 {
 		t.Fatalf("%d %v", len(steps), err)
 	}
@@ -172,24 +172,24 @@ func TestTimelineAndFirstSeen(t *testing.T) {
 		t.Fatalf("%+v", steps)
 	}
 	// A custom range: up to the first snapshot lists only it; from just after it, the two later ones.
-	if one, err := s.TimelineBetween(ctx, time.Time{}, first.State.At, nil, 40); err != nil || len(one) != 1 || one[0].ID != first.ID {
+	if one, err := s.TimelineBetween(ctx, time.Time{}, first.State.At, nil, 40, ""); err != nil || len(one) != 1 || one[0].ID != first.ID {
 		t.Fatalf("until the first snapshot: %+v %v", one, err)
 	}
-	if later, _ := s.TimelineBetween(ctx, first.State.At.Add(time.Nanosecond), time.Time{}, nil, 40); len(later) != 2 {
+	if later, _ := s.TimelineBetween(ctx, first.State.At.Add(time.Nanosecond), time.Time{}, nil, 40, ""); len(later) != 2 {
 		t.Fatalf("after the first snapshot: %d", len(later))
 	}
 	// days 0 is "All": every snapshot kept, not none (the Timeline's All showed an empty chart).
-	if all, err := s.Timeline(ctx, 0, nil, 40); err != nil || len(all) != 3 {
+	if all, err := s.Timeline(ctx, 0, nil, 40, ""); err != nil || len(all) != 3 {
 		t.Fatalf("days 0 listed %d snapshots, want 3: %v", len(all), err)
 	}
-	if none, _ := s.Timeline(ctx, 30, []string{"Safari"}, 40); len(none) != 0 {
+	if none, _ := s.Timeline(ctx, 30, []string{"Safari"}, 40, ""); len(none) != 0 {
 		t.Fatalf("Safari had no windows: %+v", none)
 	}
 	seen, _ := s.FirstSeen(ctx, []string{"https://go.dev/", "https://pkg.go.dev/", "https://private.example/", "https://never.example/"})
 	if !seen["https://go.dev/"].Equal(first.State.At) || seen["https://pkg.go.dev/"].Equal(first.State.At) || len(seen) != 2 {
 		t.Fatalf("%v", seen)
 	}
-	rows, _ := s.Rows(ctx, 10, nil)
+	rows, _ := s.Rows(ctx, 10, nil, "")
 	if len(rows) != 3 || rows[0].Summary.Tabs != 1 || rows[0].Browsers[0] != "Google Chrome" {
 		t.Fatalf("%+v", rows)
 	}
@@ -241,5 +241,43 @@ func TestExtensionReportsStandInForReading(t *testing.T) {
 	}
 	if live.Summary.IncognitoTabs != 1 {
 		t.Fatalf("Firefox's private window, sent by its extension, is counted and redacted: %+v", live.Summary)
+	}
+}
+
+// Workspaces that keep their own tab snapshots save into and read from their own pool; every other workspace shares
+// one. A pool's "unchanged" check compares with that pool's last snapshot only.
+func TestSnapshotPools(t *testing.T) {
+	s, r, _, _ := service(t)
+	ctx := context.Background()
+	shared, _ := s.Take(ctx, "auto", false) // no workspace chosen yet: the shared pool
+	p, _ := store.LoadPrefs(ctx, s.Data)
+	p.TabsOwn, p.ActiveWorkspace = []string{"work"}, "work"
+	if err := store.SavePrefs(ctx, s.Data, p); err != nil {
+		t.Fatal(err)
+	}
+	if PoolFor(p, "work") != "work" || PoolFor(p, "main") != "" {
+		t.Fatal("PoolFor")
+	}
+	r.state["Google Chrome"][0].Tabs = []Tab{{URL: "https://pkg.go.dev/", Title: "Pkg"}}
+	own, _ := s.Take(ctx, "auto", false)
+	if !own.Stored {
+		t.Fatalf("the work pool had no snapshot yet, so this one is new: %+v", own)
+	}
+	sharedRows, _ := s.Rows(ctx, 10, nil, "")
+	workRows, _ := s.Rows(ctx, 10, nil, "work")
+	if len(sharedRows) != 1 || sharedRows[0].ID != shared.ID || len(workRows) != 1 || workRows[0].ID != own.ID {
+		t.Fatalf("shared %+v, work %+v", sharedRows, workRows)
+	}
+	if n, _, _ := s.Stored(ctx, "work"); n != 1 {
+		t.Fatalf("stored in work: %d", n)
+	}
+	if steps, _ := s.Timeline(ctx, 0, nil, 40, "work"); len(steps) != 1 || steps[0].OpenedN != 0 {
+		t.Fatalf("the work pool's timeline starts with its own first snapshot: %+v", steps)
+	}
+	// Back to a shared workspace: the same tabs are new to the shared pool, so they are stored there.
+	p.ActiveWorkspace = "main"
+	_ = store.SavePrefs(ctx, s.Data, p)
+	if again, _ := s.Take(ctx, "auto", false); !again.Stored {
+		t.Fatalf("the shared pool's last snapshot differs: %+v", again)
 	}
 }

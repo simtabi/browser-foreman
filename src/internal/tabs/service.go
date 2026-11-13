@@ -123,29 +123,61 @@ type Saved struct {
 	State  State  `json:"live"`
 }
 
-// snapshotDoc is what a snapshot stores: the state and its fingerprint.
+// snapshotDoc is what a snapshot stores: the state, its fingerprint, and the pool it belongs to: a workspace's id
+// when that workspace keeps its own snapshots, empty for the shared pool (every snapshot before pools existed).
 type snapshotDoc struct {
 	State
 	Fingerprint string `json:"fingerprint"`
+	Workspace   string `json:"workspace,omitempty"`
+}
+
+// PoolFor is the pool a workspace reads and saves tab snapshots in: its own when it keeps its own
+// (Prefs.TabsOwn), otherwise the shared one ("").
+func PoolFor(p store.Prefs, workspace string) string {
+	for _, id := range p.TabsOwn {
+		if id != "" && id == workspace {
+			return workspace
+		}
+	}
+	return ""
+}
+
+// loadDoc reads one stored snapshot with its pool.
+func (s *Service) loadDoc(ctx context.Context, id string) (snapshotDoc, store.TabSnapshot, error) {
+	snap, err := s.Data.TabSnapshot(ctx, id)
+	if err != nil {
+		return snapshotDoc{}, snap, err
+	}
+	var doc snapshotDoc
+	if err := json.Unmarshal(snap.Windows, &doc); err != nil {
+		return doc, snap, fmt.Errorf("snapshot %s is unreadable: %w", id, err)
+	}
+	return doc, snap, nil
 }
 
 // Take reads the browsers and stores a snapshot, unless nothing changed since the last one (force stores anyway).
 func (s *Service) Take(ctx context.Context, reason string, force bool) (Saved, error) {
-	live, _, err := s.Live(ctx)
+	live, p, err := s.Live(ctx)
 	if err != nil {
 		return Saved{}, err
 	}
+	// Saved into the pool of the workspace last opened (Prefs.ActiveWorkspace), compared with that pool's last one.
+	pool := PoolFor(p, p.ActiveWorkspace)
 	if !Readable(live) {
 		return Saved{Why: "no browser windows could be read", State: live}, nil
 	}
 	fp := Fingerprint(live)
 	if !force {
-		if last, err := s.Data.TabSnapshots(ctx, 1); err == nil && len(last) == 1 {
-			if prev, err := s.Data.TabSnapshot(ctx, last[0].ID); err == nil {
-				var doc snapshotDoc
-				if json.Unmarshal(prev.Windows, &doc) == nil && doc.Fingerprint == fp {
+		if recent, err := s.Data.TabSnapshots(ctx, 200); err == nil {
+			for _, r := range recent {
+				doc, prev, err := s.loadDoc(ctx, r.ID)
+				if err != nil || doc.Workspace != pool {
+					continue
+				}
+				if doc.Fingerprint == fp {
 					return Saved{ID: prev.ID, Why: "unchanged since the last snapshot", State: live}, nil
 				}
+				break
 			}
 		}
 	}
@@ -153,7 +185,7 @@ func (s *Service) Take(ctx context.Context, reason string, force bool) (Saved, e
 	if _, err := s.Data.TabSnapshot(ctx, id); err == nil {
 		return Saved{ID: id, Why: "a snapshot was just taken", State: live}, nil
 	}
-	body, err := json.Marshal(snapshotDoc{State: live, Fingerprint: fp})
+	body, err := json.Marshal(snapshotDoc{State: live, Fingerprint: fp, Workspace: pool})
 	if err != nil {
 		return Saved{}, err
 	}
@@ -165,15 +197,8 @@ func (s *Service) Take(ctx context.Context, reason string, force bool) (Saved, e
 
 // Snapshot reads one stored snapshot back.
 func (s *Service) Snapshot(ctx context.Context, id string) (State, store.TabSnapshot, error) {
-	snap, err := s.Data.TabSnapshot(ctx, id)
-	if err != nil {
-		return State{}, snap, err
-	}
-	var doc snapshotDoc
-	if err := json.Unmarshal(snap.Windows, &doc); err != nil {
-		return State{}, snap, fmt.Errorf("snapshot %s is unreadable: %w", id, err)
-	}
-	return doc.State, snap, nil
+	doc, snap, err := s.loadDoc(ctx, id)
+	return doc.State, snap, err
 }
 
 // Restore opens a snapshot's windows again (pick: which, by position; nil: all), each in its own new window of the

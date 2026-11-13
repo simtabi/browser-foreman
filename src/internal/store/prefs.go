@@ -36,6 +36,10 @@ type Prefs struct {
 	SnapshotHeight      int    `json:"snapshot_height"`
 	SnapshotWaitSeconds int    `json:"snapshot_wait_seconds"`
 	SnapshotDir         string `json:"snapshot_dir"`
+	// Tab snapshots per workspace: TabsOwn lists the workspaces that keep their own; the rest share one pool.
+	// ActiveWorkspace is the workspace last opened, which background snapshots are saved for.
+	TabsOwn         []string `json:"tabs_own,omitempty"`
+	ActiveWorkspace string   `json:"active_workspace,omitempty"`
 }
 
 // Defaults are what a new store reads.
@@ -49,6 +53,8 @@ func (p Prefs) Validate() error {
 	switch {
 	case len(p.OpenWith) == 0 || len(p.OpenWith) > 12:
 		return errors.New("open_with: name 1 to 12 browsers")
+	case len(p.TabsOwn) > 500 || len(p.ActiveWorkspace) > 100:
+		return errors.New("tabs_own: at most 500 workspaces")
 	case len(p.Tracked) > 20:
 		return errors.New("tracked: at most 20 browsers")
 	case p.SaveMode != "change" && p.SaveMode != "interval":

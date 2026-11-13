@@ -128,8 +128,11 @@ func (s *Server) addSources(w http.ResponseWriter, r *http.Request) {
 	if len(res.Dups) > 0 {
 		summary += fmt.Sprintf("; %d duplicate copies went to the Trash", len(res.Dups))
 	}
+	if res.Again > 0 {
+		summary += fmt.Sprintf("; %d copies were already in the Trash from an earlier merge", res.Again)
+	}
 	s.commitWith(w, r, x, saw, given, given, store.Change{Op: "merge", Summary: summary, Tree: res.Tree}, nil, "imported",
-		map[string]any{"added": res.Added, "duplicates": len(res.Dups), "folders": res.Folder}, func(store.Entry) error {
+		map[string]any{"added": res.Added, "duplicates": len(res.Dups), "already_in_trash": res.Again, "folders": res.Folder}, func(store.Entry) error {
 			for _, p := range records {
 				p.src.Added = s.Now().UTC()
 				if err := s.Data.AddSource(r.Context(), x.ID, p.src, p.body); err != nil {

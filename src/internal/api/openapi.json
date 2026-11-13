@@ -1391,7 +1391,7 @@
     },
     "/api/v1/tabs/snapshots": {
       "get": {
-        "summary": "Snapshots, newest first, without pages; older than keep_days only with ?all=1",
+        "summary": "Snapshots, newest first, without pages; older than keep_days only with ?all=1; ?workspace= picks its tab-snapshot pool (default: the workspace last opened)",
         "tags": [
           "Tabs"
         ],
@@ -1462,7 +1462,7 @@
     },
     "/api/v1/tabs/timeline": {
       "get": {
-        "summary": "Snapshots of the last ?days (30, 0 for all), or from ?from= to ?to= (RFC 3339 or 2006-01-02T15:04, either may be left out), oldest first, with what opened and closed at each; ?browsers= narrows it",
+        "summary": "Snapshots of the last ?days (30, 0 for all), or from ?from= to ?to= (RFC 3339 or 2006-01-02T15:04, either may be left out), oldest first, with what opened and closed at each; ?browsers= narrows it; ?workspace= picks its tab-snapshot pool (default: the workspace last opened)",
         "tags": [
           "Tabs"
         ],
@@ -1913,7 +1913,7 @@
     },
     "/api/v1/tabs/stored": {
       "get": {
-        "summary": "How many tab snapshots are kept (hidden ones too) and how many private-window pages they still hold",
+        "summary": "How many tab snapshots are kept (hidden ones too) and how many private-window pages they still hold; ?workspace= picks its tab-snapshot pool (default: the workspace last opened)",
         "tags": [
           "Tabs"
         ],
@@ -1923,6 +1923,54 @@
             "description": "JSON; errors are {\"error\": \"message\"}"
           }
         }
+      }
+    },
+    "/api/v1/workspaces/{id}/open": {
+      "post": {
+        "summary": "Record the workspace in use, so background tab snapshots are saved into its pool",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{id}/tabs": {
+      "put": {
+        "summary": "{\"own\": true} gives the workspace its own tab snapshots; false returns it to the shared pool. Snapshots taken stay in their pool",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     }
   }

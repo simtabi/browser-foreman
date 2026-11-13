@@ -89,7 +89,7 @@ func (s *Server) listSnapshots(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	rows, err := s.Tabs.Rows(r.Context(), limit, scope(r))
+	rows, err := s.Tabs.Rows(r.Context(), limit, scope(r), s.tabPool(r))
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
@@ -125,9 +125,9 @@ func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 	}
 	var steps []tabs.Step
 	if custom {
-		steps, err = s.Tabs.TimelineBetween(r.Context(), from, to, scope(r), 40)
+		steps, err = s.Tabs.TimelineBetween(r.Context(), from, to, scope(r), 40, s.tabPool(r))
 	} else {
-		steps, err = s.Tabs.Timeline(r.Context(), days, scope(r), 40)
+		steps, err = s.Tabs.Timeline(r.Context(), days, scope(r), 40, s.tabPool(r))
 	}
 	if err != nil {
 		writeErr(w, 500, err.Error())

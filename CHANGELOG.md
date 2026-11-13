@@ -10,6 +10,10 @@ ships.
 
 ### Added
 
+- Workspaces across every view: the switcher moved to the top bar, the ⋮ menu has All workspaces, Rename and Notes,
+  and All workspaces renames, notes and chooses per workspace whether it keeps its own tab snapshots or uses the
+  shared ones (`PUT /api/v1/workspaces/{id}/tabs`, `POST /api/v1/workspaces/{id}/open`, `?workspace=` on the tab
+  routes, `tabs_own` and `active_workspace` preferences). Open tabs, Timeline and the counts follow the workspace.
 - Your own labels on bookmarks: a 1 to 5 star rating and tags (`rating` and `tags` on every bookmark, on the API, in
   edits and whole-tree saves, validated the same way). Set them in the bookmark's details; they show on its row and
   card, search finds tags (`#work` matches one exactly), Sort has Highest rated and Group by has Rating and Tag.
@@ -128,6 +132,11 @@ ships.
 
 ### Fixed
 
+- Merging the same file again no longer refills the Trash: copies it already holds as duplicates of the same kept
+  bookmark are skipped and counted (`already_in_trash`). A test workspace merged ~60 times had 617,515 such copies.
+- The folder summary stacks its columns when the details pane is narrow (grid layout), instead of wrapping About's
+  numbers one character per line; the top bar no longer overlaps at narrower widths; the Bookmarks toolbar says
+  edits are saved in the workspace when there is a server.
 - Open tabs said 0 snapshots kept and 0 private pages stored: `GET /api/v1/tabs/stored` now counts both.
 - Expand / Collapse all now covers the Trash and works in filtered views; it used to leave the Trash open.
 - A web test now fails when `page.ts` (still unchecked by the compiler) uses a name that does not exist, and the

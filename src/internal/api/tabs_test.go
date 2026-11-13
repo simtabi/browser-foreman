@@ -49,6 +49,28 @@ func TestTabsRoutes(t *testing.T) {
 	if w := send(h, "GET", "/api/v1/tabs/stored", ""); w.Code != 200 || w.Body.String() != `{"incognito_pages":0,"snapshots":1}`+"\n" {
 		t.Fatalf("stored %d %q", w.Code, w.Body)
 	}
+	// A workspace with its own snapshots starts with an empty pool; the shared one keeps what was taken.
+	if _, err := s.Data.CreateWorkspace(context.Background(), "main", "Main", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if w := send(h, "PUT", "/api/v1/workspaces/main/tabs", `{"own":true}`); w.Code != 200 {
+		t.Fatalf("own tabs %d %s", w.Code, w.Body)
+	}
+	if w := send(h, "POST", "/api/v1/workspaces/main/open", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"own_tabs":true`) {
+		t.Fatalf("open %d %s", w.Code, w.Body)
+	}
+	if w := send(h, "GET", "/api/v1/tabs/stored", ""); !strings.Contains(w.Body.String(), `"snapshots":0`) {
+		t.Fatalf("main's own pool is empty: %s", w.Body)
+	}
+	if w := send(h, "GET", "/api/v1/tabs/snapshots?workspace=nope", ""); !strings.Contains(w.Body.String(), saved.ID) {
+		t.Fatalf("a workspace without its own pool reads the shared one: %s", w.Body)
+	}
+	if w := send(h, "PUT", "/api/v1/workspaces/main/tabs", `{"own":false}`); w.Code != 200 {
+		t.Fatal(w.Code)
+	}
+	if w := send(h, "PUT", "/api/v1/workspaces/nope/tabs", `{"own":true}`); w.Code != 404 {
+		t.Fatalf("unknown workspace %d", w.Code)
+	}
 	// A custom range on the Timeline: one that holds the snapshot lists it, one ending before it lists none, bad input is 400.
 	if w := send(h, "GET", "/api/v1/tabs/timeline?from=2000-01-01T00:00:00Z", ""); !strings.Contains(w.Body.String(), saved.ID) {
 		t.Fatalf("from 2000: %s", w.Body)

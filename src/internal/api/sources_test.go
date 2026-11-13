@@ -100,9 +100,14 @@ func TestSourcesMergeFilesAndTrashTheCopies(t *testing.T) {
 	}
 	_ = send(h, "POST", "/api/v1/workspaces/main/undo", "")
 
-	// Adding the same files again adds nothing new: the workspace's own bookmarks always win.
+	// Adding the same files again adds nothing new: the workspace's own bookmarks always win, and copies the Trash
+	// already holds as duplicates of the same kept bookmark are not added to it again (3 copies: 2 already there).
 	w = send(h, "POST", "/api/v1/workspaces/main/sources?name=again.html", htmlFile)
-	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || w.Code != 201 || out.Added != 0 || out.Duplicates != 3 {
+	var again struct {
+		AlreadyInTrash int `json:"already_in_trash"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &again)
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || w.Code != 201 || out.Added != 0 || out.Duplicates+again.AlreadyInTrash != 3 || again.AlreadyInTrash != 2 {
 		t.Fatalf("again %d %s", w.Code, w.Body)
 	}
 }

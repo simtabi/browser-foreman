@@ -45,19 +45,23 @@ func rowOf(snap store.TabSnapshot, st State) Row {
 	return r
 }
 
-// Rows lists up to limit snapshots, newest first, for the given browsers (nil: all); a snapshot where none of them
-// had a window is left out.
-func (s *Service) Rows(ctx context.Context, limit int, names []string) ([]Row, error) {
-	all, err := s.Data.TabSnapshots(ctx, limit)
+// Rows lists up to limit snapshots of one pool (PoolFor), newest first, for the given browsers (nil: all); a
+// snapshot where none of them had a window is left out.
+func (s *Service) Rows(ctx context.Context, limit int, names []string, pool string) ([]Row, error) {
+	all, err := s.Data.TabSnapshots(ctx, 0)
 	if err != nil {
 		return nil, err
 	}
 	out := []Row{}
 	for _, x := range all {
-		st, snap, err := s.Snapshot(ctx, x.ID)
-		if err != nil {
+		if len(out) >= limit && limit > 0 {
+			break
+		}
+		doc, snap, err := s.loadDoc(ctx, x.ID)
+		if err != nil || doc.Workspace != pool {
 			continue
 		}
+		st := doc.State
 		st = only(st, names)
 		if names != nil && st.Summary.Windows+st.Summary.IncognitoWindows == 0 {
 			continue
@@ -100,16 +104,17 @@ func pages(st State) map[pageKey]string {
 // Timeline lists the snapshots of the last `days` days, oldest first, each with what opened and closed since the
 // one before (compared by address, per mode; private pages appear only where they were kept). days 0 means every
 // snapshot kept. At most `limit` pages are listed per step; the counts are complete.
-func (s *Service) Timeline(ctx context.Context, days int, names []string, limit int) ([]Step, error) {
+func (s *Service) Timeline(ctx context.Context, days int, names []string, limit int, pool string) ([]Step, error) {
 	var since time.Time // days 0: no lower bound
 	if days > 0 {
 		since = s.Now().Add(-time.Duration(days) * 24 * time.Hour)
 	}
-	return s.TimelineBetween(ctx, since, time.Time{}, names, limit)
+	return s.TimelineBetween(ctx, since, time.Time{}, names, limit, pool)
 }
 
-// TimelineBetween is Timeline for a chosen range: snapshots taken from `since` to `until` (either zero: unbounded).
-func (s *Service) TimelineBetween(ctx context.Context, since, until time.Time, names []string, limit int) ([]Step, error) {
+// TimelineBetween is Timeline for a chosen range: snapshots taken from `since` to `until` (either zero: unbounded),
+// of one pool only (PoolFor), so what opened and closed is compared within it.
+func (s *Service) TimelineBetween(ctx context.Context, since, until time.Time, names []string, limit int, pool string) ([]Step, error) {
 	all, err := s.Data.TabSnapshots(ctx, 0)
 	if err != nil {
 		return nil, err
@@ -122,10 +127,11 @@ func (s *Service) TimelineBetween(ctx context.Context, since, until time.Time, n
 	var prev map[pageKey]string
 	out := []Step{}
 	for i := start; i >= 0; i-- {
-		st, snap, err := s.Snapshot(ctx, all[i].ID)
-		if err != nil {
+		doc, snap, err := s.loadDoc(ctx, all[i].ID)
+		if err != nil || doc.Workspace != pool {
 			continue
 		}
+		st := doc.State
 		if !until.IsZero() && snap.At.After(until) {
 			break // oldest first: everything after this is past the range
 		}

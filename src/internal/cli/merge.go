@@ -77,6 +77,9 @@ func mergeCmd() *cobra.Command {
 			if len(res.Dups) > 0 {
 				summary += fmt.Sprintf("; %d duplicate copies went to the Trash", len(res.Dups))
 			}
+			if res.Again > 0 {
+				summary += fmt.Sprintf("; %d copies were already in the Trash from an earlier merge", res.Again)
+			}
 			e, err := s.Commit(ctx, x.ID, x.Head, store.Change{Op: "merge", Summary: summary, Tree: res.Tree}, now)
 			if err != nil {
 				return err

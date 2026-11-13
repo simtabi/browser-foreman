@@ -86,6 +86,9 @@ type Result struct {
 	Added  int // new bookmarks placed
 	Dups   []Dup
 	Folder int // new folders made
+	// Again counts copies left out because the Trash already holds that page as a duplicate of the same kept
+	// bookmark: merging a source a second time adds nothing new to the Trash.
+	Again int
 }
 
 type cand struct {
@@ -112,8 +115,13 @@ func Merge(base store.Tree, sources []Source, separate bool, now int64) (Result,
 		}
 	}
 	mark(out.Root)
+	// Pages already in the Trash as a duplicate of a kept bookmark (by address and the kept one's id).
+	trashedDup := map[string]bool{}
 	for _, x := range out.Trash {
 		mark(x.Node)
+		if kept, ok := strings.CutPrefix(x.Reason, DuplicateOf); ok && x.Node.Kind == store.KindBookmark {
+			trashedDup[Key(x.Node.URL)+"\x00"+strings.Fields(kept + " ")[0]] = true
+		}
 	}
 	newID := func() string {
 		for {
@@ -239,6 +247,10 @@ func Merge(base store.Tree, sources []Source, separate bool, now int64) (Result,
 		for _, l := range losers {
 			if l.old {
 				continue // never demote what is already in the workspace
+			}
+			if trashedDup[Key(l.n.URL)+"\x00"+w.n.ID] {
+				res.Again++ // this copy was merged away before: the Trash already has it
+				continue
 			}
 			f := folderAt(l.path)
 			out.Trash = append(out.Trash, &store.Trashed{Node: l.n, From: f.ID, Index: len(f.Children), At: now, Reason: DuplicateOf + w.n.ID})
