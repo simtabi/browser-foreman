@@ -143,6 +143,13 @@ ships.
 
 ### Fixed
 
+- The page adapts to the window without clipping or covering anything, checked from 1920 to 390 pixels wide: the
+  search keeps a usable width (the product name, then the view tabs' labels, give way first, and the Commands label
+  and shortcut hints go by the search's own width); the Show filters wrap instead of hiding off the edge; on a phone
+  the Browsers menu is its icon and the panes line up with the bar above them.
+- Bookmark cards without a page snapshot show a short tinted band with the site's initial, not an empty box (the
+  initial was white on white).
+- Confirm dialogs' buttons are as wide as their words need, with room either side, and stack when they do not fit.
 - Deleting tab history and purging private windows act on the open workspace's tab snapshots only (what its panel
   counts), not every workspace's; the automatic purge still covers all of them.
 - Merging no longer stops with an error when a Trash entry's reason says *duplicate of* with no bookmark after it.
@@ -165,6 +172,9 @@ ships.
 
 ### Changed
 
+- Work that blocks the page dims it behind a centred card with a large spinner and what is happening, and turns every
+  button off until it ends, so nothing can be pressed twice. A save shows a spinner in the button that started it,
+  which stays off until the answer arrives; a slow one also shows a note at the top.
 - The workspace switcher keeps its ordinary button, with the workspace's icon in its colour, and the Browsers menu shows
   each browser's state as a pill: green with windows, grey when not running, amber when it needs attention.
 - List and grid switch instantly and keep the panes' widths: the grid is CSS on the same rows (nothing is rebuilt),

@@ -60,7 +60,7 @@ export function askConfirm({ title, body, ok = "Continue", no = "Cancel", danger
     must("#confirmBar").className = "modal-status " + (danger ? "bg-danger" : "bg-primary");
     must("#confirmIcon").className = "ti mb-2 " + (danger ? "ti-alert-triangle text-danger" : "ti-info-circle text-primary");
     const yes = must<HTMLButtonElement>("#confirmYes"), noBtn = must<HTMLButtonElement>("#confirmNo");
-    yes.className = "btn w-100 " + (danger ? "btn-danger" : "btn-primary"); yes.textContent = ok; noBtn.textContent = no;
+    yes.className = "btn " + (danger ? "btn-danger" : "btn-primary"); yes.textContent = ok; noBtn.textContent = no;
     const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); done(false); } if (e.key === "Enter") { e.stopPropagation(); e.preventDefault(); done(true); } };
     const done = (v: boolean) => { hideModal("#confirmModal"); yes.onclick = noBtn.onclick = null; document.removeEventListener("keydown", key, true); resolve(v); };
     yes.onclick = () => done(true); noBtn.onclick = () => done(false);

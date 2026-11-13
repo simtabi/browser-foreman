@@ -4,6 +4,7 @@
 
 import { type Media, toPage, fromPage, linkFields, type V1Tree, type V1Link, type PageState } from "./v1";
 import { legacy } from "./v1-compat";
+import { watchRequests } from "./busy";
 
 export interface WorkspaceInfo { id: string; name: string; head: number; notes?: string; locked?: boolean; archived?: boolean; color?: string; icon?: string }
 interface Boot {
@@ -22,6 +23,7 @@ declare global { interface Window { BF_V1?: Boot; BF_PAGE?: unknown; BM_WS?: unk
 
 const boot = window.BF_V1;
 if (boot) {
+  watchRequests();  // saves show a spinner in the button that started them, which stays off until the answer
   const page = toPage(boot.tree, boot.built, boot.links ?? {}, boot.media);
   window.BF_PAGE = page.data;
   let state: PageState = page.state, urls: Record<string, string> = {}, head = boot.workspace.head;
