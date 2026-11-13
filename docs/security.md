@@ -72,8 +72,9 @@ What Browser Foreman protects, and how. Report a weakness privately: see [SECURI
 
 ## Releases
 
-Binary releases only run when dispatched by hand with a confirmation; a test fails if the workflow gains any other
-trigger.
+Binary releases run only on a pushed `vX.Y.Z` tag or a request naming one, and publish to the GitHub release only. A
+test fails if the workflow gains any other trigger, stops calling the shared release workflow, or if
+`src/.goreleaser.yaml` gains a block that publishes anywhere else.
 
 ---
 [← Docs index](../README.md#documentation)

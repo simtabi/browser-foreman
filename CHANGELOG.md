@@ -107,10 +107,18 @@ ships.
   and `POST /api/v1/snapshots` takes snapshots with the installed Chrome, headless, in a throwaway profile, public
   pages only. The page shows both and Refresh takes snapshots again. File names match the Python tool's, so its
   icons and snapshots can be copied into `<storage>/media/{icons,thumbs}`.
+- Linux and Windows: browsers are found (on `PATH`, or where they install) with the system's default, links open
+  in them, and open tabs are read from each browser's session file (Firefox's `recovery.jsonlz4`, Chromium's
+  `Sessions/Session_*`), which never holds private windows. Firefox and Zen are read the same way on macOS.
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed
 
+- Releases: a pushed `vX.Y.Z` tag, or `gh workflow run release.yml -f tag=vX.Y.Z`, now builds and publishes the
+  binaries on the GitHub release, and nowhere else. `release.yml` calls simtabi/.github's shared `go-release.yml`
+  (no `confirm=release-go` dispatch any more), and the new `src/.goreleaser.yaml` publishes the same assets the old
+  workflow did: one binary per target in `build/targets.txt`, `browser-foreman_macos_universal` and `checksums.txt`,
+  which now lists bare file names.
 - The web interface: counts agree everywhere (the Trash is counted on its own), the tree header no longer wraps,
   a save refused because the bookmarks changed elsewhere shows a Tabler alert with Reload and Keep my change, Open
   tabs shows a loading state, the Timeline drops "−0 closed" and names months, link health says Skipped for links

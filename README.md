@@ -9,7 +9,9 @@ Runs on macOS, Linux and Windows from one Go binary (macOS ships as one universa
 
 ## Install
 
-Releases are on hold, so build from source (Go 1.26 or newer):
+Download the binary for your platform from the
+[GitHub release](https://github.com/simtabi/browser-foreman/releases) once one is published, and check it against
+that release's `checksums.txt`. Or build from source (Go 1.26 or newer):
 
 ```bash
 git clone https://github.com/simtabi/browser-foreman.git ~/src/browser-foreman

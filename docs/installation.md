@@ -1,12 +1,22 @@
 # Installation
 
-Browser Foreman is one binary, built from source while releases are on hold.
+Browser Foreman is one binary: download it from a GitHub release, or build it from source.
 
 ## Requirements
 
 - Go 1.26 or newer, and `make`.
 - macOS for reading live tabs; every other feature runs on macOS, Linux, Windows and FreeBSD.
 - Node.js 22 or newer only to rebuild the web interface (`make web`).
+
+## Download
+
+Each release on [GitHub](https://github.com/simtabi/browser-foreman/releases) carries one binary per platform,
+`browser-foreman_<os>_<arch>` (`.exe` on Windows), the universal macOS binary `browser-foreman_macos_universal`, and
+`checksums.txt`. None has been published yet. Check a download before running it:
+
+```bash
+cd ~/Downloads && shasum -a 256 -c checksums.txt --ignore-missing
+```
 
 ## Build
 
@@ -49,8 +59,8 @@ Check out a tag before building: `git -C ~/src/browser-foreman checkout v0.1.0` 
 
 ## Releases
 
-No downloads, package managers or `go install` path are offered until binary releases begin; see
-[release](release.md).
+Binaries are published on the GitHub release and nowhere else: no package manager, image or `go install` path.
+See [release](release.md).
 
 ---
 [← Docs index](../README.md#documentation)
