@@ -68,6 +68,10 @@ ships.
 - Scheduled link re-checks of links whose last check is older than `recheck_days`.
 - The web interface's Open tabs view, Timeline and Browsers menu work with the Go server.
 - Requests another site's page makes from a browser are refused even without an Origin header.
+- A browser extension, one source built for Chromium browsers (Manifest V3), Firefox and Safari (`make extension`,
+  `make extension-safari`): it pairs with a one-time code (`browser-foreman pair`), reports tabs and tab groups,
+  opens links or a named tab group when the server asks, reads the browser's bookmarks into a workspace, and writes a
+  workspace back into the browser's bookmarks after showing the changes, saving the current ones first.
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed

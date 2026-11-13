@@ -121,8 +121,13 @@ func TestCommandsReachTheirBrowser(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("the waiting extension was not woken")
 	}
-	if b := fromExtension(h, "GET", "/api/v1/extension/commands", "", firefox).Body.String(); strings.Contains(b, "Reading") {
+	// A command still waiting for Chrome is not handed to Firefox, which asks first.
+	send(h, "POST", "/api/v1/extension/commands", `{"browser":"Google Chrome","kind":"open","urls":["https://pkg.go.dev/"]}`)
+	if b := fromExtension(h, "GET", "/api/v1/extension/commands", "", firefox).Body.String(); strings.Contains(b, "pkg.go.dev") {
 		t.Fatal("Firefox got Chrome's command")
+	}
+	if b := fromExtension(h, "GET", "/api/v1/extension/commands", "", chrome).Body.String(); !strings.Contains(b, "pkg.go.dev") {
+		t.Fatalf("Chrome lost its command: %s", b)
 	}
 	if w := fromExtension(h, "POST", "/api/v1/extension/commands/"+q.Command.ID+"/done", `{"ok":true}`, firefox); w.Code != 404 {
 		t.Fatalf("another browser closed the command: %d", w.Code)

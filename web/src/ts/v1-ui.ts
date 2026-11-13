@@ -141,6 +141,41 @@ function install(W: V1): void {
     input.click();
   }
 
+  // Browser extensions: a one-time pairing code, and the browsers already paired (each disconnects on its own).
+  async function extensions(): Promise<void> {
+    const { body } = modal("v1Extensions", "Browser extension");
+    body.append(el("p", "text-secondary", "The extension sends this browser's tabs and tab groups, reads its bookmarks into a workspace, and can write a workspace back. Install it from web/dist/extension (see docs › Browser extension), then connect it with a code."));
+    const codeBox = el("div", "mb-3");
+    const make = el("button", "btn btn-primary", "Make a pairing code"); make.type = "button";
+    make.onclick = async () => {
+      try {
+        const r = await W.call<{ code: string; expires: string }>("POST", "extension/pairings");
+        codeBox.replaceChildren(el("div", "h2 font-monospace mb-1", r.code),
+          el("div", "text-secondary small", `Type it into the extension's popup with the server ${location.origin}. It works once, until ${new Date(r.expires).toLocaleTimeString()}.`));
+      } catch (e) { fail(e); }
+    };
+    body.append(make, codeBox);
+    const list = el("div", "list-group list-group-flush");
+    try {
+      const { extensions } = await W.call<{ extensions: { id: string; name: string; created: string; last_used?: string }[] }>("GET", "extension/status");
+      if (!extensions.length) list.append(el("div", "text-secondary", "No browser is connected yet."));
+      for (const x of extensions) {
+        const row = el("div", "list-group-item d-flex align-items-center gap-2");
+        const text = el("div", "flex-fill");
+        text.append(el("div", "fw-medium", x.name.replace(/^extension:/, "")),
+          el("div", "text-secondary small", x.last_used && !x.last_used.startsWith("0001") ? `last heard from ${fmtDate(Date.parse(x.last_used) / 1000)}` : "not heard from yet"));
+        const off = el("button", "btn btn-sm btn-ghost-danger", "Disconnect"); off.type = "button";
+        off.onclick = async () => {
+          if (!(await askConfirm({ title: "Disconnect this browser?", ok: "Disconnect", body: "Its extension stops being able to reach Browser Foreman until it is connected again with a new code." }))) return;
+          try { await W.call("DELETE", `tokens/${encodeURIComponent(x.id)}`); row.remove(); } catch (e) { fail(e); }
+        };
+        row.append(text, off); list.append(row);
+      }
+    } catch (e) { list.append(el("div", "text-danger", String((e as Error).message))); }
+    body.append(el("h4", "mt-2", "Connected browsers"), list);
+    showModal("#v1Extensions");
+  }
+
   function menu(): HTMLElement {
     const item = (ic: string, label: string, fn: () => void, cls = ""): HTMLElement => {
       const a = el("a", "dropdown-item " + cls); a.href = "#"; a.append(icon(ic, "me-2"), label);
@@ -160,6 +195,7 @@ function install(W: V1): void {
     const live = W.workspaces.filter(w => !w.archived), archived = W.workspaces.length - live.length;
     for (const w of live) dm.append(item(w.id === W.id ? "ti-check" : "ti-point", w.name, () => { if (w.id !== W.id) nav(w.id); }, w.id === W.id ? "active" : ""));
     dm.append(item("ti-list-details", "All workspaces" + (archived ? ` (${archived} archived)` : "") + "…", manage),
+      item("ti-puzzle", "Browser extension…", () => void extensions()),
       el("div", "dropdown-divider"), el("h6", "dropdown-header", "This workspace"),
       item("ti-history", "History and progress…", () => void history()));
     if (W.locked) dm.append(item("ti-lock-open", "Unlock", () => void toggleLock(false)));
@@ -198,7 +234,7 @@ function install(W: V1): void {
   }
 
   W.ui = {
-    history, manage, importer, menu, download, toggleLock, backup, restore,
+    history, manage, importer, menu, download, toggleLock, backup, restore, extensions,
     duplicatesCsv: () => toast("Duplicates are merged by the cleanup the Python tool runs; this workspace has no list of them.", "info"),
   };
   const mount = () => { document.getElementById("wsMenu")?.remove(); document.querySelector("#edited")?.before(menu()); };

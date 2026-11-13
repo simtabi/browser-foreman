@@ -59,6 +59,7 @@ of that buffer, the stream starts with `: some events were missed; reload the st
 | `tabs.restored` | `{id, windows}` |
 | `links.opened` | `{count, how, browsers, ok}`; never the links |
 | `preferences.updated` | `{open_with, autosave}` |
+| `extension.paired` | `{browser, token}` (the token's id, never the secret) |
 | `linkcheck.scheduled` | a scheduled re-check started: `{workspace, due}` |
 
 ---

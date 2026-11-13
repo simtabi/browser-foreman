@@ -1,0 +1,83 @@
+// The browser extension's own rules (src/extension/core.ts, apply.ts), without a browser. Run: npm run test:web
+import { build } from "esbuild";
+import assert from "node:assert/strict";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const load = async f => { const o = await build({ entryPoints: [join(here, "..", "extension", f)], bundle: true, format: "esm", write: false, platform: "neutral" });
+  return import("data:text/javascript;base64," + Buffer.from(o.outputFiles[0].text).toString("base64")); };
+const C = await load("core.ts"), A = await load("apply.ts");
+let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; }; const eq = (a, b, m) => { assert.deepEqual(a, b, m); n++; };
+
+// ---- core ----
+eq(C.browserName("Mozilla/5.0 (Macintosh) Gecko/20100101 Firefox/133.0", [], false), "Firefox");
+eq(C.browserName("Mozilla/5.0 … Chrome/131.0 Safari/537.36", ["Chromium", "Google Chrome"], false), "Google Chrome");
+eq(C.browserName("Mozilla/5.0 … Chrome/131.0 Safari/537.36", ["Chromium", "Google Chrome"], true), "Brave Browser", "Brave says it is Chrome");
+eq(C.browserName("Mozilla/5.0 … Chrome/131.0 Safari/537.36 Edg/131.0", ["Microsoft Edge"], false), "Microsoft Edge");
+eq(C.browserName("Mozilla/5.0 (Macintosh) AppleWebKit/605 Version/18.1 Safari/605.1.15", [], false), "Safari");
+eq(C.checkServer("http://127.0.0.1:8765/x"), "http://127.0.0.1:8765");
+for (const bad of ["https://evil.example", "http://192.168.1.4:8765", "file:///x", "nonsense"]) assert.throws(() => C.checkServer(bad), bad), n++;
+const rep = C.tabReport([{ id: 1, incognito: false, focused: true, type: "normal", tabs: [{ id: 9, url: "https://go.dev/", title: "Go", active: true, pinned: false, groupId: 4, windowId: 1, index: 0 }] },
+  { id: 2, incognito: false, focused: false, type: "devtools", tabs: [] }], [{ id: 4, windowId: 1, title: "Work", color: "blue", collapsed: false }]);
+eq([rep.windows.length, rep.windows[0].tabs[0].groupId, rep.groups[0].title], [1, 4, "Work"], "devtools windows are left out");
+eq(C.groupColor("magenta"), "grey");
+eq(C.webOnly(["https://a/", "file:///etc/passwd", "javascript:x"]), ["https://a/"]);
+// the client sends its token and reads errors
+const seen = [];
+const client = new C.Client("http://127.0.0.1:8765", "brofo_x", async (url, init) => { seen.push([url, init.headers.Authorization]); return { ok: false, status: 423, json: async () => ({ error: "locked" }) }; });
+await assert.rejects(client.sendBookmarks([]), /locked/); n++;
+eq(seen[0], ["http://127.0.0.1:8765/api/v1/extension/bookmarks", "Bearer brofo_x"]);
+
+// ---- apply: a fake bookmarks API that behaves like the browser's ----
+function fake(roots) {
+  const byId = new Map(); let next = 1000;
+  const index = (n, parentId) => { n.parentId = parentId; byId.set(n.id, n); for (const c of n.children ?? []) index(c, n.id); };
+  index(roots[0], undefined);
+  const kids = id => byId.get(id).children;
+  const detach = id => { const n = byId.get(id); const k = kids(n.parentId); k.splice(k.indexOf(n), 1); };
+  const api = {
+    calls: 0,
+    async create(o) { api.calls++; const n = { id: String(next++), title: o.title, ...(o.url !== undefined ? { url: o.url } : { children: [] }) }; n.parentId = o.parentId; byId.set(n.id, n); kids(o.parentId).splice(o.index ?? kids(o.parentId).length, 0, n); return n; },
+    async update(id, o) { api.calls++; Object.assign(byId.get(id), o); },
+    async move(id, o) { api.calls++; detach(id); const n = byId.get(id); n.parentId = o.parentId; kids(o.parentId).splice(Math.min(o.index ?? 1e9, kids(o.parentId).length), 0, n); },
+    async remove(id) { api.calls++; if (byId.get(id).children?.length) throw new Error("not empty"); detach(id); byId.delete(id); },
+    async removeTree(id) { api.calls++; detach(id); byId.delete(id); },
+    tree: () => roots,
+  };
+  return api;
+}
+const browser = () => [{ id: "0", title: "", children: [
+  { id: "1", title: "Bookmarks bar", children: [
+    { id: "5", title: "Go", url: "https://go.dev/" },
+    { id: "6", title: "Dev", children: [{ id: "7", title: "GitHub", url: "https://github.com/" }, { id: "8", title: "MDN", url: "https://developer.mozilla.org/" }] },
+    { id: "9", title: "Old", url: "https://old.example/" }] },
+  { id: "2", title: "Other bookmarks", children: [{ id: "10", title: "Gone folder", children: [{ id: "11", title: "x", url: "https://x.example/" }] }] }] }];
+// The workspace after editing: Go renamed and moved into Dev; Dev reordered; a new folder with a bookmark; "Old" and
+// "Gone folder" deleted (or trashed); GitHub moved to Other bookmarks.
+const ws = { id: "root", kind: "folder", title: "", children: [
+  { id: "ext-1", kind: "folder", title: "Bookmarks bar", children: [
+    { id: "ext-6", kind: "folder", title: "Dev", children: [
+      { id: "ext-8", kind: "bookmark", title: "MDN", url: "https://developer.mozilla.org/" },
+      { id: "ext-5", kind: "bookmark", title: "The Go site", url: "https://go.dev/doc/" }] },
+    { id: "f-new", kind: "folder", title: "Reading", children: [{ id: "b-new", kind: "bookmark", title: "Blog", url: "https://blog.example/" }] }] },
+  { id: "ext-2", kind: "folder", title: "Other bookmarks", children: [{ id: "ext-7", kind: "bookmark", title: "GitHub", url: "https://github.com/" },
+    { id: "ext-11", kind: "bookmark", title: "x", url: "https://x.example/" }] }] }; // x leaves "Gone folder" before it is removed
+
+const shape = nodes => nodes.map(x => x.url !== undefined ? `${x.title}<${x.url}>` : `${x.title}(${shape(x.children ?? [])})`).join(" ");
+const wsShape = nodes => nodes.map(x => x.kind === "bookmark" ? `${x.title}<${x.url}>` : `${x.title}(${wsShape(x.children ?? [])})`).join(" ");
+
+const b = fake(browser());
+const p = A.plan(b.tree(), ws);
+eq([p.created, p.updated, p.removedBookmarks, p.removedFolders], [2, 1, 1, 1], "2 created, 1 renamed+readdressed; Old removed, and the emptied folder");
+const made = await A.run(p, b);
+eq(shape(b.tree()[0].children), wsShape(ws.children), "the browser now holds exactly the workspace");
+eq(A.plan(b.tree(), ws, made).steps.length, 0, "planning again after a run has nothing left to do");
+ok(made.get("f-new") && made.get("b-new"), "created nodes are reported for the re-read");
+
+// A workspace not read from this browser is refused rather than deleting everything.
+assert.throws(() => A.plan(browser(), { id: "root", kind: "folder", title: "", children: [{ id: "n1", kind: "folder", title: "Bar", children: [] }] }), /not read from this browser/); n++;
+// The browser's own top folders are never moved or removed, even when the workspace leaves one out.
+const keepTops = A.plan(browser(), { id: "root", kind: "folder", title: "", children: [{ id: "ext-1", kind: "folder", title: "Bookmarks bar", children: [] }] });
+ok(!keepTops.steps.some(s => s.id === "1" || s.id === "2"), "roots are left alone");
+console.log(`extension: ${n} checks passed`);

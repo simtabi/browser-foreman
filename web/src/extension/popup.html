@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Browser Foreman</title>
+<style>
+  :root { color-scheme: light dark; --fg: #1d273b; --muted: #6b7280; --line: #d9dee6; --accent: #066fd1; --bad: #c0392b; --bg: #fff; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #e6e8eb; --muted: #9aa3ad; --line: #374151; --bg: #1b1f24; } }
+  body { font: 13px/1.45 system-ui, sans-serif; margin: 0; width: 320px; color: var(--fg); background: var(--bg); }
+  header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); font-weight: 600; }
+  header svg { width: 20px; height: 20px; }
+  section { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 6px 0 2px; }
+  input, select { width: 100%; box-sizing: border-box; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; }
+  button { margin-top: 8px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { border-color: var(--bad); color: var(--bad); }
+  .muted { color: var(--muted); font-size: 12px; }
+  .msg { margin-top: 6px; font-size: 12px; }
+  .msg.bad { color: var(--bad); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#066fd1"/><path d="M22 14h20a4 4 0 0 1 4 4v32l-14-9-14 9V18a4 4 0 0 1 4-4z" fill="#fff"/></svg>Browser Foreman</header>
+
+<section id="unpaired">
+  <div class="muted">Connect this browser to Browser Foreman on this computer. Make a code with <code>browser-foreman pair</code> (or in Settings in the web interface), then enter it here.</div>
+  <label for="server">Server</label><input id="server" value="http://127.0.0.1:8765" autocomplete="off">
+  <label for="code">Pairing code</label><input id="code" placeholder="ABCD-EFGH" autocomplete="off">
+  <button class="primary" id="pair">Connect</button>
+  <div class="msg" id="pairMsg" role="status"></div>
+</section>
+
+<section id="paired" hidden>
+  <div><strong id="who"></strong> <span class="muted">is connected to <span id="where"></span></span></div>
+  <div class="muted" id="last"></div>
+  <button id="send">Send open tabs now</button>
+  <button id="read">Read this browser's bookmarks into Browser Foreman</button>
+  <div class="msg" id="readMsg" role="status"></div>
+</section>
+
+<section id="write" hidden>
+  <strong>Write a workspace into this browser</strong>
+  <div class="muted">Makes this browser's bookmarks match a workspace you edited. The bookmarks as they are now are saved to Browser Foreman first.</div>
+  <label for="ws">Workspace</label><select id="ws"></select>
+  <button id="preview">Show what would change</button>
+  <div class="msg" id="planMsg" role="status"></div>
+  <button class="danger" id="apply" hidden>Write it</button>
+</section>
+
+<section id="foot" hidden><button id="unpair">Disconnect</button></section>
+<script src="popup.js"></script>
+</body>
+</html>

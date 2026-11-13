@@ -67,13 +67,17 @@ pull request, with tests and docs.
 - Done on macOS. Not ported from the Python tool yet: notes on tabs and windows, deleting snapshots, purging private
   pages, reading browser history and profile files; Linux and Windows browsers.
 
-## Phase 6 — Browser plugins
+## Phase 6 — Browser plugins (done)
 
 - One WebExtension source, built for Chromium browsers (Manifest V3), Firefox and Safari.
 - Live tabs and tab groups, bookmark editing in place (no import or export round trip), all through the local API with
   a token the extension is paired with.
 
-## Phase 7 — Landing page and release
+- Done: pairing, tabs and tab groups, commands, reading and writing bookmarks in place. Not yet: store listings
+  (Chrome Web Store, Firefox Add-ons, App Store), extension icons, opening a folder as a tab group from the web
+  interface's own menus.
+
+## Phase 7 — Landing page and release (next)
 
 - The landing page in `site/`, with screenshots, published at the product URL.
 - A full documentation pass; the hosted docs.

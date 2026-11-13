@@ -51,4 +51,11 @@ web:  ## build the web interface (TypeScript) and stage it for embedding in the 
 	cp -R web/assets/css web/assets/fonts src/internal/webui/dist/assets/
 	cp web/dist/assets/js/app.js web/dist/assets/js/v1.js src/internal/webui/dist/assets/js/
 
+extension:  ## build the browser extension into web/dist/extension/{chromium,firefox,safari}
+	cd web && npm install --no-audit --no-fund && npm run build:extension
+
+extension-safari: extension  ## wrap the Safari build in an Xcode project (needs Xcode; you sign and enable it)
+	xcrun safari-web-extension-converter web/dist/extension/safari --project-location web/dist/extension/safari-xcode \
+	  --app-name "Browser Foreman" --bundle-identifier com.simtabi.browser-foreman --no-open --force
+
 check: fmt vet test  ## what CI runs

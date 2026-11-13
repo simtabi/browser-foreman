@@ -1,6 +1,6 @@
 # REST API
 
-63 endpoints, all under `/api/v1`, all JSON. `GET /api/v1/openapi.json` describes every one (OpenAPI 3.1, with the
+72 endpoints, all under `/api/v1`, all JSON. `GET /api/v1/openapi.json` describes every one (OpenAPI 3.1, with the
 role each needs in `x-role`); a test fails if a route and the document ever disagree.
 
 ## Rules for every request
@@ -13,6 +13,8 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 - A change made with a session cookie must also send that session's `X-CSRF-Token` (from sign-in or `/auth/me`), or it
   is refused with `403`. Token requests need no CSRF header.
 - Each endpoint needs a role: viewer < editor < owner. Too low: `403`.
+- A browser extension (`chrome-extension://`, `moz-extension://`, `safari-web-extension://` origins) may call in; it
+  still needs a paired token, or a one-time code to pair.
 - A request another site's page makes from a browser (`Sec-Fetch-Site: cross-site`, anything but following a link)
   is refused, even one that sends no `Origin`, such as an image.
 - Every change to a workspace is one history entry made on the head you last saw. Send that head as
@@ -72,6 +74,7 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `GET`, `PUT` | `/api/v1/preferences` | viewer, owner | browsers, snapshots and re-checks |
 | `GET` | `/api/v1/tabs` and the `/api/v1/tabs/…` routes | viewer to owner | open tabs, snapshots, timeline, restore, close; see [browsers and tabs](browsers-and-tabs.md) |
 | `GET` | `/api/v1/linkchecks` | viewer | the running check and earlier ones, with links newly broken and fixed |
+| `POST`, `GET` | `/api/v1/extension/…` | see [browser extension](browser-extension.md) | pairing, tabs and groups, bookmarks, commands |
 | `GET` | `/api/v1/settings` | owner | the configuration in force, without secrets; read-only |
 | `POST` | `/api/v1/workspaces/{id}/rollback` | editor | body `{to}`: the state after entry `to` becomes the newest, as an entry you can undo |
 

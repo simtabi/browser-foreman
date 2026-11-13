@@ -22,6 +22,10 @@ What Browser Foreman protects, and how. Report a weakness privately: see [SECURI
 - **This computer's browsers.** Opening links, restoring a session and closing tabs need the owner role, open only
   `http` and `https` addresses, and run only `open(1)` and the browsers' own automation. Reading tabs never starts a
   browser; private windows' pages are not kept or published unless the owner turns that on.
+- **Browser extensions** pair with a one-time code that works once, for ten minutes, behind the sign-in limiter,
+  and get their own revocable token. They only talk to a server on this computer. Writing a workspace into a
+  browser's bookmarks saves the browser's current bookmarks to the server first, refuses a workspace not read from
+  that browser, and never moves or removes the browser's own top folders.
 - **Headers.** Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
   `Referrer-Policy: no-referrer` and a Content Security Policy limited to the server itself.
 
