@@ -107,6 +107,21 @@ func TestReleaseRunsOnAVersionTagOrOnRequest(t *testing.T) {
 	if regexp.MustCompile(`(?m)^    (steps|runs-on):`).MatchString(j) {
 		t.Error("the release job runs steps of its own; the pipeline belongs in the shared workflow")
 	}
+
+	// The release builds the web interface (src/.goreleaser.yaml's `make web` hook) on the same Node
+	// as CI's web job, not on whatever the shared workflow defaults to.
+	ci, err := os.ReadFile(filepath.Join("..", "..", "..", ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ciNode := regexp.MustCompile(`(?m)^\s+node-version:\s*'?"?([0-9][0-9.x]*)`).FindSubmatch(ci)
+	if ciNode == nil {
+		t.Fatal("ci.yml sets no node-version for the web job")
+	}
+	relNode := regexp.MustCompile(`(?m)^      node-version:\s*'?"?([0-9][0-9.x]*)`).FindStringSubmatch(j)
+	if relNode == nil || relNode[1] != string(ciNode[1]) {
+		t.Errorf("the release job's node-version is %v; want %q, the Node ci.yml's web job uses", relNode, ciNode[1])
+	}
 }
 
 // The GitHub release is the only channel. go.md's list of GoReleaser blocks that publish anywhere else.

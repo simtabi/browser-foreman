@@ -1,7 +1,7 @@
 # Release: build Browser Foreman's binaries and publish them on its GitHub release, and nowhere else
 # (no `go install` path, Homebrew, Scoop, Winget, image or any other channel; owner, 2026-11-13).
 # The pipeline is simtabi/.github's shared go-release.yml, driven by src/.goreleaser.yaml; this file
-# only says when.
+# only says when, and which Node builds the web interface (the same as ci.yml's web job).
 #
 #   git push origin vX.Y.Z                                                       builds and publishes vX.Y.Z
 #   gh workflow run release.yml --repo simtabi/browser-foreman -f tag=vX.Y.Z    the same, for a tag already pushed
@@ -36,6 +36,8 @@ jobs:
       contents: write
       id-token: write
       attestations: write
-    uses: simtabi/.github/.github/workflows/go-release.yml@941f7b7ecce5dc8af6daedfc7496dd4367c70877  # simtabi/.github#28
+    uses: simtabi/.github/.github/workflows/go-release.yml@d648d8998f95a351001979f9c4527badca588bf1  # simtabi/.github#30
     with:
       tag: ${{ inputs.tag || github.ref_name }}
+      # GoReleaser's `make web` hook builds the web interface; the same Node as ci.yml's web job.
+      node-version: '22'
