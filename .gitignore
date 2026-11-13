@@ -1,6 +1,8 @@
 # Build output: one folder per OS; only the target list is tracked.
 /build/*
 !/build/targets.txt
+# GoReleaser's scratch dist (src/.goreleaser.yaml); a release uploads from it, nothing is kept.
+/.cache/
 
 # Web interface
 /web/node_modules/

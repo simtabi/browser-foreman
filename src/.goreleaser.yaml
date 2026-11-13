@@ -1,0 +1,73 @@
+# GoReleaser config for the GitHub release, the only place Browser Foreman's binaries are published.
+# simtabi/.github's shared go-release.yml runs it from the repository root:
+#   goreleaser release --clean --config src/.goreleaser.yaml
+# and a local dry run is:
+#   goreleaser release --snapshot --clean --config src/.goreleaser.yaml --skip=sign,publish,sbom
+#
+# It publishes the same assets the hand-written release did before (make test cross universal):
+# browser-foreman_<os>_<arch>[.exe] for every target in build/targets.txt, browser-foreman_macos_universal,
+# and checksums.txt, now with bare names. No archives and no other channel:
+# src/internal/version/release_workflow_test.go fails on a Homebrew, Scoop, Winget, image or other
+# publishing block, and the shared workflow refuses one at release time.
+version: 2
+project_name: browser-foreman
+
+# The shared workflow pushes src/vX.Y.Z (the Go module alias) on the same commit as vX.Y.Z. Without this,
+# GoReleaser can take src/vX.Y.Z as the current tag: "not semver" on a release.
+git:
+  ignore_tags:
+    - "src/*"
+
+# A scratch directory, ignored, never build/: the release uploads straight from it.
+dist: .cache/goreleaser
+
+before:
+  hooks:
+    # The binary embeds the web interface, so stage it first; then the tests the release always ran.
+    - make web
+    - make test
+
+builds:
+  - id: browser-foreman
+    dir: src
+    main: ./cmd/browser-foreman
+    binary: browser-foreman
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    # The targets in build/targets.txt; keep the two in step.
+    goos: [darwin, linux, windows, freebsd]
+    goarch: [amd64, arm64]
+    ignore:
+      - { goos: freebsd, goarch: arm64 }
+    ldflags:
+      - -s -w
+      - -X github.com/simtabi/browser-foreman/src/internal/version.Version={{ .Version }}
+      - -X github.com/simtabi/browser-foreman/src/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/simtabi/browser-foreman/src/internal/version.Date={{ .Date }}
+
+# One macOS binary for Apple silicon and Intel, beside the two it is made from.
+universal_binaries:
+  - id: browser-foreman-macos
+    ids: [browser-foreman]
+    replace: false
+
+archives:
+  - id: bare
+    # Both build ids: the universal binary is its own id, and an archive without it leaves it out.
+    ids: [browser-foreman, browser-foreman-macos]
+    formats: [binary]
+    name_template: '{{ .ProjectName }}_{{ if eq .Os "darwin" }}macos{{ else }}{{ .Os }}{{ end }}_{{ if eq .Arch "all" }}universal{{ else }}{{ .Arch }}{{ end }}'
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+release:
+  github:
+    owner: simtabi
+    name: browser-foreman
+
+changelog:
+  disable: true

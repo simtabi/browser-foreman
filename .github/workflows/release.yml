@@ -1,49 +1,41 @@
+# Release: build Browser Foreman's binaries and publish them on its GitHub release, and nowhere else
+# (no `go install` path, Homebrew, Scoop, Winget, image or any other channel; owner, 2026-11-13).
+# The pipeline is simtabi/.github's shared go-release.yml, driven by src/.goreleaser.yaml; this file
+# only says when.
+#
+#   git push origin vX.Y.Z                                                       builds and publishes vX.Y.Z
+#   gh workflow run release.yml --repo simtabi/browser-foreman -f tag=vX.Y.Z    the same, for a tag already pushed
+#
+# Push a version tag only for final code: tags are final, and a pushed tag publishes. The shared
+# workflow also pushes the src/vX.Y.Z module tag, which matches no trigger here.
+# src/internal/version/release_workflow_test.go fails if this gains another trigger or stops calling it.
 name: Release
 
-# Go releases are git only until the owner says otherwise, so nothing here starts on a tag push: pushing a vX.Y.Z tag
-# records a version and publishes nothing. A release is dispatched by hand against the tag, with a confirmation,
-# and refuses to run without both:
-#
-#   gh workflow run release.yml --repo simtabi/browser-foreman --ref vX.Y.Z -f confirm=release-go
-#
-# src/internal/version/release_workflow_test.go fails if this gains another trigger or loses the confirmation.
 on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
     inputs:
-      confirm:
-        description: Type release-go to build and publish binaries for the tag this run is dispatched on
+      tag:
+        description: 'An existing vX.Y.Z tag to build and publish'
         required: true
         type: string
 
+permissions: {}
+
+# One run per tag, never cancelled: two runs must not publish the same release.
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
-
-permissions:
-  contents: write
-
-env:
-  GOPRIVATE: github.com/simtabi/*
-  GONOSUMDB: github.com/simtabi/*
 
 jobs:
   release:
-    runs-on: macos-latest
-    timeout-minutes: 30
-    steps:
-      - name: Refuse without the confirmation and a version tag
-        run: |
-          [ "${{ inputs.confirm }}" = "release-go" ] || { echo "confirm must be release-go"; exit 1; }
-          case "$GITHUB_REF" in refs/tags/v[0-9]*) ;; *) echo "dispatch this on a vX.Y.Z tag, not $GITHUB_REF"; exit 1;; esac
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: src/go.mod
-      - run: make test cross universal
-      - name: Publish the binaries to the tag's GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="${GITHUB_REF#refs/tags/}"
-          notes="$(awk "/^## \\[${tag#v}\\]/{f=1;next} /^## \\[/{f=0} f" CHANGELOG.md)"
-          gh release create "$tag" --title "$tag" --notes "${notes:-See CHANGELOG.md}" build/*/browser-foreman_* build/checksums.txt
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    uses: simtabi/.github/.github/workflows/go-release.yml@941f7b7ecce5dc8af6daedfc7496dd4367c70877  # simtabi/.github#28
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
