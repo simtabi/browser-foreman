@@ -80,7 +80,7 @@ func New(api *API, o Options) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{Name: "put_back", Description: "Put items (by id) back from the Trash, each where it came from.", Annotations: writes("Put back from the Trash", false)}, t.putBack)
 	mcp.AddTool(s, &mcp.Tool{Name: "undo", Description: "Take back the workspace's last change, as a new history entry.", Annotations: writes("Undo", false)}, t.undo)
 	mcp.AddTool(s, &mcp.Tool{Name: "rollback", Description: "Make the state after history entry `to` the newest, as a new entry (undo brings today's back). Needs confirm: true.", Annotations: writes("Go back in history", true)}, t.rollback)
-	mcp.AddTool(s, &mcp.Tool{Name: "save_tabs_as_bookmarks", Description: "Save links (url and title) as a new folder of bookmarks, inside the folder at parent (by path; the second top folder when left out).", Annotations: writes("Save tabs as bookmarks", false)}, t.saveTabs)
+	mcp.AddTool(s, &mcp.Tool{Name: "save_tabs_as_bookmarks", Description: "Save links (url and title) as a new folder of bookmarks, inside the folder at parent (by path; \"Saved tabs\" when left out). One history entry.", Annotations: writes("Save tabs as bookmarks", false)}, t.saveTabs)
 	mcp.AddTool(s, &mcp.Tool{Name: "refresh_links", Description: "Check a folder's links again (or the whole workspace) and wait up to two minutes for the result: how many are working, moved, dead.", Annotations: &mcp.ToolAnnotations{Title: "Re-check links", DestructiveHint: &no, OpenWorldHint: &yes}}, t.refresh)
 	return s
 }
@@ -477,7 +477,7 @@ type link struct {
 type saveIn struct {
 	Workspace string `json:"workspace"`
 	Folder    string `json:"folder" jsonschema:"the new folder's name"`
-	Parent    string `json:"parent,omitempty" jsonschema:"where to put it, a folder path; the second top folder (Other bookmarks) when left out"`
+	Parent    string `json:"parent,omitempty" jsonschema:"where to put it, a folder path; Saved tabs when left out"`
 	Links     []link `json:"links"`
 }
 
@@ -485,48 +485,18 @@ func (t *tools) saveTabs(ctx context.Context, _ *mcp.CallToolRequest, in saveIn)
 	if len(in.Links) == 0 || len(in.Links) > 500 {
 		return nil, Untrusted{}, errors.New("give 1 to 500 links")
 	}
-	l, err := t.load(ctx, in.Workspace)
-	if err != nil {
-		return nil, Untrusted{}, err
-	}
-	parent := l.tree.Root
+	body := map[string]any{"folder": in.Folder, "links": in.Links}
 	if in.Parent != "" {
-		if parent, err = folderAt(l.tree.Root, in.Parent); err != nil {
-			return nil, Untrusted{}, err
-		}
-	} else if len(l.tree.Root.Children) > 1 {
-		parent = l.tree.Root.Children[1]
+		body["parent"] = in.Parent
 	}
-	name := strings.TrimSpace(in.Folder)
-	if name == "" {
-		name = "Saved tabs " + time.Now().Format("2006-01-02 15:04")
+	var out struct {
+		Entry  store.Entry `json:"entry"`
+		Folder string      `json:"folder"`
+		Path   string      `json:"path"`
+		Saved  int         `json:"saved"`
 	}
-	var made struct {
-		Entry  store.Entry
-		Events []struct {
-			Type string
-			Data map[string]any
-		}
-	}
-	if err := t.api.do(ctx, "POST", ws(in.Workspace)+"/nodes", map[string]any{"parent": parent.ID, "kind": "folder", "title": name}, &made); err != nil {
-		return nil, Untrusted{}, err
-	}
-	folderID := ""
-	for _, e := range made.Events {
-		if e.Type == "folder.created" {
-			folderID, _ = e.Data["id"].(string)
-		}
-	}
-	if folderID == "" {
-		return nil, Untrusted{}, errors.New("the server made the folder but did not say its id")
-	}
-	ops := []map[string]any{}
-	for _, x := range in.Links {
-		ops = append(ops, map[string]any{"op": "create", "parent": folderID, "kind": "bookmark", "title": x.Title, "url": x.URL})
-	}
-	var out changed
-	err = t.api.do(ctx, "POST", ws(in.Workspace)+"/changes", map[string]any{"ops": ops}, &out)
-	return nil, wrap(map[string]any{"folder": folderID, "entry": out.Entry, "saved": len(in.Links)}), err
+	err := t.api.do(ctx, "POST", ws(in.Workspace)+"/save-links", body, &out)
+	return nil, wrap(out), err
 }
 
 type refreshIn struct {

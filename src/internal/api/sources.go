@@ -2,7 +2,10 @@ package api
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/csv"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -34,7 +37,9 @@ func (s *Server) addSources(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
+	sep := q.Get("separate") == "1"
 	var sources []merge.Source
+	var records []pendingSource
 	if from := q.Get("from"); from != "" {
 		other, err := s.Data.Workspace(r.Context(), from)
 		if errors.Is(err, store.ErrNotFound) {
@@ -54,6 +59,9 @@ func (s *Server) addSources(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sources = append(sources, merge.Source{Name: "workspace " + other.Name, Tree: store.Tree{Root: t.Root}})
+		body, _ := json.Marshal(store.Tree{Root: t.Root})
+		records = append(records, pendingSource{store.Source{ID: "w-" + other.ID, Name: "workspace " + other.Name, Kind: store.SourceWorkspace,
+			From: other.ID, Count: count(t), Separate: sep}, body})
 	}
 	files, code, err := readFiles(w, r)
 	if err != nil {
@@ -67,6 +75,9 @@ func (s *Server) addSources(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sources = append(sources, merge.Source{Name: f.name, Tree: t})
+		sum := sha256.Sum256(f.body)
+		records = append(records, pendingSource{store.Source{ID: "f-" + hex.EncodeToString(sum[:8]), Name: f.name, Kind: store.SourceFile,
+			SHA256: hex.EncodeToString(sum[:]), Count: count(t), Separate: sep}, f.body})
 	}
 	if len(sources) == 0 {
 		writeErr(w, 400, "send at least one bookmarks file, or ?from= another workspace")
@@ -77,7 +88,7 @@ func (s *Server) addSources(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	res, err := merge.Merge(prev, sources, q.Get("separate") == "1", s.Now().Unix())
+	res, err := merge.Merge(prev, sources, sep, s.Now().Unix())
 	if err != nil {
 		writeErr(w, 400, err.Error())
 		return
@@ -91,7 +102,26 @@ func (s *Server) addSources(w http.ResponseWriter, r *http.Request) {
 		summary += fmt.Sprintf("; %d duplicate copies went to the Trash", len(res.Dups))
 	}
 	s.commitWith(w, r, x, saw, given, given, store.Change{Op: "merge", Summary: summary, Tree: res.Tree}, nil, "imported",
-		map[string]any{"added": res.Added, "duplicates": len(res.Dups), "folders": res.Folder})
+		map[string]any{"added": res.Added, "duplicates": len(res.Dups), "folders": res.Folder}, func(store.Entry) error {
+			for _, p := range records {
+				p.src.Added = s.Now().UTC()
+				if err := s.Data.AddSource(r.Context(), x.ID, p.src, p.body); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+}
+
+// pendingSource is a source to record once its merge is stored, with the bytes as read (for Update to compare).
+type pendingSource struct {
+	src  store.Source
+	body []byte
+}
+
+func count(t store.Tree) int {
+	n, _ := t.Count()
+	return n
 }
 
 type upload struct {

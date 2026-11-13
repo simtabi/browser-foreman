@@ -69,11 +69,12 @@ func (s *Server) head(r *http.Request, x store.Workspace) (store.Tree, error) {
 
 // commit records a change and publishes it: the edit events first, then workspace.<kind> with the entry.
 func (s *Server) commit(w http.ResponseWriter, r *http.Request, x store.Workspace, saw int, given bool, viaHeader bool, c store.Change, events []edit.Event, kind string) {
-	s.commitWith(w, r, x, saw, given, viaHeader, c, events, kind, nil)
+	s.commitWith(w, r, x, saw, given, viaHeader, c, events, kind, nil, nil)
 }
 
-// commitWith is commit, adding extra's keys to the answer.
-func (s *Server) commitWith(w http.ResponseWriter, r *http.Request, x store.Workspace, saw int, given bool, viaHeader bool, c store.Change, events []edit.Event, kind string, extra map[string]any) {
+// commitWith is commit, adding extra's keys to the answer; after, when set, runs once the entry is stored and before
+// the answer is written.
+func (s *Server) commitWith(w http.ResponseWriter, r *http.Request, x store.Workspace, saw int, given bool, viaHeader bool, c store.Change, events []edit.Event, kind string, extra map[string]any, after func(store.Entry) error) {
 	b := x.Head
 	if given {
 		b = saw
@@ -94,6 +95,12 @@ func (s *Server) commitWith(w http.ResponseWriter, r *http.Request, x store.Work
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
+	}
+	if after != nil {
+		if err := after(e); err != nil {
+			writeErr(w, 500, fmt.Sprintf("entry %d was stored, but: %v", e.Seq, err))
+			return
+		}
 	}
 	for _, ev := range events {
 		data := map[string]any{"workspace": x.ID, "seq": e.Seq}

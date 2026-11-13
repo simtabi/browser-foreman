@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -27,17 +30,18 @@ func mergeCmd() *cobra.Command {
 		Args:  cobra.RangeArgs(1, 20),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var sources []merge.Source
+			var bodies [][]byte
 			for _, path := range args {
-				f, err := os.Open(path)
+				b, err := os.ReadFile(path)
 				if err != nil {
 					return err
 				}
-				t, _, err := importer.Read(f)
-				f.Close()
+				t, _, err := importer.Read(bytes.NewReader(b))
 				if err != nil {
 					return fmt.Errorf("%s: %w", path, err)
 				}
 				sources = append(sources, merge.Source{Name: filepath.Base(path), Tree: t})
+				bodies = append(bodies, b)
 			}
 			s, err := openStore()
 			if err != nil {
@@ -76,6 +80,15 @@ func mergeCmd() *cobra.Command {
 			e, err := s.Commit(ctx, x.ID, x.Head, store.Change{Op: "merge", Summary: summary, Tree: res.Tree}, now)
 			if err != nil {
 				return err
+			}
+			for i, src := range sources { // kept, so the workspace's Update can compare with them later
+				sum := sha256.Sum256(bodies[i])
+				n, _ := src.Tree.Count()
+				rec := store.Source{ID: "f-" + hex.EncodeToString(sum[:8]), Name: src.Name, Kind: store.SourceFile,
+					SHA256: hex.EncodeToString(sum[:]), Count: n, Separate: separate, Added: now.UTC()}
+				if err := s.AddSource(ctx, x.ID, rec, bodies[i]); err != nil {
+					return err
+				}
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "workspace %s: %s (entry %d)\n", x.ID, e.Summary, e.Seq)
 			return nil

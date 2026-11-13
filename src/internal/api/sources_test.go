@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"mime/multipart"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -133,4 +134,119 @@ func TestSourcesFromAnotherWorkspaceAndSeparate(t *testing.T) {
 	if w := send(h, "POST", "/api/v1/workspaces/b/sources?name=x", "not bookmarks"); w.Code != 400 || !strings.Contains(w.Body.String(), "x: ") {
 		t.Errorf("bad file %d %s", w.Code, w.Body)
 	}
+}
+
+func TestUpdateReadsTheSourcesAgain(t *testing.T) {
+	h := newServer(t, "tok").Handler()
+	for _, id := range []string{"up", "main"} {
+		if w := send(h, "POST", "/api/v1/workspaces", `{"id":"`+id+`","name":"`+id+`"}`); w.Code != 201 {
+			t.Fatal(w.Code)
+		}
+	}
+	if w := send(h, "POST", "/api/v1/workspaces/up/import", htmlFile); w.Code != 201 {
+		t.Fatal(w.Code)
+	}
+	if w := send(h, "POST", "/api/v1/workspaces/main/sources?from=up&name=f.html", ""); w.Code != 201 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if w := send(h, "POST", "/api/v1/workspaces/main/sources?name=chrome", chromeFile); w.Code != 201 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	w := send(h, "GET", "/api/v1/workspaces/main/sources", "")
+	if !strings.Contains(w.Body.String(), `"kind":"workspace"`) || !strings.Contains(w.Body.String(), `"kind":"file"`) || strings.Contains(w.Body.String(), "body") {
+		t.Fatalf("sources %s", w.Body)
+	}
+	// Nothing changed upstream: nothing to do.
+	if w := send(h, "POST", "/api/v1/workspaces/main/update", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"entry":null`) {
+		t.Fatalf("idle update %d %s", w.Code, w.Body)
+	}
+	// Upstream: one bookmark renamed, one added.
+	up := func() store.Tree {
+		w := send(h, "GET", "/api/v1/workspaces/up", "")
+		var out struct{ Tree store.Tree }
+		_ = json.Unmarshal(w.Body.Bytes(), &out)
+		return out.Tree
+	}()
+	var newsID string
+	for _, c := range up.Root.Children[0].Children {
+		if c.Title == "News" {
+			newsID = c.ID
+		}
+	}
+	if w := send(h, "PATCH", "/api/v1/workspaces/up/nodes/"+newsID, `{"title":"Daily news"}`); w.Code != 200 && w.Code != 201 {
+		t.Fatalf("rename %d %s", w.Code, w.Body)
+	}
+	if w := send(h, "POST", "/api/v1/workspaces/up/nodes", `{"parent":"`+up.Root.Children[0].ID+`","kind":"bookmark","title":"Later","url":"https://later.example/"}`); w.Code != 201 {
+		t.Fatalf("add %d %s", w.Code, w.Body)
+	}
+	w = send(h, "GET", "/api/v1/workspaces/main/update", "")
+	type change struct {
+		URL      string
+		NewTitle string `json:"new_title"`
+	}
+	var pv struct {
+		Plan    struct{ New, Retitle, Gone []change }
+		Missing []string
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &pv); err != nil || len(pv.Plan.New) != 1 || pv.Plan.New[0].URL != "https://later.example/" ||
+		len(pv.Plan.Retitle) != 1 || pv.Plan.Retitle[0].NewTitle != "Daily news" || len(pv.Missing) != 0 {
+		t.Fatalf("preview %s", w.Body)
+	}
+	if w := send(h, "POST", "/api/v1/workspaces/main/update", ""); w.Code != 201 || !strings.Contains(w.Body.String(), "Updated from source: 1 new, 1 retitled upstream") {
+		t.Fatalf("apply %d %s", w.Code, w.Body)
+	}
+	if w := send(h, "POST", "/api/v1/workspaces/main/update", ""); !strings.Contains(w.Body.String(), `"entry":null`) {
+		t.Fatalf("a second update did something: %s", w.Body)
+	}
+	tr, _ := tree(t, h)
+	if s := titles(tr.Root); !strings.Contains(s, "Daily news") || !strings.Contains(s, "Later") {
+		t.Fatalf("after update: %s", s)
+	}
+	// The source workspace gone: named as missing, nothing else breaks.
+	if w := send(h, "POST", "/api/v1/workspaces/nobody/update", ""); w.Code != 404 {
+		t.Fatalf("%d", w.Code)
+	}
+}
+
+func TestSaveLinksMakesOneFolderInOneEntry(t *testing.T) {
+	s := seeded(t)
+	h := s.Handler()
+	before := len(history(t, h))
+	body := `{"folder":"Research","links":[{"url":"https://a.example/","title":"  A   page "},{"url":"https://b.example/"}]}`
+	w := send(h, "POST", "/api/v1/workspaces/main/save-links", body)
+	if w.Code != 201 || !strings.Contains(w.Body.String(), `"path":"Saved tabs/Research"`) || !strings.Contains(w.Body.String(), `"type":"bookmark.created"`) {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if w := send(h, "POST", "/api/v1/workspaces/main/save-links", body); !strings.Contains(w.Body.String(), `"path":"Saved tabs/Research (2)"`) {
+		t.Fatalf("the name is not made unique: %s", w.Body)
+	}
+	if n := len(history(t, h)); n != before+2 {
+		t.Fatalf("%d entries, want one per save", n-before)
+	}
+	tr, _ := tree(t, h)
+	if s := titles(tr.Root); !strings.Contains(s, "Saved tabs(Research(A page https://b.example/) Research (2)(") {
+		t.Fatalf("tree %s", s)
+	}
+	w = send(h, "POST", "/api/v1/workspaces/main/save-links", `{"folder":"x","parent":"Bookmarks Bar/New∕one","links":[{"url":"https://c.example/"}]}`)
+	if w.Code != 201 || !strings.Contains(w.Body.String(), `"path":"Bookmarks Bar/New/one/x"`) {
+		t.Fatalf("parent path %d %s", w.Code, w.Body)
+	}
+	for _, bad := range []string{
+		`{"folder":"x","links":[]}`,
+		`{"folder":"x","links":[{"url":"javascript:alert(1)"}]}`,
+		`{"folder":"x","parent":"Trash","links":[{"url":"https://a.example/"}]}`,
+	} {
+		if w := send(h, "POST", "/api/v1/workspaces/main/save-links", bad); w.Code != 400 {
+			t.Errorf("%s: %d", bad, w.Code)
+		}
+	}
+}
+
+func history(t *testing.T, h http.Handler) []store.Entry {
+	t.Helper()
+	var out struct{ History []store.Entry }
+	if err := json.Unmarshal(send(h, "GET", "/api/v1/workspaces/main/history", "").Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	return out.History
 }

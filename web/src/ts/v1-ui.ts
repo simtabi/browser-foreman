@@ -175,6 +175,38 @@ function install(W: V1): void {
   const importer = (): void => sourcesDialog("new");
   const addFiles = (): void => { if (W.locked) toast("The workspace is locked; unlock it to add bookmarks.", "warning"); else sourcesDialog("this"); };
 
+  // Open tabs saved as bookmarks: a new folder inside `parent` (a page path), as one entry on the server.
+  async function addLinks(folder: string, links: { url: string; title: string }[], opts: { reload?: boolean; parent?: string } = {}): Promise<void> {
+    if (W.locked) throw new Error("the workspace is locked; unlock it to save tabs into it");
+    const r = await W.call<{ path: string; saved: number }>("POST", ws("/save-links"), { folder, parent: opts.parent ?? "Saved tabs", links });
+    toast(`${r.saved} saved in “${r.path}”.`, "success", "Saved as bookmarks");
+    if (opts.reload) setTimeout(() => location.reload(), 900);
+  }
+
+  // Update: read the workspace's sources again; say what would change, then apply it as one entry.
+  async function updateWs(): Promise<void> {
+    if (W.locked) { toast("Unlock the workspace first.", "warning", "Locked"); return; }
+    type C = { title: string; url: string; new_title?: string };
+    let pv: { plan: { new: C[]; retitle: C[]; gone: C[] }; sources: number; missing: string[] };
+    try { pv = await W.call("GET", ws("/update")); } catch (e) { fail(e); return; }
+    const missing = pv.missing.length ? ` Could not read: ${pv.missing.join("; ")}.` : "";
+    if (!pv.sources && !pv.missing.length) { toast("This workspace has no source to read again. Add files to it, or merge another workspace in.", "info"); return; }
+    const p = pv.plan, eg = (l: C[]) => l.slice(0, 3).map(b => b.title || b.url).join("; ");
+    if (!p.new.length && !p.retitle.length) {
+      toast((p.gone.length ? `${p.gone.length} no longer upstream; they stay here.` : "Nothing new upstream.") + missing, "info", "Up to date");
+      return;
+    }
+    const body = [`${p.new.length} new` + (p.new.length ? ` (${eg(p.new)})` : ""),
+      `${p.retitle.length} retitled upstream (your own renames still win)`,
+      `${p.gone.length} no longer upstream, kept here until you trash them`].join(" · ") + "." + missing + " Nothing is removed, and the update is one entry in the history.";
+    if (!(await askConfirm({ title: "Update from the sources?", ok: "Apply update", danger: false, body }))) return;
+    try {
+      const j = await W.call<{ entry: Entry | null }>("POST", ws("/update"));
+      toast(j.entry ? j.entry.summary : "Nothing to apply", "success", "Updated");
+      if (j.entry) setTimeout(() => location.reload(), 900);
+    } catch (e) { fail(e); }
+  }
+
   async function duplicatesCsv(): Promise<void> {
     try {
       const r = await fetch(`api/v1/${ws("/duplicates.csv")}`, { headers: W.headers() });
@@ -240,7 +272,8 @@ function install(W: V1): void {
     dm.append(item("ti-list-details", "All workspaces" + (archived ? ` (${archived} archived)` : "") + "…", manage),
       item("ti-puzzle", "Browser extension…", () => void extensions()),
       el("div", "dropdown-divider"), el("h6", "dropdown-header", "This workspace"),
-      item("ti-history", "History and progress…", () => void history()));
+      item("ti-history", "History and progress…", () => void history()),
+      item("ti-refresh-dot", "Update from source…", () => void updateWs()));
     if (W.locked) dm.append(item("ti-lock-open", "Unlock", () => void toggleLock(false)));
     else dm.append(item("ti-pencil", "Rename…", () => void rename()), item("ti-notes", "Notes…", () => void notes()),
       item("ti-lock", "Lock (read-only)…", () => void toggleLock(true)),
@@ -277,7 +310,7 @@ function install(W: V1): void {
   }
 
   W.ui = {
-    history, manage, importer, addFiles, menu, download, toggleLock, backup, restore, extensions, duplicatesCsv,
+    history, manage, importer, addFiles, addLinks, updateWs, menu, download, toggleLock, backup, restore, extensions, duplicatesCsv,
   };
   const mount = () => { document.getElementById("wsMenu")?.remove(); document.querySelector("#edited")?.before(menu()); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount); else mount();

@@ -82,6 +82,11 @@ ships.
   workspaces) to a workspace, keeping one copy of each page by the Python tool's rule; every other copy goes to the
   Trash as a duplicate. `GET /api/v1/workspaces/{id}/duplicates.csv` lists them, and the page's Import, Add to this
   workspace, Merged duplicates (CSV) and Removed duplicates view use them.
+- Update from source: a workspace remembers the files and workspaces merged into it (kept in backups and
+  `storage migrate`), and `GET/POST /api/v1/workspaces/{id}/update` (and Update from source… in the page) brings in
+  what is new upstream and titles changed upstream that were not renamed here, without removing anything.
+- Saving tabs as bookmarks: `POST /api/v1/workspaces/{id}/save-links` makes a new folder of them in one entry; the
+  page's Save and Move to bookmarks and the MCP tool use it.
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed

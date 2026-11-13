@@ -44,7 +44,7 @@ func OpenSQLite(dir string) (*SQLiteStore, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1) // one writer; keeps every Commit's read-check-write in one connection
-	if _, err := db.Exec(schema + accountsSchema + linksSchema + prefsSchema); err != nil {
+	if _, err := db.Exec(schema + accountsSchema + linksSchema + prefsSchema + sourcesSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("sqlite schema: %w", err)
 	}

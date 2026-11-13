@@ -51,6 +51,10 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `POST` | `/api/v1/workspaces/{id}/import` | editor | the body is a bookmarks file (Chrome JSON or exported HTML, up to 64 MiB); replaces the tree as one entry; `?name=` labels it |
 | `POST` | `/api/v1/workspaces/{id}/sources` | editor | merges files (the body, or multipart `file` parts, up to 20) and `?from=` another workspace into this one, as one entry; copies of a page go to the Trash as duplicates; `?separate=1` keeps each source's folders apart; answers `added`, `duplicates`, `folders` |
 | `GET` | `/api/v1/workspaces/{id}/duplicates.csv` | viewer | every copy merged away, with the bookmark kept for it |
+| `GET` | `/api/v1/workspaces/{id}/sources` | viewer | where the workspace's bookmarks came from: files (a copy is kept), other workspaces, files on this computer |
+| `GET` | `/api/v1/workspaces/{id}/update` | viewer | what Update would do: `plan.new`, `plan.retitle` (titles changed upstream that you have not renamed here), `plan.gone` (no longer upstream; they stay), and `missing` sources |
+| `POST` | `/api/v1/workspaces/{id}/update` | editor | reads the sources again and brings new bookmarks and titles in, as one entry; nothing is removed |
+| `POST` | `/api/v1/workspaces/{id}/save-links` | editor | `{folder, parent, links: [{url, title}]}`: saves up to 2000 http(s) links as a new folder inside `parent` ("Saved tabs" when left out), as one entry |
 | `GET` | `/api/v1/workspaces/{id}/export` | viewer | a download: `?format=html` (default, every browser imports it) or `chrome`; `?at=N` for an earlier state |
 | `POST` | `/api/v1/workspaces/{id}/changes` | editor | body `{base?, ops: [...]}`: several changes as one entry, all or none |
 | `PUT` | `/api/v1/workspaces/{id}/tree` | editor | body `{root, trash?}`: the whole tree at once (the web interface saves this way); the server works out what changed, checks it by the same rules and publishes those events; an unchanged tree records nothing (`200`) |

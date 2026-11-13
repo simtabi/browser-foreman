@@ -556,6 +556,52 @@
           }
         ],
         "description": "Body: one file, or multipart/form-data with up to 20 \"file\" parts. Answers the entry, and added, duplicates and folders counts."
+      },
+      "get": {
+        "summary": "Where the workspace's bookmarks came from (files, workspaces, files on this computer), without their kept bytes",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{id}/links": {
+      "get": {
+        "summary": "What the last checks found for this workspace's links, by URL",
+        "tags": [
+          "Link checks"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/v1/workspaces/{id}/duplicates.csv": {
@@ -580,6 +626,95 @@
             }
           }
         ]
+      }
+    },
+    "/api/v1/workspaces/{id}/update": {
+      "get": {
+        "summary": "What Update would do: bookmarks new upstream, titles changed upstream (not renamed here), bookmarks gone upstream (they stay), and sources that cannot be read",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "post": {
+        "summary": "Read the sources again and bring the new bookmarks and titles in, as one entry; nothing is removed",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{id}/save-links": {
+      "post": {
+        "summary": "Save links (open tabs) as a new folder of bookmarks inside parent (a folder path, \"Saved tabs\" when left out), as one entry",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          }
+        ],
+        "description": "Body: {folder, parent, links: [{url, title}]}; up to 2000 http(s) links. Answers the entry, and folder (its id), path and saved."
       }
     },
     "/api/v1/workspaces/{id}/changes": {
@@ -977,30 +1112,6 @@
               "type": "string"
             },
             "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
-          }
-        ]
-      }
-    },
-    "/api/v1/workspaces/{id}/links": {
-      "get": {
-        "summary": "What the last checks found for this workspace's links, by URL",
-        "tags": [
-          "Link checks"
-        ],
-        "x-role": "viewer",
-        "responses": {
-          "default": {
-            "description": "JSON; errors are {\"error\": \"message\"}"
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
           }
         ]
       }

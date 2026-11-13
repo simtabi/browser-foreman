@@ -100,6 +100,9 @@ func Migrate(ctx context.Context, src, dst Store) (workspaces, entries int, err 
 			}
 			entries++
 		}
+		if err := copySources(ctx, src, dst, w.ID, w.ID); err != nil {
+			return workspaces, entries, err
+		}
 		// Notes, lock and archive go over last: a locked workspace would refuse the entries above.
 		if err := dst.UpdateWorkspace(ctx, w); err != nil {
 			return workspaces, entries, err
@@ -157,4 +160,22 @@ func Migrate(ctx context.Context, src, dst Store) (workspaces, entries int, err 
 		}
 	}
 	return workspaces, entries, nil
+}
+
+// copySources copies a workspace's sources, with the kept files, from one store to another.
+func copySources(ctx context.Context, src, dst Store, fromID, toID string) error {
+	list, err := src.SourceList(ctx, fromID)
+	if err != nil {
+		return err
+	}
+	for _, x := range list {
+		body, err := src.SourceBody(ctx, fromID, x.ID)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return err
+		}
+		if err := dst.AddSource(ctx, toID, x, body); err != nil {
+			return fmt.Errorf("workspace %s source %s: %w", toID, x.ID, err)
+		}
+	}
+	return nil
 }

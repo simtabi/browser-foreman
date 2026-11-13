@@ -46,5 +46,17 @@ curl "http://127.0.0.1:8765/api/v1/workspaces/all/duplicates.csv" -H "Authorizat
 
 Each merge is one history entry, so undo takes the whole merge back.
 
+## Update from the sources
+
+A workspace remembers where its bookmarks came from: each file merged in (a copy is kept) and each workspace merged
+in. **Update from source…** in the workspace menu (or `POST /api/v1/workspaces/{id}/update`) reads them again and
+shows what changed before applying it:
+
+- bookmarks new upstream are added, by the same rule as a merge;
+- a title changed upstream is taken, unless you renamed that bookmark here;
+- bookmarks no longer upstream are listed, and stay until you trash them.
+
+A kept file never changes, so Update matters for workspaces merged in, which keep changing.
+
 ---
 [← Docs index](../../README.md#documentation)

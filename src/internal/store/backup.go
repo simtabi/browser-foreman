@@ -30,6 +30,14 @@ type Backup struct {
 type BackupWorkspace struct {
 	Workspace Workspace `json:"workspace"`
 	History   []Entry   `json:"history"`
+	// Sources are where its bookmarks came from, each with its kept file, so Update works after a restore.
+	Sources []BackupSource `json:"sources,omitempty"`
+}
+
+// BackupSource is a Source and, for a kept file, its bytes.
+type BackupSource struct {
+	Source Source `json:"source"`
+	Body   []byte `json:"body,omitempty"`
 }
 
 // MakeBackup reads everything into one Backup.
@@ -54,7 +62,19 @@ func MakeBackup(ctx context.Context, s Store, now time.Time) (Backup, error) {
 			}
 			b.Trees[e.Snap] = t
 		}
-		b.Workspaces = append(b.Workspaces, BackupWorkspace{Workspace: w, History: h})
+		bw := BackupWorkspace{Workspace: w, History: h}
+		list, err := s.SourceList(ctx, w.ID)
+		if err != nil {
+			return b, err
+		}
+		for _, x := range list {
+			body, err := s.SourceBody(ctx, w.ID, x.ID)
+			if err != nil && !errors.Is(err, ErrNotFound) {
+				return b, err
+			}
+			bw.Sources = append(bw.Sources, BackupSource{Source: x, Body: body})
+		}
+		b.Workspaces = append(b.Workspaces, bw)
 	}
 	if b.Links, err = s.Links(ctx, nil); err != nil {
 		return b, err
@@ -122,6 +142,11 @@ func Restore(ctx context.Context, s Store, b Backup, now time.Time) (Restored, e
 				return out, fmt.Errorf("workspace %s entry %d: %w", id, e.Seq, err)
 			}
 			out.Entries++
+		}
+		for _, x := range bw.Sources {
+			if err := s.AddSource(ctx, id, x.Source, x.Body); err != nil {
+				return out, fmt.Errorf("workspace %s source %s: %w", id, x.Source.ID, err)
+			}
 		}
 		w.ID = id
 		if err := s.UpdateWorkspace(ctx, w); err != nil { // notes, lock and archive last: a lock would refuse the entries

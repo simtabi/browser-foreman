@@ -189,7 +189,7 @@ func TestWritesGoThroughTheAPIAndConfirm(t *testing.T) {
 		t.Fatal(err)
 	}
 	other, _ := folderAt(w.Tree.Root, "Other bookmarks")
-	reading, err := folderAt(w.Tree.Root, "Other bookmarks/Reading")
+	reading, err := folderAt(w.Tree.Root, "Saved tabs/Reading")
 	if err != nil || len(reading.Children) != 2 || other.Children[0].ID != "b3" {
 		t.Fatalf("after writes: %s", toJSON(w.Tree.Root))
 	}

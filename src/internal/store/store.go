@@ -205,6 +205,7 @@ type Store interface {
 	Accounts
 	Links
 	PrefsStore
+	Sources
 
 	Close() error
 }
