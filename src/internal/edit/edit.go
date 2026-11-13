@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 // Op is one change. Which fields count depends on Op:
 //
 //	create  Parent, Index (end when nil), Kind, Title, URL (bookmarks), Note
-//	update  ID, and any of Title, URL, Note
+//	update  ID, and any of Title, URL, Note, Rating (0 clears), Tags (empty clears)
 //	move    IDs, Parent, Index (end when nil), in the order given
 //	trash   IDs, Reason
 //	restore IDs (back where each came from; to the first top folder if that is gone)
@@ -32,6 +33,8 @@ type Op struct {
 	Title  *string  `json:"title,omitempty"`
 	URL    *string  `json:"url,omitempty"`
 	Note   *string  `json:"note,omitempty"`
+	Rating *int     `json:"rating,omitempty"`
+	Tags   []string `json:"tags,omitempty"`
 	Reason string   `json:"reason,omitempty"`
 }
 
@@ -204,6 +207,46 @@ func checkText(field, v string) error {
 	return nil
 }
 
+// Limits on a bookmark's labels.
+const (
+	MaxRating = 5
+	maxTags   = 20
+	maxTagLen = 40
+)
+
+// CheckRating accepts 0 (not rated) to MaxRating stars.
+func CheckRating(v int) error {
+	if v < 0 || v > MaxRating {
+		return refuse("rating is 0 to %d stars", MaxRating)
+	}
+	return nil
+}
+
+// CleanTags trims, de-duplicates (ignoring case) and sorts a bookmark's tags, and refuses ones that cannot be kept:
+// too many, too long, or holding a comma (bookmark files list tags comma-separated).
+func CleanTags(in []string) ([]string, error) {
+	seen, out := map[string]bool{}, []string{}
+	for _, t := range in {
+		t = strings.Join(strings.Fields(t), " ")
+		if t == "" || seen[strings.ToLower(t)] {
+			continue
+		}
+		if len(t) > maxTagLen {
+			return nil, refuse("a tag is longer than %d characters", maxTagLen)
+		}
+		if strings.ContainsAny(t, ",\x00") {
+			return nil, refuse("a tag cannot hold a comma")
+		}
+		seen[strings.ToLower(t)] = true
+		out = append(out, t)
+	}
+	if len(out) > maxTags {
+		return nil, refuse("a bookmark has at most %d tags", maxTags)
+	}
+	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i]) < strings.ToLower(out[j]) })
+	return out, nil
+}
+
 // CheckURL accepts the addresses a bookmark can hold and refuses ones that run code when opened.
 func CheckURL(raw string) error {
 	if raw == "" {
@@ -351,6 +394,27 @@ func (e *editor) update(op Op) error {
 		}
 		n.Note, changed["note"] = *op.Note, *op.Note
 	}
+	if op.Rating != nil || op.Tags != nil {
+		if n.Kind != store.KindBookmark {
+			return refuse("only bookmarks are rated and tagged")
+		}
+	}
+	if op.Rating != nil {
+		if err := CheckRating(*op.Rating); err != nil {
+			return err
+		}
+		n.Rating, changed["rating"] = *op.Rating, *op.Rating
+	}
+	if op.Tags != nil {
+		tags, err := CleanTags(op.Tags)
+		if err != nil {
+			return err
+		}
+		if len(tags) == 0 {
+			tags = nil
+		}
+		n.Tags, changed["tags"] = tags, tags
+	}
 	if op.URL != nil {
 		if n.Kind != store.KindBookmark {
 			return refuse("a folder has no URL")
@@ -362,7 +426,7 @@ func (e *editor) update(op Op) error {
 		n.URL, changed["url"] = v, v
 	}
 	if len(changed) == 1 {
-		return refuse("update %q: give a title, url or note", op.ID)
+		return refuse("update %q: give a title, url, note, rating or tags", op.ID)
 	}
 	if _, ok := changed["title"]; !ok {
 		changed["title"] = n.Title

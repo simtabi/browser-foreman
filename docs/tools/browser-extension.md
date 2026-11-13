@@ -30,9 +30,10 @@ Make a one-time code, then type it into the extension's popup with the server's 
 browser-foreman pair
 ```
 
-Or, in the web interface, the workspace menu › *Browser extension…* (signed in as an owner in `accounts` mode). A code
+Or, in the web interface, the Browsers menu (top bar) › *Browser extensions…*, which also lists the supported
+browsers, whether each is on this computer and connected, and how to install the extension in it (signed in as an owner in `accounts` mode). A code
 works once, for ten minutes, and five wrong codes lock pairing for fifteen minutes. The extension gets its own API
-token, named `extension:<browser>`, listed under *Browser extension…* and in `GET /api/v1/tokens`; disconnecting
+token, named `extension:<browser>`, listed under *Browser extensions…* and in `GET /api/v1/tokens`; disconnecting
 revokes it. The extension only talks to a server on this computer (`127.0.0.1` or `localhost`).
 
 ## What it does

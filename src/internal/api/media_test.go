@@ -9,6 +9,8 @@ import (
 	"image/png"
 	"net"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -113,6 +115,26 @@ func TestIconsSnapshotsAndTheirRoutes(t *testing.T) {
 	if body := get(h, "/?ws=pics", nil).Body.String(); !strings.Contains(body, `"icons":{"go.dev":"`+icon+`"}`) || !strings.Contains(body, media.ThumbKey("https://www.go.dev/")) {
 		t.Fatalf("boot media missing: %s", body[strings.Index(body, `"media"`):][:200])
 	}
+	// A folder chosen in Preferences is where pictures are then read from: the snapshot in the default folder is no
+	// longer served, and one placed in the chosen folder is.
+	key := media.ThumbKey("https://www.go.dev/") + ".jpg"
+	other := t.TempDir()
+	if w := send(h, "PUT", "/api/v1/preferences", `{"snapshot_dir":`+strconv.Quote(other)+`}`); w.Code != 200 {
+		t.Fatalf("set the folder: %d %s", w.Code, w.Body)
+	}
+	if w := get(h, "/thumbs/"+key, nil); w.Code != 404 {
+		t.Fatalf("still served from the default folder: %d", w.Code)
+	}
+	b, _ := os.ReadFile(filepath.Join(s.Media.Dir, "thumbs", key))
+	_ = os.MkdirAll(filepath.Join(other, "thumbs"), 0o700)
+	_ = os.WriteFile(filepath.Join(other, "thumbs", key), b, 0o600)
+	if w := get(h, "/thumbs/"+key, nil); w.Code != 200 {
+		t.Fatalf("not served from the chosen folder: %d", w.Code)
+	}
+	if w := send(h, "PUT", "/api/v1/preferences", `{"snapshot_dir":"relative/x"}`); w.Code != 400 {
+		t.Fatalf("a relative folder was accepted: %d", w.Code)
+	}
+	_ = send(h, "PUT", "/api/v1/preferences", `{"snapshot_dir":""}`)
 	// In accounts mode the pictures need a signed-in person.
 	s.Cfg.Server.Mode = "accounts"
 	if w := get(h, "/favicons/"+icon, nil); w.Code != 401 {

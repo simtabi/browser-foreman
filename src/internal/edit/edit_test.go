@@ -147,3 +147,46 @@ func TestTrashKeepsOldHashes(t *testing.T) {
 		t.Fatal("an empty Trash changed the tree's hash; stored history would no longer dedupe")
 	}
 }
+
+func TestRatingAndTags(t *testing.T) {
+	tr, ev := run(t, sample(), Op{Op: "update", ID: "go", Rating: i(4), Tags: []string{" work ", "Read later", "WORK", "go"}})
+	g := tr.Root.Children[0].Children[0]
+	if g.Rating != 4 || strings.Join(g.Tags, "|") != "go|Read later|work" {
+		t.Fatalf("rating %d tags %q: trimmed, once each, sorted", g.Rating, g.Tags)
+	}
+	if ev[0].Type != "bookmark.updated" || ev[0].Data["rating"] != 4 {
+		t.Fatalf("%+v", ev)
+	}
+	cleared, _ := run(t, tr, Op{Op: "update", ID: "go", Rating: i(0), Tags: []string{}})
+	if g := cleared.Root.Children[0].Children[0]; g.Rating != 0 || g.Tags != nil {
+		t.Fatalf("0 and [] clear: %d %q", g.Rating, g.Tags)
+	}
+	refused(t, sample(), "0 to 5", Op{Op: "update", ID: "go", Rating: i(6)})
+	refused(t, sample(), "0 to 5", Op{Op: "update", ID: "go", Rating: i(-1)})
+	refused(t, sample(), "comma", Op{Op: "update", ID: "go", Tags: []string{"a,b"}})
+	refused(t, sample(), "longer than", Op{Op: "update", ID: "go", Tags: []string{strings.Repeat("x", 41)}})
+	many := make([]string, 21)
+	for k := range many {
+		many[k] = fmt.Sprintf("t%d", k)
+	}
+	refused(t, sample(), "at most 20", Op{Op: "update", ID: "go", Tags: many})
+	refused(t, sample(), "only bookmarks", Op{Op: "update", ID: "dev", Rating: i(3)})
+}
+
+func TestDiffChecksRatingAndTags(t *testing.T) {
+	next := sample()
+	next.Root.Children[0].Children[0].Rating = 5
+	next.Root.Children[0].Children[0].Tags = []string{"b", "a", "a"}
+	ev, err := Diff(sample(), next)
+	if err != nil || len(ev) != 1 || ev[0].Type != "bookmark.updated" || ev[0].Data["rating"] != 5 {
+		t.Fatalf("%+v %v", ev, err)
+	}
+	if got := strings.Join(next.Root.Children[0].Children[0].Tags, "|"); got != "a|b" {
+		t.Fatalf("a whole-tree save keeps tags clean: %q", got)
+	}
+	bad := sample()
+	bad.Root.Children[0].Children[0].Rating = 9
+	if _, err := Diff(sample(), bad); err == nil || !IsRefusal(err) {
+		t.Fatal("a 9-star rating got through a whole-tree save")
+	}
+}

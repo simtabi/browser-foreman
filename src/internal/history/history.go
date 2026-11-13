@@ -106,6 +106,9 @@ type Query struct {
 	Words []string  // all must appear in the address or the title (lower case)
 	Since time.Time // visits on or after
 	Until time.Time // visits on or before (zero: up to now)
+	// Want, when set, keeps only the pages it accepts, and Limit then counts those alone (up to 100,000): used to
+	// find when each bookmark was last opened.
+	Want  func(url string) bool
 	Limit int
 }
 
@@ -132,7 +135,9 @@ func Read(ctx context.Context, f File, q Query) ([]Visit, error) {
 	defer conn.Close()
 	_, _ = conn.ExecContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)")
 	limit := q.Limit
-	if limit <= 0 || limit > 5000 {
+	switch {
+	case q.Want != nil && limit > 0 && limit <= 100_000:
+	case limit <= 0 || limit > 5000:
 		limit = 500
 	}
 	var query string
@@ -168,6 +173,9 @@ func Read(ctx context.Context, f File, q Query) ([]Visit, error) {
 			return nil, err
 		}
 		if !strings.HasPrefix(v.URL, "https://") && !strings.HasPrefix(v.URL, "http://") {
+			continue
+		}
+		if q.Want != nil && !q.Want(v.URL) {
 			continue
 		}
 		hay := strings.ToLower(v.URL + " " + v.Title)

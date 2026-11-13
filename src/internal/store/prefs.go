@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 )
 
 // Prefs are the owner's choices about browsers and tabs, kept with the data (not in the config files, which hold the
@@ -29,12 +30,18 @@ type Prefs struct {
 	KeepDays int `json:"keep_days"`
 	// RecheckDays re-checks every bookmarked link this often; 0 is off.
 	RecheckDays int `json:"recheck_days"`
+	// Page snapshots: the browser window they are taken in (a taller one shows more of the page), how long a page
+	// may run before the picture is taken, and the folder they are kept in ("": the data folder's media/).
+	SnapshotWidth       int    `json:"snapshot_width"`
+	SnapshotHeight      int    `json:"snapshot_height"`
+	SnapshotWaitSeconds int    `json:"snapshot_wait_seconds"`
+	SnapshotDir         string `json:"snapshot_dir"`
 }
 
 // Defaults are what a new store reads.
 func Defaults() Prefs {
 	return Prefs{OpenWith: []string{"System default"}, Autosave: true, SaveMode: "change", IntervalSeconds: 300,
-		WatchSeconds: 15, KeepDays: 14, RecheckDays: 7}
+		WatchSeconds: 15, KeepDays: 14, RecheckDays: 7, SnapshotWidth: 1280, SnapshotHeight: 800, SnapshotWaitSeconds: 8}
 }
 
 // Validate refuses values that would make the server misbehave (a 1-second poll, a negative age).
@@ -56,6 +63,14 @@ func (p Prefs) Validate() error {
 		return errors.New("recheck_days: 0 (off) to 365")
 	case p.IncognitoPurgeHours < 0 || p.IncognitoPurgeHours > 24*365:
 		return errors.New("incognito_purge_hours: 0 (never) to 8760")
+	case p.SnapshotWidth < 640 || p.SnapshotWidth > 2560:
+		return errors.New("snapshot_width: 640 to 2560")
+	case p.SnapshotHeight < 400 || p.SnapshotHeight > 4800:
+		return errors.New("snapshot_height: 400 to 4800")
+	case p.SnapshotWaitSeconds < 1 || p.SnapshotWaitSeconds > 30:
+		return errors.New("snapshot_wait_seconds: 1 to 30")
+	case p.SnapshotDir != "" && (!filepath.IsAbs(p.SnapshotDir) || len(p.SnapshotDir) > 1024 || filepath.Clean(p.SnapshotDir) != p.SnapshotDir):
+		return errors.New("snapshot_dir: a full path to a folder (or empty for the default)")
 	}
 	for _, n := range append(append([]string{}, p.OpenWith...), p.Tracked...) {
 		if n == "" || len(n) > 60 {

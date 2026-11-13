@@ -1886,6 +1886,30 @@
           }
         ]
       }
+    },
+    "/api/v1/workspaces/{id}/opened": {
+      "get": {
+        "summary": "When each bookmark was last opened, from the browsers' own history (matched like merging: http/https and a trailing slash ignored), with visit counts; read through copies, never stored",
+        "tags": [
+          "History"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
     }
   }
 }

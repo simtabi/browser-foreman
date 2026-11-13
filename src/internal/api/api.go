@@ -98,6 +98,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/history/access", s.require(store.RoleOwner, s.historyAccess))
 	m.HandleFunc("POST /api/v1/history/access/open-settings", s.require(store.RoleOwner, s.openAccessSettings))
 	m.HandleFunc("GET /api/v1/history", s.require(store.RoleOwner, s.searchHistory))
+	m.HandleFunc("GET /api/v1/workspaces/{id}/opened", s.require(store.RoleOwner, s.opened))
 	m.HandleFunc("GET /api/v1/workspaces/{id}/update", s.require(store.RoleViewer, s.updatePreview))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/update", s.require(store.RoleEditor, s.updateApply))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/save-links", s.require(store.RoleEditor, s.saveLinks))

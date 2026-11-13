@@ -76,6 +76,25 @@ func TestHistoryRoutes(t *testing.T) {
 	if out.Read != 2 || len(out.Skipped) != 1 || out.Skipped[0].Browser != "Safari" {
 		t.Fatalf("read %d skipped %+v", out.Read, out.Skipped)
 	}
+	// Last opened, per bookmark: both profiles' visits to go.dev added up, the newest wins; pages that are not
+	// bookmarks (unbookmarked.example) are not listed; the answer is never cached.
+	w = send(h, "GET", "/api/v1/workspaces/main/opened", "")
+	var op struct {
+		Opened map[string]struct {
+			Last   time.Time
+			Visits int
+		}
+		Read int
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &op); err != nil || w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("opened %d %s", w.Code, w.Body)
+	}
+	if g, ok := op.Opened["https://go.dev/"]; !ok || g.Visits != 2 || now.Sub(g.Last) > 2*time.Minute || len(op.Opened) != 1 || op.Read != 2 {
+		t.Fatalf("opened %+v", op)
+	}
+	if w := send(h, "GET", "/api/v1/workspaces/nope/opened", ""); w.Code != 404 {
+		t.Fatalf("unknown workspace: %d", w.Code)
+	}
 	if w := send(h, "GET", "/api/v1/history?q=find&days=365", ""); !strings.Contains(w.Body.String(), "unbookmarked") || strings.Contains(w.Body.String(), "go.dev") {
 		t.Fatalf("search %s", w.Body)
 	}

@@ -1,6 +1,10 @@
 package edit
 
-import "github.com/simtabi/browser-foreman/src/internal/store"
+import (
+	"strings"
+
+	"github.com/simtabi/browser-foreman/src/internal/store"
+)
 
 type place struct {
 	n       *store.Node
@@ -84,6 +88,18 @@ func Diff(prev, next store.Tree) ([]Event, error) {
 			err = e
 			return
 		}
+		if e := CheckRating(now.n.Rating); e != nil {
+			err = e
+			return
+		}
+		if len(now.n.Tags) > 0 {
+			clean, e := CleanTags(now.n.Tags)
+			if e != nil {
+				err = e
+				return
+			}
+			now.n.Tags = clean
+		}
 		switch {
 		case !existed:
 			if !now.inTrash || now.trashed {
@@ -98,8 +114,15 @@ func Diff(prev, next store.Tree) ([]Event, error) {
 		case !now.inTrash && (was.parent != now.parent || reordered[id]):
 			emit(now.n, "moved", map[string]any{"from": was.parent, "to": now.parent})
 		}
-		if existed && (was.n.Title != now.n.Title || was.n.URL != now.n.URL || was.n.Note != now.n.Note) {
+		sameTags := !existed || strings.Join(was.n.Tags, "\x00") == strings.Join(now.n.Tags, "\x00")
+		if existed && (was.n.Title != now.n.Title || was.n.URL != now.n.URL || was.n.Note != now.n.Note || was.n.Rating != now.n.Rating || !sameTags) {
 			data := map[string]any{}
+			if was.n.Rating != now.n.Rating {
+				data["rating"] = now.n.Rating
+			}
+			if !sameTags {
+				data["tags"] = now.n.Tags
+			}
 			if was.n.URL != now.n.URL {
 				data["url"] = now.n.URL
 			}

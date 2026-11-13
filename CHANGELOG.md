@@ -10,6 +10,20 @@ ships.
 
 ### Added
 
+- Your own labels on bookmarks: a 1 to 5 star rating and tags (`rating` and `tags` on every bookmark, on the API, in
+  edits and whole-tree saves, validated the same way). Set them in the bookmark's details; they show on its row and
+  card, search finds tags (`#work` matches one exactly), Sort has Highest rated and Group by has Rating and Tag.
+- Last opened: `GET /api/v1/workspaces/{id}/opened` reads when each bookmark was last visited, and how often, from
+  the browsers' own history (owner only, through copies, never stored). The details show it; Sort has Recently opened
+  and Group by has Last opened. When macOS blocks reading history, the details say so.
+- Grid layout: the Folders pane's List / Grid switch shows each folder's bookmarks as cards with their snapshot,
+  stars and tags.
+- Snapshot settings (Settings › Page snapshots): the window size (up to a tall 1280 × 2400 that shows more of a page),
+  how long a page may run first, and the folder snapshots and site icons are kept in (`snapshot_width`,
+  `snapshot_height`, `snapshot_wait_seconds`, `snapshot_dir` preferences).
+- Browser extensions dialog, now in the Browsers menu: the five major browsers (Chrome, Edge, Firefox, Safari, Brave)
+  and any other supported one on this computer, each with whether it is installed and connected and the steps to
+  install the extension there; then the pairing code and the connected list.
 - `browser-foreman` Go binary (module `github.com/simtabi/browser-foreman/src`) with `serve`, `version` and
   `config {path,show,init}`.
 - Configuration from `~/.config/browser-foreman/`: every `*.json` merged in name order, then `.env`, then `BROFO_*`
@@ -114,6 +128,7 @@ ships.
 
 ### Fixed
 
+- Expand / Collapse all now covers the Trash and works in filtered views; it used to leave the Trash open.
 - A web test now fails when `page.ts` (still unchecked by the compiler) uses a name that does not exist, and the
   header counts log their errors instead of hiding them.
 - The Timeline's All range showed no tab snapshots: `days=0` now means every snapshot kept.

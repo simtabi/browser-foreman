@@ -35,9 +35,13 @@ type Node struct {
 	URL   string `json:"url,omitempty"`
 	Note  string `json:"note,omitempty"`
 	// Description is what the page itself says it is (its meta description), when known.
-	Description string  `json:"description,omitempty"`
-	Added       int64   `json:"added,omitempty"` // Unix seconds, when known
-	Children    []*Node `json:"children,omitempty"`
+	Description string `json:"description,omitempty"`
+	Added       int64  `json:"added,omitempty"` // Unix seconds, when known
+	// Rating is the owner's 1 to 5 stars for a bookmark (0: not rated); Tags are its labels, sorted, each once.
+	// Both are left out of the JSON when empty, so trees stored before them keep their content hash.
+	Rating   int      `json:"rating,omitempty"`
+	Tags     []string `json:"tags,omitempty"`
+	Children []*Node  `json:"children,omitempty"`
 }
 
 const (

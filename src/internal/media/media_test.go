@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHostAndNames(t *testing.T) {
@@ -101,7 +102,7 @@ func TestSnapKeepsASmallJPEG(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(ran, " ")
-	for _, want := range []string{"--headless=new", "--user-data-dir=", "--incognito", "https://go.dev/"} {
+	for _, want := range []string{"--headless=new", "--user-data-dir=", "--incognito", "https://go.dev/", "--window-size=1280,800", "--virtual-time-budget=8000"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing %s in %s", want, joined)
 		}
@@ -117,6 +118,11 @@ func TestSnapKeepsASmallJPEG(t *testing.T) {
 	}
 	if r, _, _, _ := img.At(10, 10).RGBA(); r>>8 < 180 {
 		t.Fatalf("colour lost: %d", r>>8)
+	}
+	// The owner's snapshot settings reach Chrome: a taller window and a longer wait.
+	tall := Snapper{Store: s, Chrome: "/x/chrome", Run: fakeChrome(t, &ran), Resolve: public, Width: 1440, Height: 2400, Wait: 15 * time.Second}
+	if err := tall.Snap(context.Background(), "https://go.dev/"); err != nil || !strings.Contains(strings.Join(ran, " "), "--window-size=1440,2400 --virtual-time-budget=15000") {
+		t.Fatalf("%v %v", err, ran)
 	}
 	private := func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("192.168.1.10")}, nil }
 	for _, u := range []string{"http://router.local/", "file:///etc/passwd", "javascript:alert(1)"} {

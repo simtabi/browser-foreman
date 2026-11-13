@@ -29,6 +29,10 @@ type Snapper struct {
 	Run     Runner
 	Resolve func(ctx context.Context, host string) ([]net.IP, error)
 	Timeout time.Duration
+	// Width and Height are the window the page is drawn in (0: 1280 by 800); Wait is how long the page may run
+	// before the picture (0: 8 seconds). The kept picture is half the window's size.
+	Width, Height int
+	Wait          time.Duration
 }
 
 // RunCommand is the Runner that starts the process.
@@ -82,11 +86,21 @@ func (s Snapper) Snap(ctx context.Context, raw string) error {
 	if timeout == 0 {
 		timeout = 30 * time.Second
 	}
+	w, h, wait := s.Width, s.Height, s.Wait
+	if w == 0 || h == 0 {
+		w, h = 1280, 800
+	}
+	if wait == 0 {
+		wait = 8 * time.Second
+	}
+	if timeout < wait+20*time.Second {
+		timeout = wait + 20*time.Second
+	}
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	argv := []string{s.Chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars", "--mute-audio", "--no-first-run",
 		"--no-default-browser-check", "--disable-extensions", "--disable-sync", "--incognito",
-		"--user-data-dir=" + filepath.Join(dir, "profile"), "--window-size=1280,800", "--virtual-time-budget=8000",
+		"--user-data-dir=" + filepath.Join(dir, "profile"), fmt.Sprintf("--window-size=%d,%d", w, h), fmt.Sprintf("--virtual-time-budget=%d", wait.Milliseconds()),
 		"--screenshot=" + shot, u.String()}
 	run := s.Run
 	if run == nil {

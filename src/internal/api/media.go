@@ -26,7 +26,7 @@ func (s *Server) servePicture(kind string) http.HandlerFunc {
 				return
 			}
 		}
-		path, ct, err := s.Media.Path(kind, r.PathValue("name"))
+		path, ct, err := s.media(r).Path(kind, r.PathValue("name"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -45,9 +45,9 @@ func (s *Server) servePicture(kind string) http.HandlerFunc {
 
 // keepIcons saves the site icons an imported file carries, for sites that have none yet.
 func (s *Server) keepIcons(b []byte) int {
-	n := 0
+	n, m := 0, s.mediaNow()
 	for href, uri := range importer.IconURIs(b) {
-		if ok, _ := s.Media.SaveIconURI(media.Host(href), uri); ok {
+		if ok, _ := m.SaveIconURI(media.Host(href), uri); ok {
 			n++
 		}
 	}
@@ -58,7 +58,7 @@ func (s *Server) keepIcons(b []byte) int {
 // {url: key}}, for the page to show.
 func (s *Server) mediaFor(t store.Tree) map[string]any {
 	icons, thumbs := map[string]string{}, map[string]string{}
-	seen := map[string]bool{}
+	seen, m := map[string]bool{}, s.mediaNow()
 	var walk func(n *store.Node)
 	walk = func(n *store.Node) {
 		for _, c := range n.Children {
@@ -68,11 +68,11 @@ func (s *Server) mediaFor(t store.Tree) map[string]any {
 			}
 			if h := media.Host(c.URL); h != "" && !seen[h] {
 				seen[h] = true
-				if f := s.Media.Icon(h); f != "" {
+				if f := m.Icon(h); f != "" {
 					icons[h] = f
 				}
 			}
-			if s.Media.HasThumb(c.URL) {
+			if m.HasThumb(c.URL) {
 				thumbs[c.URL] = media.ThumbKey(c.URL)
 			}
 		}
@@ -125,7 +125,29 @@ func (s *Server) snapper() *media.Snapper {
 			}
 		}
 	}
-	return &media.Snapper{Store: s.Media, Chrome: media.FindChrome(paths)}
+	p, _ := store.LoadPrefs(context.Background(), s.Data)
+	return &media.Snapper{Store: s.mediaWith(p), Chrome: media.FindChrome(paths), Width: p.SnapshotWidth, Height: p.SnapshotHeight,
+		Wait: time.Duration(p.SnapshotWaitSeconds) * time.Second}
+}
+
+// media is where site icons and page snapshots are kept: the folder the owner chose (Preferences › snapshot_dir), or
+// the data folder's media/.
+func (s *Server) media(r *http.Request) media.Store {
+	p, _ := store.LoadPrefs(r.Context(), s.Data)
+	return s.mediaWith(p)
+}
+
+// mediaNow is media for work that has no request (an import, the page's boot data).
+func (s *Server) mediaNow() media.Store {
+	p, _ := store.LoadPrefs(context.Background(), s.Data)
+	return s.mediaWith(p)
+}
+
+func (s *Server) mediaWith(p store.Prefs) media.Store {
+	if p.SnapshotDir != "" {
+		return media.Store{Dir: p.SnapshotDir}
+	}
+	return s.Media
 }
 
 // startSnapshots takes snapshots of a workspace's pages (or those under nodes) that have none, or all with force.
@@ -153,7 +175,7 @@ func (s *Server) startSnapshots(w http.ResponseWriter, r *http.Request) {
 	}
 	var urls []string
 	for _, u := range webURLs(t, in.Nodes) {
-		if in.Force || !s.Media.HasThumb(u) {
+		if in.Force || !s.media(r).HasThumb(u) {
 			urls = append(urls, u)
 		}
 	}
