@@ -92,6 +92,7 @@ Hosted at <https://opensource.simtabi.com/documentation/simtabi/browser-foreman/
 
 ### Recipes
 
+- [Move from the Python tool](docs/recipes/migrate-from-python.md) — workspaces with history, link results, tab snapshots, settings
 - [Import bookmarks](docs/recipes/import-bookmarks.md) — from Chrome, Edge, Brave, Firefox, Safari or an export
 - [Receive a webhook](docs/recipes/receive-a-webhook.md) — verify the signature in your endpoint
 - [Stream events](docs/recipes/stream-events.md) — follow changes live, and catch up after a reconnect

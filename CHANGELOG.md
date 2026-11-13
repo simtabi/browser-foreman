@@ -72,6 +72,9 @@ ships.
   `make extension-safari`): it pairs with a one-time code (`browser-foreman pair`), reports tabs and tab groups,
   opens links or a named tab group when the server asks, reads the browser's bookmarks into a workspace, and writes a
   workspace back into the browser's bookmarks after showing the changes, saving the current ones first.
+- Moving from the Python tool: `legacy/tools/export_for_go.py` writes everything it kept (workspaces with their
+  whole history, link results, tab snapshots, settings) as a backup that `browser-foreman restore` takes in. Backups
+  now carry tab snapshots and preferences; bookmarks can carry the page's own description.
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed

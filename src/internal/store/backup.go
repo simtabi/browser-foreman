@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -20,6 +21,10 @@ type Backup struct {
 	Workspaces []BackupWorkspace     `json:"workspaces"`
 	Trees      map[string]Tree       `json:"trees"`
 	Links      map[string]LinkResult `json:"links"`
+	// Tabs are the tab snapshots, each with its windows and pages.
+	Tabs []TabSnapshot `json:"tabs,omitempty"`
+	// Prefs are the preferences document, as stored.
+	Prefs json.RawMessage `json:"prefs,omitempty"`
 }
 
 type BackupWorkspace struct {
@@ -54,6 +59,20 @@ func MakeBackup(ctx context.Context, s Store, now time.Time) (Backup, error) {
 	if b.Links, err = s.Links(ctx, nil); err != nil {
 		return b, err
 	}
+	snaps, err := s.TabSnapshots(ctx, 0)
+	if err != nil {
+		return b, err
+	}
+	for i := len(snaps) - 1; i >= 0; i-- { // oldest first
+		full, err := s.TabSnapshot(ctx, snaps[i].ID)
+		if err != nil {
+			return b, err
+		}
+		b.Tabs = append(b.Tabs, full)
+	}
+	if b.Prefs, err = s.PrefsDoc(ctx); err != nil {
+		return b, err
+	}
 	return b, nil
 }
 
@@ -62,6 +81,8 @@ type Restored struct {
 	Workspaces map[string]string `json:"workspaces"`
 	Entries    int               `json:"entries"`
 	Links      int               `json:"links"`
+	Tabs       int               `json:"tabs"`
+	Prefs      bool              `json:"prefs"`
 }
 
 // Restore adds what a backup holds, replacing nothing: a workspace whose id is taken comes back under a new id
@@ -123,5 +144,33 @@ func Restore(ctx context.Context, s Store, b Backup, now time.Time) (Restored, e
 		}
 	}
 	out.Links = len(newer)
-	return out, s.SaveLinks(ctx, newer)
+	if err := s.SaveLinks(ctx, newer); err != nil {
+		return out, err
+	}
+	for _, t := range b.Tabs { // a snapshot already here (same id) is kept as it is
+		if _, err := s.TabSnapshot(ctx, t.ID); err == nil {
+			continue
+		}
+		if err := s.SaveTabs(ctx, t); err != nil {
+			return out, fmt.Errorf("tab snapshot %s: %w", t.ID, err)
+		}
+		out.Tabs++
+	}
+	if len(b.Prefs) > 0 { // only into a store whose preferences were never set
+		have, err := s.PrefsDoc(ctx)
+		if err != nil {
+			return out, err
+		}
+		if have == nil {
+			p := Defaults()
+			if err := json.Unmarshal(b.Prefs, &p); err != nil {
+				return out, fmt.Errorf("the backup's preferences are unreadable: %w", err)
+			}
+			if err := SavePrefs(ctx, s, p); err != nil {
+				return out, fmt.Errorf("the backup's preferences: %w", err)
+			}
+			out.Prefs = true
+		}
+	}
+	return out, nil
 }

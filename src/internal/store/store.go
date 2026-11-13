@@ -29,13 +29,15 @@ var (
 
 // Node is a folder or a bookmark. A folder has Children; a bookmark has a URL.
 type Node struct {
-	ID       string  `json:"id"`
-	Kind     string  `json:"kind"` // "folder" or "bookmark"
-	Title    string  `json:"title"`
-	URL      string  `json:"url,omitempty"`
-	Note     string  `json:"note,omitempty"`
-	Added    int64   `json:"added,omitempty"` // Unix seconds, when known
-	Children []*Node `json:"children,omitempty"`
+	ID    string `json:"id"`
+	Kind  string `json:"kind"` // "folder" or "bookmark"
+	Title string `json:"title"`
+	URL   string `json:"url,omitempty"`
+	Note  string `json:"note,omitempty"`
+	// Description is what the page itself says it is (its meta description), when known.
+	Description string  `json:"description,omitempty"`
+	Added       int64   `json:"added,omitempty"` // Unix seconds, when known
+	Children    []*Node `json:"children,omitempty"`
 }
 
 const (

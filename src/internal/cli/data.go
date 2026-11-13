@@ -244,7 +244,11 @@ func restoreCmd() *cobra.Command {
 					fmt.Fprintf(cmd.OutOrStdout(), "restored %s as %s (that id was taken)\n", from, to)
 				}
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%d entries, %d newer link results\n", res.Entries, res.Links)
+			fmt.Fprintf(cmd.OutOrStdout(), "%d entries, %d newer link results, %d tab snapshots", res.Entries, res.Links, res.Tabs)
+			if res.Prefs {
+				fmt.Fprint(cmd.OutOrStdout(), ", preferences")
+			}
+			fmt.Fprintln(cmd.OutOrStdout())
 			return nil
 		},
 	}

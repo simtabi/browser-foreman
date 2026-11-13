@@ -56,3 +56,43 @@ func TestBackupRestoreReplacesNothing(t *testing.T) {
 		}
 	})
 }
+
+func TestBackupCarriesTabsAndPrefs(t *testing.T) {
+	each(t, func(t *testing.T, s Store) {
+		ctx := context.Background()
+		_ = s.SaveTabs(ctx, TabSnapshot{ID: "2026-11-12_072137", At: t0, Reason: "auto", Windows: json.RawMessage(`{"browsers":[]}`)})
+		p := Defaults()
+		p.IncludeIncognito, p.IntervalSeconds = true, 120
+		_ = SavePrefs(ctx, s, p)
+		b, err := MakeBackup(ctx, s, t0)
+		if err != nil || len(b.Tabs) != 1 || len(b.Prefs) == 0 {
+			t.Fatalf("%d %d %v", len(b.Tabs), len(b.Prefs), err)
+		}
+		raw, _ := json.Marshal(b)
+		var back Backup
+		_ = json.Unmarshal(raw, &back)
+		fresh, _ := Open("json", t.TempDir())
+		defer fresh.Close()
+		res, err := Restore(ctx, fresh, back, t0)
+		if err != nil || res.Tabs != 1 || !res.Prefs {
+			t.Fatalf("%+v %v", res, err)
+		}
+		got, _ := LoadPrefs(ctx, fresh)
+		if !got.IncludeIncognito || got.IntervalSeconds != 120 {
+			t.Fatalf("%+v", got)
+		}
+		// Into a store with its own preferences and that snapshot already: nothing is replaced.
+		mine := Defaults()
+		mine.KeepDays = 3
+		other, _ := Open("json", t.TempDir())
+		defer other.Close()
+		_ = SavePrefs(ctx, other, mine)
+		_ = other.SaveTabs(ctx, TabSnapshot{ID: "2026-11-12_072137", At: t0, Reason: "mine", Windows: json.RawMessage(`{}`)})
+		res, _ = Restore(ctx, other, back, t0)
+		kept, _ := LoadPrefs(ctx, other)
+		snap, _ := other.TabSnapshot(ctx, "2026-11-12_072137")
+		if res.Prefs || res.Tabs != 0 || kept.KeepDays != 3 || snap.Reason != "mine" {
+			t.Fatalf("a restore replaced something: %+v %+v %s", res, kept, snap.Reason)
+		}
+	})
+}
