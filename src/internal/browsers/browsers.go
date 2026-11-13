@@ -19,6 +19,9 @@ type Browser struct {
 	Engine string `json:"engine"` // chromium, webkit or gecko
 	// Scriptable: its windows and tabs can be read (and closed) through automation.
 	Scriptable bool `json:"scriptable"`
+	// SessionFile: its tabs are read from the file it keeps to restore its session (Firefox everywhere; every
+	// browser on Linux and Windows). Private windows are never in it.
+	SessionFile bool `json:"session_file,omitempty"`
 	// PrivateKnown: a tab read can tell private windows apart.
 	PrivateKnown bool `json:"private_known"`
 	// PrivateFlag is the launch option for a new private window; "" when it has none.
@@ -40,8 +43,8 @@ var Known = []Browser{
 	{Name: "Opera", Bundle: "com.operasoftware.Opera", Engine: "chromium", Scriptable: true, PrivateKnown: true, PrivateFlag: "--private"},
 	{Name: "Arc", Bundle: "company.thebrowser.Browser", Engine: "chromium", Scriptable: true},
 	{Name: "Safari", Bundle: "com.apple.Safari", Engine: "webkit", Scriptable: true},
-	{Name: "Firefox", Bundle: "org.mozilla.firefox", Engine: "gecko", PrivateFlag: "--private-window"},
-	{Name: "Zen", Bundle: "app.zen-browser.zen", Engine: "gecko", PrivateFlag: "--private-window"},
+	{Name: "Firefox", Bundle: "org.mozilla.firefox", Engine: "gecko", PrivateFlag: "--private-window", SessionFile: true},
+	{Name: "Zen", Bundle: "app.zen-browser.zen", Engine: "gecko", PrivateFlag: "--private-window", SessionFile: true},
 	{Name: "Orion", Bundle: "com.kagi.kagimacOS", Engine: "webkit"},
 }
 
@@ -56,6 +59,14 @@ type Platform interface {
 	Icon(b Browser, size int) ([]byte, error)
 	// Launch runs a command that hands links to a browser and returns once it has been handed over (or refused).
 	Launch(ctx context.Context, argv []string) error
+}
+
+// Commander is a Platform that opens links its own way (Linux, Windows); macOS's open(1) is Command below.
+type Commander interface {
+	// Command is what to run to open urls in b.
+	Command(b Browser, how string, urls []string) ([]string, error)
+	// DefaultCommands are what to run to open urls in the system's default browser, one command per link.
+	DefaultCommands(urls []string) [][]string
 }
 
 // ErrUnsupported: this operating system is not supported yet for this.
@@ -193,8 +204,14 @@ func (s *Service) openIn(ctx context.Context, urls []string, how, name string) O
 			if how == Private {
 				return Opened{Browser: name, Error: "the system default browser cannot be asked for a private window; choose a browser for that"}
 			}
-			if err := s.Platform.Launch(ctx, append([]string{"open"}, urls...)); err != nil {
-				return Opened{Browser: name, Error: err.Error()}
+			cmds := [][]string{append([]string{"open"}, urls...)}
+			if c, ok := s.Platform.(Commander); ok {
+				cmds = c.DefaultCommands(urls)
+			}
+			for _, argv := range cmds {
+				if err := s.Platform.Launch(ctx, argv); err != nil {
+					return Opened{Browser: name, Error: err.Error()}
+				}
 			}
 			return Opened{Browser: name, OK: true}
 		}
@@ -203,7 +220,11 @@ func (s *Service) openIn(ctx context.Context, urls []string, how, name string) O
 	if !ok {
 		return Opened{Browser: name, Error: name + " is not installed"}
 	}
-	argv, err := Command(b, how, urls)
+	command := Command
+	if c, ok := s.Platform.(Commander); ok {
+		command = c.Command
+	}
+	argv, err := command(b, how, urls)
 	if err == nil {
 		err = s.Platform.Launch(ctx, argv)
 	}

@@ -21,7 +21,7 @@ type platform struct {
 func (p *platform) Installed() []browsers.Browser {
 	var out []browsers.Browser
 	for _, b := range browsers.Known {
-		if b.Name == "Google Chrome" || b.Name == "Safari" || b.Name == "Firefox" {
+		if b.Name == "Google Chrome" || b.Name == "Safari" || b.Name == "Firefox" || b.Name == "Orion" {
 			b.Path = "/Applications/" + b.Name + ".app"
 			out = append(out, b)
 		}
@@ -85,8 +85,9 @@ func TestPrivateWindowsAreRedacted(t *testing.T) {
 		t.Fatal(err)
 	}
 	sort.Strings(r.asked)
-	if strings.Join(r.asked, ",") != "Google Chrome,Safari" {
-		t.Fatalf("Firefox cannot be read and must not be asked: %v", r.asked)
+	// Firefox is read from its session file; Orion can be read neither way and must not be asked.
+	if strings.Join(r.asked, ",") != "Firefox,Google Chrome,Safari" {
+		t.Fatalf("asked %v", r.asked)
 	}
 	b, _ := json.Marshal(live)
 	if strings.Contains(string(b), "private.example") || strings.Contains(string(b), "Secret") {

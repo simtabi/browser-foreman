@@ -92,7 +92,7 @@ func (s *Service) tracked(p store.Prefs) []browsers.Browser {
 	}
 	var out []browsers.Browser
 	for _, b := range s.Browsers.Installed() {
-		if b.Scriptable && (p.Tracked == nil || want[b.Name]) {
+		if (b.Scriptable || b.SessionFile) && (p.Tracked == nil || want[b.Name]) {
 			out = append(out, b)
 		}
 	}

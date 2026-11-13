@@ -64,6 +64,9 @@ func NewMac() *Mac { return &Mac{Timeout: 20 * time.Second} }
 func (m *Mac) Read(ctx context.Context, b browsers.Browser) Browser {
 	out := Browser{Browser: b.Name}
 	if !b.Scriptable {
+		if b.SessionFile { // Firefox and Zen cannot be scripted, but keep their session in a file
+			return Sessions{Dirs: SessionDirs}.Read(ctx, b)
+		}
 		out.Error = ErrNotScriptable.Error()
 		return out
 	}

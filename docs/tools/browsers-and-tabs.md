@@ -1,8 +1,19 @@
 # Browsers and tabs
 
 Browser Foreman knows the browsers on this computer, opens links in the ones you choose, and keeps snapshots of your
-open tabs so a crash never loses a session. macOS first; on other systems the server runs and these routes answer
-that the feature is not supported there yet.
+open tabs so a crash never loses a session, on macOS, Linux and Windows.
+
+## How each system is read
+
+| | Finds browsers | Opens links | Reads tabs | Closes tabs |
+|---|---|---|---|---|
+| macOS | installed apps | `open` | automation (Chromium browsers, Safari); session file (Firefox, Zen) | automation |
+| Linux | executables on `PATH`; default from `xdg-settings` | the browser itself, `xdg-open` for the default | session files | the extension |
+| Windows | where browsers install; default from the registry | the browser itself, the URL handler for the default | session files | the extension |
+
+A session file is what a browser keeps to restore its windows: Firefox's `recovery.jsonlz4`, Chromium's
+`Sessions/Session_*`. Browsers never write private windows to it, so those are never read; a file not written for ten
+minutes means the browser is not running. Only installed browsers and the system's link opener are ever started.
 
 ## Browsers
 

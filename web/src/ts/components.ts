@@ -210,7 +210,9 @@ export const rechecks = () => ({
 });
 
 // ---- browsers: which are installed, which to track, which opens links ----
-interface BrowserInfo { name: string; engine: string; scriptable: boolean; private_known: boolean; private_flag: string | null }
+interface BrowserInfo { name: string; engine: string; scriptable: boolean; session_file?: boolean; private_known: boolean; private_flag: string | null }
+/** Its tabs can be read: by automation, or from the session file it keeps. */
+const readable = (b: BrowserInfo): boolean => b.scriptable || !!b.session_file;
 interface BrowsersState { installed: BrowserInfo[]; tracked: string[]; open_with: string[] | string | null; onboarded: boolean; system_default?: string | null }
 /** The open-links choice meaning "whichever browser macOS opens links in"; the server resolves it at each open. */
 export const SYSTEM_DEFAULT = "System default";
@@ -253,7 +255,8 @@ export const browserPicker = () => ({
   // Cancel throws the unsaved choices away (re-read from the server); "Later" on first run saves what is ticked.
   hide() { this.open = false; if (this.onboarding) void this.persist(false); else void this.load(); },
   can(b: BrowserInfo) {
-    return [b.scriptable ? "reads tabs" : "can't read tabs", b.private_known ? "tells incognito apart" : b.scriptable ? "can't tell private windows apart" : "",
+    return [b.scriptable ? "reads tabs" : b.session_file ? "reads tabs from its session file (not private windows)" : "can't read tabs",
+      b.private_known ? "tells incognito apart" : b.scriptable ? "can't tell private windows apart" : "",
       b.private_flag ? "opens incognito/private" : "no private window"].filter(Boolean).join(" · ");
   },
   isTracked(name: string) { return this.tracked.has(name); },
@@ -296,7 +299,8 @@ export const browserPicker = () => ({
   },
   get allOpen() { return !this.useSystem && this.installed.length > 0 && this.installed.every(b => this.opens.has(b.name)); },
   openInAll(on: boolean) { this.opens = on ? new Set(this.installed.map(b => b.name)) : new Set([SYSTEM_DEFAULT]); },
-  toggle(b: BrowserInfo) { if (!b.scriptable) return; this.tracked.has(b.name) ? this.tracked.delete(b.name) : this.tracked.add(b.name); this.tracked = new Set(this.tracked); },
+  readable,
+  toggle(b: BrowserInfo) { if (!readable(b)) return; this.tracked.has(b.name) ? this.tracked.delete(b.name) : this.tracked.add(b.name); this.tracked = new Set(this.tracked); },
   async persist(announce = true) {
     try {
       await api.path("tabs", "settings").post({ tracked_browsers: [...this.tracked], open_with: [...this.opens], onboarded_browsers: true });

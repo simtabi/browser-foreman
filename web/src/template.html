@@ -627,10 +627,10 @@ body { overflow-wrap: break-word; }
                   <thead><tr><th>Browser</th><th class="text-center" data-tip="Save this browser's open tabs">Track tabs</th><th class="text-center" data-tip="Links you open from here open in every ticked browser at once">Opens links</th><th>Bookmarks</th><th>History</th></tr></thead>
                   <tbody>
                     <template x-for="b in installed" :key="b.name">
-                      <tr :class="!b.scriptable && 'text-secondary'">
+                      <tr :class="!readable(b) && 'text-secondary'">
                         <td><div class="fw-medium d-flex align-items-center gap-2"><img class="browser-ico" :src="'api/v1/browsers/icon?name=' + encodeURIComponent(b.name)" alt="" width="20" height="20" @error="$el.style.visibility = 'hidden'"><span x-text="b.name"></span></div><div class="text-secondary small" x-text="can(b)"></div></td>
-                        <td class="text-center"><label class="form-check form-switch d-inline-block m-0" :data-tip="b.scriptable ? 'Save this browser\'s open tabs' : 'macOS gives no way to read this browser\'s tabs'">
-                          <input type="checkbox" class="form-check-input" :checked="isTracked(b.name)" :disabled="!b.scriptable" @change="toggle(b)" :aria-label="'Track tabs in ' + b.name"></label></td>
+                        <td class="text-center"><label class="form-check form-switch d-inline-block m-0" :data-tip="readable(b) ? 'Save this browser\'s open tabs' : 'This browser gives no way to read its tabs'">
+                          <input type="checkbox" class="form-check-input" :checked="isTracked(b.name)" :disabled="!readable(b)" @change="toggle(b)" :aria-label="'Track tabs in ' + b.name"></label></td>
                         <td class="text-center"><input type="checkbox" class="form-check-input" :checked="opensIn(b.name)" @change="toggleOpen(b.name); $event.target.checked = opensIn(b.name)" :aria-label="b.name + ' opens links'"></td>
                         <td><span class="small" :class="bookmarks(b.name).cls" :data-tip="bookmarks(b.name).tip" x-text="bookmarks(b.name).label"></span></td>
                         <td><span class="small" :class="history(b.name).cls" x-text="history(b.name).label"></span></td>

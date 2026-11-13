@@ -47,7 +47,7 @@ export async function legacy(method: string, path: string, query: string, body: 
       case "tabs/browsers": {
         const b = await call("GET", "browsers");
         const installed = (b.installed ?? []).map(({ path: _p, ...rest }: any) => rest);
-        return ok({ installed, tracked: b.tracked ?? installed.filter((x: any) => x.scriptable).map((x: any) => x.name),
+        return ok({ installed, tracked: b.tracked ?? installed.filter((x: any) => x.scriptable || x.session_file).map((x: any) => x.name),
           open_with: b.open_with, onboarded: true, system_default: b.default || null });
       }
       case "rechecks": {

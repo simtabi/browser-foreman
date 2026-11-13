@@ -9,15 +9,14 @@ import (
 	"github.com/simtabi/browser-foreman/src/internal/browsers"
 )
 
-// Mac is only real on macOS; elsewhere it reads nothing, so the server still runs.
-type Mac struct{}
+// Mac is the platform's tab reader: on Linux and Windows every browser is read from its session files. (The name is
+// macOS's; NewMac is what the server asks every system for.)
+type Mac struct{ Sessions }
 
-func NewMac() *Mac { return &Mac{} }
+func NewMac() *Mac { return &Mac{Sessions{Dirs: SessionDirs}} }
 
-func (*Mac) Read(_ context.Context, b browsers.Browser) Browser {
-	return Browser{Browser: b.Name, Error: "reading tabs is supported on macOS so far"}
-}
+func (m *Mac) Read(ctx context.Context, b browsers.Browser) Browser { return m.Sessions.Read(ctx, b) }
 
 func (*Mac) Close(context.Context, string, []CloseItem) (int, []string, error) {
-	return 0, nil, errors.New("closing tabs is supported on macOS so far")
+	return 0, nil, errors.New("closing tabs here needs the Browser Foreman extension in that browser")
 }
