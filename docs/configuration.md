@@ -28,6 +28,8 @@ writes a starting `config.json` and a `.env` with a fresh token, both `0600`, an
 | `webhooks.timeout` | `BROFO_WEBHOOK_TIMEOUT` | `10s` | per delivery attempt, `1s`–`2m` |
 | `webhooks.attempts` | `BROFO_WEBHOOK_ATTEMPTS` | `5` | tries before a delivery is marked failed, 1–20 |
 | `auth.session_ttl` | `BROFO_SESSION_TTL` | `24h` | how long a sign-in lasts, `5m`–`720h` |
+| `mcp.enabled` | `BROFO_MCP` | `false` | lets `browser-foreman mcp` start; see [MCP server](tools/mcp.md) |
+| `mcp.writes` | `BROFO_MCP_WRITES` | `false` | adds the MCP tools that change bookmarks |
 | — | `BROFO_API_TOKEN` | none | the owner's token in `local` mode; `.env` or the environment only, never JSON |
 
 ## Example

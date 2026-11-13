@@ -4,7 +4,7 @@
 // too): every *.json there, merged in name order (so 10-server.json overrides 00-defaults.json), then .env
 // (KEY=VALUE lines), then the process environment. Environment variables win. Every key has a BROFO_ variable:
 // BROFO_SERVER_ADDR, BROFO_SERVER_MODE, BROFO_STORAGE_DRIVER, BROFO_STORAGE_PATH, BROFO_WEBHOOK_TIMEOUT,
-// BROFO_WEBHOOK_ATTEMPTS, BROFO_SESSION_TTL, BROFO_API_TOKEN.
+// BROFO_WEBHOOK_ATTEMPTS, BROFO_SESSION_TTL, BROFO_MCP, BROFO_MCP_WRITES, BROFO_API_TOKEN.
 //
 // Mutable state (the database, tokens, logs) lives in the state directory: $XDG_STATE_HOME/browser-foreman, else
 // ~/.local/state/browser-foreman.
@@ -54,6 +54,12 @@ type Auth struct {
 	SessionTTL Duration `json:"session_ttl"`
 }
 
+// MCP is the Model Context Protocol server (`browser-foreman mcp`): off unless Enabled, read-only unless Writes.
+type MCP struct {
+	Enabled bool `json:"enabled"`
+	Writes  bool `json:"writes"`
+}
+
 // Config is the whole configuration. APIToken is never read from a JSON file: secrets come from .env or the
 // environment, so a config file can be shared without one.
 type Config struct {
@@ -61,6 +67,7 @@ type Config struct {
 	Storage  Storage  `json:"storage"`
 	Webhooks Webhooks `json:"webhooks"`
 	Auth     Auth     `json:"auth"`
+	MCP      MCP      `json:"mcp"`
 	APIToken string   `json:"-"`
 	// Sources lists what was read, in order, for `browser-foreman config show`.
 	Sources []string `json:"-"`
@@ -164,6 +171,8 @@ func apply(c *Config, get func(string) string) error {
 		"BROFO_STORAGE_PATH":     func(v string) error { c.Storage.Path = v; return nil },
 		"BROFO_API_TOKEN":        func(v string) error { c.APIToken = v; return nil },
 		"BROFO_WEBHOOK_ATTEMPTS": func(v string) error { n, err := strconv.Atoi(v); c.Webhooks.Attempts = n; return err },
+		"BROFO_MCP":              func(v string) error { b, err := strconv.ParseBool(v); c.MCP.Enabled = b; return err },
+		"BROFO_MCP_WRITES":       func(v string) error { b, err := strconv.ParseBool(v); c.MCP.Writes = b; return err },
 		"BROFO_SESSION_TTL": func(v string) error {
 			d, err := time.ParseDuration(v)
 			c.Auth.SessionTTL = Duration{d}

@@ -75,6 +75,9 @@ ships.
 - Moving from the Python tool: `legacy/tools/export_for_go.py` writes everything it kept (workspaces with their
   whole history, link results, tab snapshots, settings) as a backup that `browser-foreman restore` takes in. Backups
   now carry tab snapshots and preferences; bookmarks can carry the page's own description.
+- `browser-foreman mcp`: an MCP server on stdio, through the official Go SDK, with 8 read tools and, behind
+  `mcp.writes`, 8 that change bookmarks through the API (trash and rollback also need `confirm: true`). Off unless
+  `mcp.enabled`; everything it returns is marked as untrusted data.
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed
