@@ -101,13 +101,18 @@ func pages(st State) map[pageKey]string {
 // one before (compared by address, per mode; private pages appear only where they were kept). days 0 means every
 // snapshot kept. At most `limit` pages are listed per step; the counts are complete.
 func (s *Service) Timeline(ctx context.Context, days int, names []string, limit int) ([]Step, error) {
-	all, err := s.Data.TabSnapshots(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
 	var since time.Time // days 0: no lower bound
 	if days > 0 {
 		since = s.Now().Add(-time.Duration(days) * 24 * time.Hour)
+	}
+	return s.TimelineBetween(ctx, since, time.Time{}, names, limit)
+}
+
+// TimelineBetween is Timeline for a chosen range: snapshots taken from `since` to `until` (either zero: unbounded).
+func (s *Service) TimelineBetween(ctx context.Context, since, until time.Time, names []string, limit int) ([]Step, error) {
+	all, err := s.Data.TabSnapshots(ctx, 0)
+	if err != nil {
+		return nil, err
 	}
 	// all is newest first: walk it backwards, starting from the last snapshot before the window.
 	start := len(all) - 1
@@ -120,6 +125,9 @@ func (s *Service) Timeline(ctx context.Context, days int, names []string, limit 
 		st, snap, err := s.Snapshot(ctx, all[i].ID)
 		if err != nil {
 			continue
+		}
+		if !until.IsZero() && snap.At.After(until) {
+			break // oldest first: everything after this is past the range
 		}
 		st = only(st, names)
 		cur := pages(st)

@@ -171,6 +171,13 @@ func TestTimelineAndFirstSeen(t *testing.T) {
 	if steps[0].ID != first.ID || steps[1].OpenedN != 1 || steps[1].Opened[0].URL != "https://pkg.go.dev/" || steps[1].ClosedN != 1 || steps[2].ClosedN != 1 || steps[2].Closed[0].URL != "https://go.dev/" {
 		t.Fatalf("%+v", steps)
 	}
+	// A custom range: up to the first snapshot lists only it; from just after it, the two later ones.
+	if one, err := s.TimelineBetween(ctx, time.Time{}, first.State.At, nil, 40); err != nil || len(one) != 1 || one[0].ID != first.ID {
+		t.Fatalf("until the first snapshot: %+v %v", one, err)
+	}
+	if later, _ := s.TimelineBetween(ctx, first.State.At.Add(time.Nanosecond), time.Time{}, nil, 40); len(later) != 2 {
+		t.Fatalf("after the first snapshot: %d", len(later))
+	}
 	// days 0 is "All": every snapshot kept, not none (the Timeline's All showed an empty chart).
 	if all, err := s.Timeline(ctx, 0, nil, 40); err != nil || len(all) != 3 {
 		t.Fatalf("days 0 listed %d snapshots, want 3: %v", len(all), err)

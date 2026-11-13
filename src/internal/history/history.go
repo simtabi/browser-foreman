@@ -105,6 +105,7 @@ type Visit struct {
 type Query struct {
 	Words []string  // all must appear in the address or the title (lower case)
 	Since time.Time // visits on or after
+	Until time.Time // visits on or before (zero: up to now)
 	Limit int
 }
 
@@ -184,6 +185,9 @@ func Read(ctx context.Context, f File, q Query) ([]Visit, error) {
 			v.Last = time.UnixMicro(at)
 		case Safari:
 			v.Last = time.Unix(at+978307200, 0)
+		}
+		if !q.Until.IsZero() && v.Last.After(q.Until) {
+			continue // newer than the range: rows come newest first, so the limit counts only pages inside it
 		}
 		v.Browser, v.Profile = f.Browser, f.Profile
 		out = append(out, v)

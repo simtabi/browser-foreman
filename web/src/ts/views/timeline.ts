@@ -49,6 +49,7 @@ const RANGES = [{ key: "1", label: "24 hours" }, { key: "7", label: "7 days" }, 
 
 export class TimelineView {
   private range: RangePicker | null = null;
+  private span: { from: string; to: string } | null = null;  // a typed range, this visit only
   private days: number;
   private readonly on = new Set<Kind>(KINDS.map(k => k[0]));
   private tabs: { snapshots: TabSnap[] } | null = null;
@@ -72,12 +73,18 @@ export class TimelineView {
   }
 
   private part<T extends HTMLElement = HTMLElement>(name: string): T | null { return Dom.one<T>("timeline", name); }
-  private inRange = (t: number) => !this.days || t >= Date.now() - this.days * 86_400_000;
+  /** The range shown, in ms (either bound may be open): the typed one, else the last `days`. */
+  private bounds(): [number, number] {
+    if (this.span) return [this.span.from ? new Date(this.span.from).getTime() : -Infinity, this.span.to ? new Date(this.span.to).getTime() : Infinity];
+    return [this.days ? Date.now() - this.days * 86_400_000 : -Infinity, Infinity];
+  }
+  private inRange = (t: number) => { const [a, b] = this.bounds(); return t >= a && t <= b; };
 
   private async load(): Promise<void> {
     const q = this.d.scope().query();
     const json = async <T>(url: string, fallback: T): Promise<T> => { try { const r = await fetch(url); return r.ok ? await r.json() as T : fallback; } catch { return fallback; } };
-    this.tabs = await json(`api/tabs/timeline?days=${this.days}${q ? "&" + q : ""}`, { snapshots: [] });
+    const when = this.span ? new URLSearchParams(Object.entries(this.span).filter(([, v]) => v)).toString() : `days=${this.days}`;
+    this.tabs = await json(`api/tabs/timeline?${when}${q ? "&" + q : ""}`, { snapshots: [] });
     this.notes = new Map((await json<{ notes: Note[] }>("api/tabs/notes", { notes: [] })).notes.map(n => [`${n.kind}|${n.key}`, n]));
     const ws = this.d.workspaceId();
     this.hist = ws ? (await json<{ entries: HistoryEntry[] }>(`api/ws/${encodeURIComponent(ws)}/history?limit=2000`, { entries: [] })).entries : [];
@@ -87,10 +94,11 @@ export class TimelineView {
     const host = this.part("range");
     if (host && !this.range) {
       this.range = new RangePicker({ label: "Range", heading: "Show the last…", value: String(this.days), defaultKey: "7", options: RANGES,
-        onPick: async key => { this.days = Number(key); try { localStorage.setItem(this.d.storeKey, key); } catch { /* this visit only */ } await this.open(); } });
+        onPick: async key => { this.days = Number(key); this.span = null; try { localStorage.setItem(this.d.storeKey, key); } catch { /* this visit only */ } await this.open(); },
+        onRange: async (from, to) => { this.span = from || to ? { from, to } : null; await this.open(); } });
       host.replaceChildren(this.range.el);
     }
-    this.range?.set(String(this.days));
+    if (this.span) this.range?.setRange(this.span.from, this.span.to); else this.range?.set(String(this.days));
     const k = this.part("kinds"); if (!k) return;
     k.replaceChildren();
     for (const [id, label, ic] of KINDS) {
@@ -211,17 +219,24 @@ export class TimelineView {
       if (!snaps.length) tc.append(el("div", "text-secondary small p-3", "No tab snapshots in this range yet."));
       else tc.append(this.lineChart(snaps.map(s => ({ t: new Date(s.at).getTime(), v: s.summary.tabs, v2: s.summary.incognito_tabs, id: s.id }))));
     }
-    // Bookmarks added: by month for a year or less, by year beyond that.
+    // Bookmarks added: by day for two months or less, by month for a year or less, by year beyond that.
     const its = this.d.bookmarks().filter(i => i.a && this.inRange(i.a * 1000));
-    const byYear = !this.days || this.days > 400, buckets = new Map<string, number>();
-    for (const i of its) { const day = new Date((i.a ?? 0) * 1000), k = byYear ? `${day.getFullYear()}` : `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}`; buckets.set(k, (buckets.get(k) ?? 0) + 1); }
-    const bn = this.part("bm-note"); if (bn) bn.textContent = `${its.length.toLocaleString()} in range · by ${byYear ? "year" : "month"}`;
+    const [lo, hi] = this.bounds(), first = Math.min(...its.map(i => (i.a ?? 0) * 1000));
+    const spanDays = ((Number.isFinite(hi) ? hi : Date.now()) - (Number.isFinite(lo) ? lo : first)) / 86_400_000;
+    const by = spanDays > 400 ? "year" : spanDays > 62 ? "month" : "day", buckets = new Map<string, number>();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    for (const i of its) {
+      const d = new Date((i.a ?? 0) * 1000);
+      const k = by === "year" ? `${d.getFullYear()}` : by === "month" ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}` : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      buckets.set(k, (buckets.get(k) ?? 0) + 1);
+    }
+    const bn = this.part("bm-note"); if (bn) bn.textContent = `${its.length.toLocaleString()} in range · by ${by}`;
     const bc = this.part("bm-chart");
     if (bc) {
       bc.replaceChildren();
       const keys = [...buckets.keys()].sort();
       if (!keys.length) bc.append(el("div", "text-secondary small p-3", "No bookmarks were added in this range."));
-      else bc.append(this.barChart(keys.map(k => ({ k, v: buckets.get(k) ?? 0 })), byYear));
+      else bc.append(this.barChart(keys.map(k => ({ k, v: buckets.get(k) ?? 0 })), by));
     }
   }
 
@@ -246,7 +261,7 @@ export class TimelineView {
     return root;
   }
 
-  private barChart(rows: { k: string; v: number }[], byYear: boolean): SVGSVGElement {
+  private barChart(rows: { k: string; v: number }[], by: "year" | "month" | "day"): SVGSVGElement {
     const W = 560, H = 150, P = { l: 34, r: 10, t: 10, b: 22 }, n = rows.length, bw = Math.min(48, (W - P.l - P.r) / n), vmax = Math.max(1, ...rows.map(r => r.v));
     P.l += ((W - P.l - P.r) - bw * n) / 2;  // a few bars sit centred instead of stretching across the chart
     const root = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "tl-chart", role: "img", "aria-label": "Bookmarks added" });
@@ -254,22 +269,27 @@ export class TimelineView {
     rows.forEach((r, k) => {
       const h = r.v / vmax * (H - P.t - P.b);
       const b = svg("rect", { x: P.l + k * bw + Math.min(2, bw * .15), y: H - P.b - h, width: Math.max(1, bw - Math.min(4, bw * .3)), height: h, rx: 2, class: "tl-bar", tabindex: 0 });
-      b.append(svg("title", {}, `${byYear ? r.k : monthLabel(r.k, true)}: ${plural(r.v, "bookmark")} added`));
+      b.append(svg("title", {}, `${bucketLabel(r.k, by, true)}: ${plural(r.v, "bookmark")} added`));
       b.addEventListener("click", () => {
-        const [yy, mm] = r.k.split("-").map(Number) as [number, number];
-        const from = new Date(yy, byYear ? 0 : mm - 1, 1), to = byYear ? new Date(yy + 1, 0, 1) : new Date(yy, mm, 1);
+        const [yy, mm = 1, dd = 1] = r.k.split("-").map(Number) as [number, number?, number?];
+        const from = new Date(yy, mm - 1, dd);
+        const to = by === "year" ? new Date(yy + 1, 0, 1) : by === "month" ? new Date(yy, mm, 1) : new Date(yy, mm - 1, dd + 1);
         this.d.showAddedBetween(from, new Date(to.getTime() - 60_000));
       });
       root.append(b);
     });
     const step = Math.ceil(n / 8);
-    rows.forEach((r, k) => { if (k % step === 0) root.append(svg("text", { x: P.l + k * bw + bw / 2, y: H - 6, class: "tl-axis", "text-anchor": "middle" }, byYear ? r.k : monthLabel(r.k))); });
+    rows.forEach((r, k) => { if (k % step === 0) root.append(svg("text", { x: P.l + k * bw + bw / 2, y: H - 6, class: "tl-axis", "text-anchor": "middle" }, bucketLabel(r.k, by))); });
     return root;
   }
 }
 
 /** "2026-11" as people read it: "Nov 26" on the axis, "November 2026" in full. */
-function monthLabel(k: string, full = false): string {
-  const [y, m] = k.split("-").map(Number) as [number, number];
-  return new Date(y, m - 1, 1).toLocaleDateString(undefined, full ? { month: "long", year: "numeric" } : { month: "short", year: "2-digit" });
+/** A bar's label: "2024", "Mar 24" / "March 2024", or "12 Mar" / "12 March 2024". */
+function bucketLabel(k: string, by: "year" | "month" | "day", full = false): string {
+  if (by === "year") return k;
+  const [y, m, d = 1] = k.split("-").map(Number) as [number, number, number?];
+  const at = new Date(y, m - 1, d);
+  if (by === "month") return at.toLocaleDateString(undefined, full ? { month: "long", year: "numeric" } : { month: "short", year: "2-digit" });
+  return at.toLocaleDateString(undefined, full ? { day: "numeric", month: "long", year: "numeric" } : { day: "numeric", month: "short" });
 }

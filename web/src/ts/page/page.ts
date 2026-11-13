@@ -333,13 +333,10 @@ function buildToolbar() {
     lab.append(el("span", "tb-pick-label", l), val, icon("ti-chevron-down", "text-secondary"), s); paint();
     $("#view").append(lab);
   }
-  $("#dFrom").value = view.from; $("#dTo").value = view.to;
-  $("#dFrom").onchange = () => { datePreset = ""; setView("from", $("#dFrom").value); sel = 0; build(); };
-  $("#dTo").onchange = () => { datePreset = ""; setView("to", $("#dTo").value); sel = 0; build(); };
-  const custom = $("#dateCustom").firstElementChild; $("#dateCustom").remove();
   DATES = new RangePicker({label: "Added", heading: "Bookmarks added…", defaultKey: "Any time", value: "Any time",
-    options: DATE_PRESETS.map(([label]) => ({key: label, label})), custom: {heading: "Custom range", body: custom},
-    onPick: key => { const p = DATE_PRESETS.find(x => x[0] === key); if (p) setDates(...p[1](), key); }});
+    options: DATE_PRESETS.map(([label]) => ({key: label, label})), columns: 1,
+    onPick: key => { const p = DATE_PRESETS.find(x => x[0] === key); if (p) setDates(...p[1](), key); },
+    onRange: (from, to) => { datePreset = ""; setView("from", from); setView("to", to); sel = 0; build(); }});
   $("#dates").replaceWith(DATES.el); DATES.el.id = "dates";
   $("#clearFilters").onclick = clearFilters;
   paintChips();
@@ -356,17 +353,14 @@ const DATE_PRESETS = [
   ["Before 2020", () => [null, new Date(2019, 11, 31, 23, 59)]],
   ["Any time", () => [null, null]],
 ];
-function setDates(from, to, preset = "") { datePreset = from || to ? preset : ""; setView("from", iso(from)); setView("to", iso(to)); $("#dFrom").value = view.from; $("#dTo").value = view.to; sel = 0; build(); }
+function setDates(from, to, preset = "") { datePreset = from || to ? preset : ""; setView("from", iso(from)); setView("to", iso(to)); sel = 0; build(); }
 // The Added picker's label: the preset chosen, else the range typed, else "Any time".
 let datePreset = "", DATES = null;
 function paintDates() {
   if (!DATES) return;
-  const day = v => v ? new Date(v).toLocaleDateString(undefined, {day: "numeric", month: "short", year: "numeric"}) : "";
-  const f = day(view.from), t = day(view.to);
-  if (datePreset) DATES.set(datePreset);
-  else if (!f && !t) DATES.set("Any time");
-  else DATES.set("", f && t ? `${f} – ${t}` : f ? `Since ${f}` : `Before ${t}`);
-}function setFilter(k) { filter = k; paintChips(); marked.clear(); sel = 0; build(); list.focus(); if (!restoringPlace) PLACE.update({filter: k === "all" ? "" : k}); }
+  if (datePreset) DATES.set(datePreset); else DATES.setRange(view.from, view.to);
+}
+function setFilter(k) { filter = k; paintChips(); marked.clear(); sel = 0; build(); list.focus(); if (!restoringPlace) PLACE.update({filter: k === "all" ? "" : k}); }
 // The chips count what the tree holds now, outside the Trash (moved, renamed, trashed or deleted bookmarks included);
 // they used to count the original set, so "Dead links 470" stayed after every dead link had been deleted.
 function paintChipCounts() {
@@ -1225,7 +1219,7 @@ function dupesTree() {
 
 function build(keepView = false) {
   indexParents(st().root);
-  try { paintTrashBadge(); paintChipCounts(); updateAllLabel(); $("#navBmCount").textContent = liveItems().length.toLocaleString(); } catch {}
+  try { paintTrashBadge(); paintChipCounts(); updateAllLabel(); $("#navBmCount").textContent = liveItems().length.toLocaleString(); } catch (e) { console.error("header counts", e); }
   const root = readOnly() ? dupesTree() : grouped() ? virtualTree() : st().root;
   if (readOnly()) indexParents(root);
   const match = matcher(), auto = filtering();

@@ -107,7 +107,7 @@ func (s *Server) listSnapshots(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"snapshots": out, "hidden": hidden})
 }
 
-// timeline lists the last ?days (30) of snapshots, oldest first, with what opened and closed at each.
+// timeline lists the last ?days (30) of snapshots, or those from ?from= to ?to=, oldest first, with what opened and closed at each.
 func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 	days := 30
 	if v := r.URL.Query().Get("days"); v != "" {
@@ -118,7 +118,17 @@ func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 		}
 		days = n
 	}
-	steps, err := s.Tabs.Timeline(r.Context(), days, scope(r), 40)
+	from, to, custom, err := timeRange(r.URL.Query())
+	if err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	var steps []tabs.Step
+	if custom {
+		steps, err = s.Tabs.TimelineBetween(r.Context(), from, to, scope(r), 40)
+	} else {
+		steps, err = s.Tabs.Timeline(r.Context(), days, scope(r), 40)
+	}
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return

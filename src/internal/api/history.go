@@ -65,7 +65,7 @@ func (s *Server) openAccessSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 // searchHistory answers the pages visited, newest first, one row per address across browsers: ?q= words,
-// ?days= (default 30), ?browser=, ?limit= (default 300). With ?workspace= each row says whether that workspace has a
+// ?days= (default 30) or ?from= / ?to=, ?browser=, ?limit= (default 300). With ?workspace= each row says whether that workspace has a
 // bookmark for the page. History is read, never stored, and never published as an event.
 func (s *Server) searchHistory(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -116,6 +116,12 @@ func (s *Server) searchHistory(w http.ResponseWriter, r *http.Request) {
 		walk(t.Root)
 	}
 	hq := history.Query{Words: strings.Fields(strings.ToLower(q.Get("q"))), Since: s.Now().AddDate(0, 0, -days), Limit: limit}
+	if from, to, custom, err := timeRange(q); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	} else if custom {
+		hq.Since, hq.Until = from, to
+	}
 	type skipped struct{ Browser, Profile, Why string }
 	var skip []skipped
 	read := 0

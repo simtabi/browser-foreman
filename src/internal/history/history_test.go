@@ -53,6 +53,10 @@ func TestReadsEachKindNewestFirst(t *testing.T) {
 	if err != nil || len(got) != 2 || got[0].URL != "https://news.example/" || !got[1].Last.Equal(day) || got[1].Visits != 3 {
 		t.Fatalf("chrome %+v %v", got, err)
 	}
+	// A custom range: Until leaves out the newer visit, and Limit counts only pages inside the range.
+	if got, _ := Read(ctx, File{Kind: Chromium, Path: chrome}, Query{Since: day.AddDate(0, 0, -7), Until: day, Limit: 1}); len(got) != 1 || got[0].URL != "https://go.dev/doc/" {
+		t.Fatalf("until: %+v", got)
+	}
 	if got, _ := Read(ctx, File{Kind: Chromium, Path: chrome}, Query{Words: []string{"go"}}); len(got) != 1 {
 		t.Fatalf("words: %+v", got)
 	}

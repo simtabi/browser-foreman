@@ -339,7 +339,7 @@ function install(W: V1): void {
     body.classList.add("p-0");
     const days = new RangePicker({ label: "Visited", heading: "Pages visited in…", value: "30", defaultKey: "30",
       options: [{ key: "1", label: "Today" }, { key: "7", label: "Last 7 days" }, { key: "30", label: "Last 30 days" },
-        { key: "90", label: "Last 3 months" }, { key: "365", label: "Last year" }], onPick: () => void load() });
+        { key: "90", label: "Last 3 months" }, { key: "365", label: "Last year" }], onPick: () => void load(), onRange: () => void load(), end: true });
     const sw = el("label", "form-check form-switch m-0"), only = el("input", "form-check-input"); only.type = "checkbox"; only.checked = true;
     sw.append(only, el("span", "form-check-label", "Not bookmarked only"));
     const note = el("div"), status = el("div", "text-secondary small px-3 pt-3");
@@ -375,7 +375,7 @@ function install(W: V1): void {
       note.replaceChildren(); const sp = el("div", "p-4 text-center text-secondary"); sp.append(el("span", "spinner-border spinner-border-sm me-2"), "Reading your browsers' history…"); note.append(sp);
       try {
         const j = await W.call<{ visits: Visit[]; read: number; skipped: { Browser: string; Profile: string; Why: string }[] }>("GET",
-          `history?${new URLSearchParams({ days: days.key, limit: "5000", workspace: W.id })}`);
+          `history?${new URLSearchParams({ ...(days.range ? Object.fromEntries(Object.entries(days.range).filter(([, v]) => v)) : { days: days.key }), limit: "5000", workspace: W.id })}`);
         rows = j.visits; note.replaceChildren(); blockedAll = !j.read && j.skipped.length > 0;
         if (j.skipped.length) {
           // One line per reason, naming the browsers it applies to, and the way out where there is one.

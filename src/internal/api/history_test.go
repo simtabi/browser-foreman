@@ -82,7 +82,7 @@ func TestHistoryRoutes(t *testing.T) {
 	if w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("history must not be cached")
 	}
-	for _, bad := range []string{"days=0", "limit=99999", "workspace=nope"} {
+	for _, bad := range []string{"days=0", "limit=99999", "workspace=nope", "from=yesterday", "from=2026-11-10T10:00&to=2026-11-09T10:00"} {
 		if w := send(h, "GET", "/api/v1/history?"+bad, ""); w.Code < 400 {
 			t.Errorf("%s: %d", bad, w.Code)
 		}

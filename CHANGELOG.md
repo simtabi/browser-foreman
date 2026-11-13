@@ -114,10 +114,17 @@ ships.
 
 ### Fixed
 
+- The page no longer throws on load: `setFilter` and the Show counts were lost in an edit before this release; a web
+  test now fails when `page.ts` uses a name that does not exist.
 - The Timeline's All range showed no tab snapshots: `days=0` now means every snapshot kept.
 
 ### Changed
 
+- Custom date and time ranges: every period picker has From / To fields beside its quick ranges (To before From is
+  refused). `GET /api/v1/tabs/timeline` and `GET /api/v1/history` take `?from=` and `?to=` (RFC 3339 or
+  `2006-01-02T15:04`); the Timeline's bookmark chart follows the range and counts by day for two months or less.
+  Icons in buttons, tabs and menus are larger and sized per control; the Expand / Collapse all button stays visible
+  (disabled) when a filter leaves nothing to fold; the Download divider is softer.
 - One period picker everywhere (`ts/rangepick.ts`): the Timeline's range buttons, Browser history's select and the
   Added filter are the same compact dropdown. One Expand / Collapse all button (`ts/fold.ts`) sits beside Undo and
   Redo and acts on the view you are in: folders in Bookmarks, windows in Open tabs. The Browsers dialog is borderless

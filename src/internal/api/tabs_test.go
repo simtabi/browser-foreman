@@ -45,6 +45,18 @@ func TestTabsRoutes(t *testing.T) {
 	if w := send(h, "POST", "/api/v1/tabs/snapshots", `{}`); w.Code != 200 || !strings.Contains(w.Body.String(), "unchanged") {
 		t.Fatalf("unchanged %d %s", w.Code, w.Body)
 	}
+	// A custom range on the Timeline: one that holds the snapshot lists it, one ending before it lists none, bad input is 400.
+	if w := send(h, "GET", "/api/v1/tabs/timeline?from=2000-01-01T00:00:00Z", ""); !strings.Contains(w.Body.String(), saved.ID) {
+		t.Fatalf("from 2000: %s", w.Body)
+	}
+	if w := send(h, "GET", "/api/v1/tabs/timeline?to=2000-01-01T00:00:00Z", ""); strings.Contains(w.Body.String(), saved.ID) || w.Code != 200 {
+		t.Fatalf("to 2000: %d %s", w.Code, w.Body)
+	}
+	for _, bad := range []string{"from=soon", "from=2026-11-10T10:00&to=2026-11-09T10:00"} {
+		if w := send(h, "GET", "/api/v1/tabs/timeline?"+bad, ""); w.Code != 400 {
+			t.Errorf("%s: %d", bad, w.Code)
+		}
+	}
 	if w := send(h, "GET", "/api/v1/tabs/snapshots", ""); !strings.Contains(w.Body.String(), saved.ID) || strings.Contains(w.Body.String(), "go.dev") {
 		t.Fatalf("list must not carry pages: %s", w.Body)
 	}

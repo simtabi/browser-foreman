@@ -1462,7 +1462,7 @@
     },
     "/api/v1/tabs/timeline": {
       "get": {
-        "summary": "Snapshots of the last ?days (30), oldest first, with what opened and closed at each; ?browsers= narrows it",
+        "summary": "Snapshots of the last ?days (30, 0 for all), or from ?from= to ?to= (RFC 3339 or 2006-01-02T15:04, either may be left out), oldest first, with what opened and closed at each; ?browsers= narrows it",
         "tags": [
           "Tabs"
         ],
@@ -1717,7 +1717,7 @@
     },
     "/api/v1/history": {
       "get": {
-        "summary": "Pages visited, newest first, one row per address across browsers: ?q=, ?days= (30), ?browser=, ?limit= (300), ?workspace= marks those already bookmarked. Read through copies, never stored",
+        "summary": "Pages visited, newest first, one row per address across browsers: ?q=, ?days= (30) or ?from= / ?to= (RFC 3339 or 2006-01-02T15:04), ?browser=, ?limit= (300), ?workspace= marks those already bookmarked. Read through copies, never stored",
         "tags": [
           "History"
         ],

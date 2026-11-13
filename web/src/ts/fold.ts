@@ -1,6 +1,6 @@
 // One Expand all / Collapse all button for the whole page, in the header beside Undo and Redo. Each view registers
 // what folding means there (Bookmarks: folders; Open tabs: windows); the button acts on the view you are in and
-// hides where nothing folds (the Timeline). Built like UndoCenter (undo.ts): views register, the page says which
+// hides in views that have nothing to fold (the Timeline). Built like UndoCenter (undo.ts): views register, the page says which
 // one is showing, and every change calls refresh().
 //
 //   const FOLD = new FoldCenter(button).register("tabs", {anyOpen: () => …, expand: () => …, collapse: () => …});
@@ -36,9 +36,11 @@ export class FoldCenter {
   refresh(): this {
     const b = this.btn; if (!b) return this;
     const open = this.scopes.get(this.current)?.anyOpen() ?? null;
-    b.hidden = open == null;
+    // Shown in every view that folds (disabled while nothing there can fold: an empty filter), hidden elsewhere.
+    b.hidden = !this.scopes.has(this.current);
+    b.disabled = open == null;
     const what = this.current === "tabs" ? "windows" : "folders";
-    const label = open ? `Collapse all ${what}` : `Expand all ${what}`;
+    const label = open == null ? `Nothing to expand or collapse here` : open ? `Collapse all ${what}` : `Expand all ${what}`;
     b.setAttribute("aria-label", label); b.dataset.tip = label + (open ? " (-)" : "");
     b.setAttribute("aria-pressed", String(!open));
     b.replaceChildren(icon(open ? "ti-fold" : "ti-arrows-vertical"));
