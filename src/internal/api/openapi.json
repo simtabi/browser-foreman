@@ -497,6 +497,91 @@
         "description": "Body: file bytes"
       }
     },
+    "/api/v1/workspaces/{id}/sources": {
+      "post": {
+        "summary": "Merge bookmarks files (and ?from= another workspace) into the workspace as one entry; copies of the same page go to the Trash as duplicates",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The head you last saw (the workspace's ETag); a stale one answers 412"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "labels a single file sent as the body"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "another workspace's id, whose bookmarks are added too"
+          },
+          {
+            "name": "separate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "1: each source's folders go under a folder named after it"
+          }
+        ],
+        "description": "Body: one file, or multipart/form-data with up to 20 \"file\" parts. Answers the entry, and added, duplicates and folders counts."
+      }
+    },
+    "/api/v1/workspaces/{id}/duplicates.csv": {
+      "get": {
+        "summary": "The copies merged away (Trash entries that are a duplicate of a kept bookmark), as CSV",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "text/csv; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
     "/api/v1/workspaces/{id}/changes": {
       "post": {
         "summary": "Apply a batch of ops as one entry: create, update, move, trash, restore, purge",

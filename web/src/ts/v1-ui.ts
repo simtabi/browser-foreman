@@ -122,23 +122,66 @@ function install(W: V1): void {
     } catch (e) { fail(e); }
   }
 
-  // Import: a bookmarks file becomes a new workspace (the open one is never replaced from here).
-  function importer(): void {
-    const input = el("input"); input.type = "file"; input.accept = ".html,.htm,.json,application/json,text/html";
-    input.onchange = async () => {
-      const f = input.files?.[0]; if (!f) return;
-      const name = await askText({ title: "Import as a new workspace", label: "Name", value: f.name.replace(/\.[^.]+$/, "") });
-      if (!name) return;
-      const id = (name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "import") + "-" + Date.now().toString(36);
+  // Adding bookmarks: files (and optionally another workspace) merged into a new workspace (importer) or this one
+  // (addFiles), through /sources: copies of the same page are folded into one, each copy going to the Trash.
+  function sourcesDialog(into: "new" | "this"): void {
+    const { body, foot } = modal("v1Sources", into === "new" ? "Import bookmarks as a new workspace" : `Add bookmarks to “${W.workspace.name}”`);
+    body.append(el("p", "text-secondary", "Choose one or more bookmarks files: an HTML export from any browser, or Chrome's Bookmarks file. Copies of the same page are kept once; every other copy goes to the Trash, where it can be put back, and the Merged duplicates list names them."));
+    const file = el("input", "form-control mb-3"); file.type = "file"; file.multiple = true; file.accept = ".html,.htm,.json,application/json,text/html";
+    let nameIn: HTMLInputElement | null = null;
+    if (into === "new") {
+      const lab = el("label", "form-label", "Name"); nameIn = el("input", "form-control mb-3"); nameIn.placeholder = "Imported bookmarks";
+      lab.append(nameIn); body.append(lab);
+      file.onchange = () => { if (nameIn && !nameIn.value && file.files?.[0]) nameIn.value = file.files[0].name.replace(/\.[^.]+$/, ""); };
+    }
+    body.append(file);
+    const fromSel = el("select", "form-select mb-3");
+    fromSel.append(new Option("Only the files", ""));
+    for (const w of W.workspaces) if (w.id !== W.id || into === "new") fromSel.append(new Option(`Also the bookmarks of “${w.name}”`, w.id));
+    const fromLab = el("label", "form-label", "Other workspace"); fromLab.append(fromSel); body.append(fromLab);
+    const sepWrap = el("label", "form-check"), sep = el("input", "form-check-input"); sep.type = "checkbox";
+    sepWrap.append(sep, el("span", "form-check-label", "Keep each file's folders apart, under a folder named after it"));
+    body.append(sepWrap);
+    const go = el("button", "btn btn-primary", into === "new" ? "Import" : "Add"); go.type = "button";
+    const cancel = el("button", "btn", "Cancel"); cancel.type = "button"; cancel.onclick = () => hideModal("#v1Sources");
+    foot.append(cancel, go);
+    go.onclick = async () => {
+      const files = [...(file.files ?? [])];
+      if (!files.length && !fromSel.value) { toast("Choose a file, or a workspace to add from.", "warning"); return; }
+      go.disabled = true;
       try {
-        await W.call("POST", "workspaces", { id, name });
-        const r = await fetch(`api/v1/workspaces/${encodeURIComponent(id)}/import?name=${encodeURIComponent(f.name)}`, { method: "POST", headers: W.headers(), body: f });
-        const j = await r.json().catch(() => ({})) as { error?: string };
+        let id = W.id;
+        if (into === "new") {
+          const name = nameIn?.value.trim() || "Imported bookmarks";
+          id = (name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "import") + "-" + Date.now().toString(36);
+          await W.call("POST", "workspaces", { id, name });
+        }
+        const fd = new FormData();
+        for (const f of files) fd.append("file", f, f.name);
+        const q = new URLSearchParams();
+        if (fromSel.value) q.set("from", fromSel.value);
+        if (sep.checked) q.set("separate", "1");
+        const h = W.headers(); delete h["Content-Type"];  // the browser sets multipart/form-data with its boundary
+        const r = await fetch(`api/v1/workspaces/${encodeURIComponent(id)}/sources?${q}`, { method: "POST", headers: h, body: fd });
+        const j = await r.json().catch(() => ({})) as { error?: string; added?: number; duplicates?: number };
         if (!r.ok) throw new Error(j.error ?? `the server answered ${r.status}`);
-        nav(id);
-      } catch (e) { fail(e); }
+        hideModal("#v1Sources");
+        toast(`${(j.added ?? 0).toLocaleString()} bookmarks added` + (j.duplicates ? `, ${j.duplicates.toLocaleString()} duplicate copies moved to the Trash` : "") + ".", "success", "Bookmarks added");
+        setTimeout(() => (into === "new" ? nav(id) : location.reload()), 900);
+      } catch (e) { fail(e); go.disabled = false; }
     };
-    input.click();
+    showModal("#v1Sources");
+  }
+  const importer = (): void => sourcesDialog("new");
+  const addFiles = (): void => { if (W.locked) toast("The workspace is locked; unlock it to add bookmarks.", "warning"); else sourcesDialog("this"); };
+
+  async function duplicatesCsv(): Promise<void> {
+    try {
+      const r = await fetch(`api/v1/${ws("/duplicates.csv")}`, { headers: W.headers() });
+      if (!r.ok) throw new Error(`the server answered ${r.status}`);
+      const a = el("a"); a.href = URL.createObjectURL(await r.blob()); a.download = `${W.id}-duplicates.csv`;
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+    } catch (e) { fail(e); }
   }
 
   // Browser extensions: a one-time pairing code, and the browsers already paired (each disconnects on its own).
@@ -234,8 +277,7 @@ function install(W: V1): void {
   }
 
   W.ui = {
-    history, manage, importer, menu, download, toggleLock, backup, restore, extensions,
-    duplicatesCsv: () => toast("Duplicates are merged by the cleanup the Python tool runs; this workspace has no list of them.", "info"),
+    history, manage, importer, addFiles, menu, download, toggleLock, backup, restore, extensions, duplicatesCsv,
   };
   const mount = () => { document.getElementById("wsMenu")?.remove(); document.querySelector("#edited")?.before(menu()); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount); else mount();

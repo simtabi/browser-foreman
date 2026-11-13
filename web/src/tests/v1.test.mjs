@@ -28,6 +28,15 @@ assert.deepEqual(page.data.keep.map(i => [i.t, i.g]), [["Go", "Bookmarks Bar"], 
 assert.deepEqual(page.data.folders, ["Bookmarks Bar", "Bookmarks Bar/Dev ∕ Ops", "Other bookmarks"]);
 assert.equal(page.state.notes[1], "start here");
 assert.deepEqual(page.state.trashFrom[3], { path: "Bookmarks Bar/Dev ∕ Ops", index: 1 });
+assert.deepEqual(page.data.dupes, [], "a Trash entry that is not a duplicate is not listed as one");
+
+// A copy merged away is listed in dupes, with the folder of the copy kept, and stays in the Trash.
+const merged = tree();
+merged.trash.push({ node: { id: "go2", kind: "bookmark", title: "Go again", url: "https://www.go.dev", added: 1500000000 }, from: "other", index: 0, at: 1, reason: "duplicate of go" });
+const mp = V.toPage(merged);
+assert.deepEqual(mp.data.dupes.map(d => [d.id, d.t, d.o, d.k, d.a]), [[5, "Go again", "Other bookmarks", "Bookmarks Bar", 1500000000]]);
+assert.equal(mp.data.keep.length, 4, "the copy is also in the Trash, where it can be put back");
+assert.ok(!mp.data.keep.some(i => i.id === 5), "dupes ids come after keep's");
 assert.deepEqual(V.fromPage(page.state, {}, page, newId), tree());
 
 // The page's own tree functions keep the server ids through a revive/plain cycle (what loadState and persist do).

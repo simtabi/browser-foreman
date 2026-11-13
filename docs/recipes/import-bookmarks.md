@@ -25,6 +25,7 @@ browser-foreman import ~/Downloads/bookmarks.html --workspace firefox
 ```
 
 Every import creates a new workspace (`--workspace` must be new), so importing never changes one you already have.
+To combine several files into one workspace without duplicates, see [merge bookmarks](merge-bookmarks.md).
 See them all with `browser-foreman workspace list`; storage and history are described in [storage](../tools/storage.md).
 
 ---

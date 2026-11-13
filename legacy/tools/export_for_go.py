@@ -21,9 +21,28 @@ import re
 import sqlite3
 import sys
 from datetime import datetime, timezone
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 TRASH_NAMES = ("Trash", "_Removed (not exported)")
 NONE = (None, "", "None")
+
+
+TRACKING = ("utm_", "fbclid", "gclid", "mc_", "ref_src", "igshid")
+
+
+def norm(u):
+    """build.py's rule for two addresses that open the same page (and Go's merge.Key)."""
+    try:
+        s = urlsplit(u.strip())
+    except ValueError:
+        return u
+    if s.scheme not in ("http", "https"):
+        return u
+    host = s.netloc.lower().removeprefix("www.")
+    q = [(k, v) for k, v in parse_qsl(s.query, keep_blank_values=True)
+         if not k.lower().startswith(TRACKING) and k.lower() != "ref"]
+    frag = "" if s.fragment.startswith(":~:") else s.fragment
+    return urlunsplit(("", host, s.path.rstrip("/") or "/", urlencode(q), frag))
 
 
 def iso(s):
@@ -186,12 +205,18 @@ class Converter:
             path = frm.get("path", "") if isinstance(frm, dict) else ""
             trash.append({"node": node, "from": paths.get(path, "root"), "index": int(frm.get("index", 0)) if isinstance(frm, dict) else 0, "at": at_unix})
         ids = {k for k in items}
+        # A copy names the kept bookmark by dupOf when the page recorded it; build.py's copies only carry the kept
+        # one's folder (k, kg), so the kept bookmark is the one with the same address, by build.py's own rule.
+        kept_by_key = {}
+        for it in self.data.get("keep") or []:
+            kept_by_key.setdefault(norm(it.get("u") or ""), str(it["id"]))
         for d in self.data.get("dupes") or []:
             k = str(d["id"])
             nid = f"py-{k}" if k not in ids else f"py-dup-{k}"
             node = {"id": nid, "kind": "bookmark", "title": d.get("t") or "", "url": d.get("u") or ""}
+            kept = str(d["dupOf"]) if val(d.get("dupOf")) else kept_by_key.get(norm(d.get("u") or ""))
             trash.append({"node": node, "from": paths.get(d.get("g") or "", "root"), "index": 0, "at": at_unix,
-                          "reason": f"duplicate of py-{d.get('k')}" if val(d.get("k")) else "duplicate"})
+                          "reason": f"duplicate of py-{kept}" if kept else "duplicate"})
         out = {"root": top}
         if trash:
             out["trash"] = trash

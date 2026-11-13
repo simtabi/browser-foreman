@@ -69,6 +69,11 @@ func (s *Server) head(r *http.Request, x store.Workspace) (store.Tree, error) {
 
 // commit records a change and publishes it: the edit events first, then workspace.<kind> with the entry.
 func (s *Server) commit(w http.ResponseWriter, r *http.Request, x store.Workspace, saw int, given bool, viaHeader bool, c store.Change, events []edit.Event, kind string) {
+	s.commitWith(w, r, x, saw, given, viaHeader, c, events, kind, nil)
+}
+
+// commitWith is commit, adding extra's keys to the answer.
+func (s *Server) commitWith(w http.ResponseWriter, r *http.Request, x store.Workspace, saw int, given bool, viaHeader bool, c store.Change, events []edit.Event, kind string, extra map[string]any) {
 	b := x.Head
 	if given {
 		b = saw
@@ -102,7 +107,11 @@ func (s *Server) commit(w http.ResponseWriter, r *http.Request, x store.Workspac
 	if events == nil {
 		events = []edit.Event{}
 	}
-	writeJSON(w, 201, map[string]any{"entry": e, "events": events})
+	out := map[string]any{"entry": e, "events": events}
+	for k, v := range extra {
+		out[k] = v
+	}
+	writeJSON(w, 201, out)
 }
 
 // change applies edit ops to the head and commits them as one entry.

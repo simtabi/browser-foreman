@@ -13,7 +13,9 @@ export interface V1Link { url: string; status: string; code?: number; final?: st
 
 /** s: the link check's status ("unchecked" until one runs), n its note, dk "page" or "host" for a dead link, nu the
  *  address a moved link now answers at; g: the folder it is in; o: the folder it came from. */
-export interface PageItem { id: BookmarkId; u: string; t: string; a?: number; s: string; g: string; o: string; n?: string; dk?: string; nu?: string }
+export interface PageItem { id: BookmarkId; u: string; t: string; a?: number; s: string; g: string; o: string; n?: string; dk?: string; nu?: string;
+  /** For a merged copy (data.dupes): the folder of the bookmark kept for it. */
+  k?: string; kg?: string }
 
 /** The page's fields for one check result. */
 export function linkFields(l: V1Link): Pick<PageItem, "s" | "n" | "dk" | "nu"> {
@@ -32,19 +34,24 @@ export interface PageState {
   trashFrom: Record<string, From>;
 }
 export interface Page {
-  data: { keep: PageItem[]; dupes: never[]; newMine: never[]; total: number; built: string; folders: string[] };
+  /** dupes: the copies merged away (Trash entries "duplicate of <id>"), as a read-only list with their own ids after
+   *  keep's; they are also in the Trash, where they can be put back. */
+  data: { keep: PageItem[]; dupes: PageItem[]; newMine: never[]; total: number; built: string; folders: string[] };
   state: PageState;
   ids: string[];
   /** When each trashed node (by server id) went to the Trash, and why: the page does not keep these. */
   trashed: Record<string, { at: number; reason?: string }>;
 }
 
+/** The Trash reason of a copy merged into another bookmark; the kept one's id follows (merge.DuplicateOf). */
+export const DUPLICATE_OF = "duplicate of ";
+
 /** A "/" inside a folder name is stored as "∕" in page paths (tree.ts `nice` shows it back). */
 const seg = (title: string): string => title.replaceAll("/", "∕");
 const unseg = (name: string): string => name.replaceAll("∕", "/");
 
 export function toPage(t: V1Tree, built = "", links: Record<string, V1Link> = {}): Page {
-  const keep: PageItem[] = [], ids: string[] = [], folders: string[] = [], pathOf = new Map<string, string>();
+  const keep: PageItem[] = [], ids: string[] = [], folders: string[] = [], pathOf = new Map<string, string>(), placed = new Map<string, string>();
   const trashed: Page["trashed"] = {};
   const state: PageState = { root: { n: "", c: [], k: t.root.id }, titles: {}, notes: {}, gone: [], trashFrom: {} };
   const bookmark = (b: V1Node, path: string): BookmarkId => {
@@ -53,7 +60,7 @@ export function toPage(t: V1Tree, built = "", links: Record<string, V1Link> = {}
     const l = links[item.u];
     if (l) Object.assign(item, linkFields(l));
     if (b.added) item.a = b.added;
-    keep.push(item); ids.push(b.id);
+    keep.push(item); ids.push(b.id); placed.set(b.id, path);
     if (b.note) state.notes[id] = b.note;
     return id;
   };
@@ -90,7 +97,19 @@ export function toPage(t: V1Tree, built = "", links: Record<string, V1Link> = {}
     }
     state.root.c.push(bin);
   }
-  return { data: { keep, dupes: [], newMine: [], total, built, folders }, state, ids, trashed };
+  const dupes: PageItem[] = [];
+  for (const x of t.trash ?? []) {
+    const kept = x.reason?.startsWith(DUPLICATE_OF) ? x.reason.slice(DUPLICATE_OF.length).split(" ")[0] : undefined;
+    if (!kept || x.node.kind !== "bookmark") continue;
+    const was = pathOf.get(x.from) ?? "", item: PageItem = { id: keep.length + dupes.length + 1, u: x.node.url ?? "", t: x.node.title, s: "unchecked", g: was, o: was };
+    if (x.node.added) item.a = x.node.added;
+    const l = links[item.u];
+    if (l) Object.assign(item, linkFields(l));
+    const at = placed.get(kept);
+    if (at !== undefined) { item.k = at; item.kg = at; }
+    dupes.push(item);
+  }
+  return { data: { keep, dupes, newMine: [], total, built, folders }, state, ids, trashed };
 }
 
 /** The server tree for what the page saved. `urls` are the page's applied address updates; `gone` ids (deleted for

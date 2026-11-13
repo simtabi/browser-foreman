@@ -49,6 +49,8 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `GET` | `/api/v1/workspaces/{id}/history` | viewer | `200 {"history": [entries, oldest first]}` |
 | `POST` | `/api/v1/workspaces` | editor | body `{id, name}`; `201`, or `409` if the id is taken |
 | `POST` | `/api/v1/workspaces/{id}/import` | editor | the body is a bookmarks file (Chrome JSON or exported HTML, up to 64 MiB); replaces the tree as one entry; `?name=` labels it |
+| `POST` | `/api/v1/workspaces/{id}/sources` | editor | merges files (the body, or multipart `file` parts, up to 20) and `?from=` another workspace into this one, as one entry; copies of a page go to the Trash as duplicates; `?separate=1` keeps each source's folders apart; answers `added`, `duplicates`, `folders` |
+| `GET` | `/api/v1/workspaces/{id}/duplicates.csv` | viewer | every copy merged away, with the bookmark kept for it |
 | `GET` | `/api/v1/workspaces/{id}/export` | viewer | a download: `?format=html` (default, every browser imports it) or `chrome`; `?at=N` for an earlier state |
 | `POST` | `/api/v1/workspaces/{id}/changes` | editor | body `{base?, ops: [...]}`: several changes as one entry, all or none |
 | `PUT` | `/api/v1/workspaces/{id}/tree` | editor | body `{root, trash?}`: the whole tree at once (the web interface saves this way); the server works out what changed, checks it by the same rules and publishes those events; an unchanged tree records nothing (`200`) |

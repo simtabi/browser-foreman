@@ -20,7 +20,8 @@ def make_root(tmp):
                 {"id": "3", "u": "https://moved.example/", "t": "Moved", "a": "x", "g": "Bookmarks Bar/Dev", "s": "moved", "n": "redirects", "dk": "None", "nu": "https://new.example/"},
                 {"id": "4", "u": "https://new-in-build.example/", "t": "New", "a": "1", "g": "Bookmarks Bar/Dev", "s": "ok", "n": "", "dk": "None", "nu": "None"},
             ],
-            "dupes": [{"id": "9", "u": "https://go.dev/", "t": "Go (copy)", "g": "Bookmarks Bar", "k": "1"}]}
+            # As build.py writes them: k and kg are the kept copy's folder, not its id; the kept copy is found by address.
+            "dupes": [{"id": "9", "u": "https://www.go.dev?utm_source=x", "t": "Go (copy)", "g": "Bookmarks Bar", "k": "1 Dev/Tools", "kg": "Bookmarks Bar"}]}
     os.makedirs(os.path.join(tmp, "public"))
     with open(os.path.join(tmp, "public", "index.html"), "w") as f:
         f.write("<html>\nconst DATA = " + json.dumps(data) + ";\n</html>\n")

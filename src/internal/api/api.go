@@ -86,6 +86,8 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/workspaces", s.require(store.RoleEditor, s.createWorkspace))
 	m.HandleFunc("PATCH /api/v1/workspaces/{id}", s.require(store.RoleEditor, s.updateWorkspace))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/import", s.require(store.RoleEditor, s.importInto))
+	m.HandleFunc("POST /api/v1/workspaces/{id}/sources", s.require(store.RoleEditor, s.addSources))
+	m.HandleFunc("GET /api/v1/workspaces/{id}/duplicates.csv", s.require(store.RoleViewer, s.duplicatesCSV))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/changes", s.require(store.RoleEditor, s.postChanges))
 	m.HandleFunc("PUT /api/v1/workspaces/{id}/tree", s.require(store.RoleEditor, s.putTree))
 	m.HandleFunc("POST /api/v1/workspaces/{id}/nodes", s.require(store.RoleEditor, s.createNode))

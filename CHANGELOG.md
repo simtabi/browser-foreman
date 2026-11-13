@@ -78,6 +78,10 @@ ships.
 - `browser-foreman mcp`: an MCP server on stdio, through the official Go SDK, with 8 read tools and, behind
   `mcp.writes`, 8 that change bookmarks through the API (trash and rollback also need `confirm: true`). Off unless
   `mcp.enabled`; everything it returns is marked as untrusted data.
+- Merging: `POST /api/v1/workspaces/{id}/sources` and `browser-foreman merge` add several files (and other
+  workspaces) to a workspace, keeping one copy of each page by the Python tool's rule; every other copy goes to the
+  Trash as a duplicate. `GET /api/v1/workspaces/{id}/duplicates.csv` lists them, and the page's Import, Add to this
+  workspace, Merged duplicates (CSV) and Removed duplicates view use them.
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed
