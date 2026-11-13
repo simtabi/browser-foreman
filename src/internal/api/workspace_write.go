@@ -296,6 +296,7 @@ func (s *Server) importInto(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
+	s.keepIcons(body)
 	bm, fo := t.Count()
 	name := r.URL.Query().Get("name")
 	if name == "" {

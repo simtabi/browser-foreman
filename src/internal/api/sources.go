@@ -100,6 +100,7 @@ func (s *Server) addSources(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 400, f.name+": "+err.Error())
 			return
 		}
+		s.keepIcons(f.body)
 		sources = append(sources, merge.Source{Name: f.name, Tree: t})
 		sum := sha256.Sum256(f.body)
 		records = append(records, pendingSource{store.Source{ID: "f-" + hex.EncodeToString(sum[:8]), Name: f.name, Kind: store.SourceFile,

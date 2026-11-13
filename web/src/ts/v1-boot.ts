@@ -2,7 +2,7 @@
 // into the page's data (window.BF_PAGE, read by the page as DATA) and installs window.BM_WS, the workspace hooks the
 // page already uses: the page's saves become PUT /api/v1/workspaces/{id}/tree, undo and redo go to the server.
 
-import { toPage, fromPage, linkFields, type V1Tree, type V1Link, type PageState } from "./v1";
+import { type Media, toPage, fromPage, linkFields, type V1Tree, type V1Link, type PageState } from "./v1";
 import { legacy } from "./v1-compat";
 
 export interface WorkspaceInfo { id: string; name: string; head: number; notes?: string; locked?: boolean; archived?: boolean }
@@ -14,6 +14,7 @@ interface Boot {
   can: { undo: string | null; redo: string | null };
   auth: { token?: string; csrf?: string };
   links: Record<string, V1Link>;
+  media?: Media;
 }
 interface CheckView { id: string; state: string; total: number; checked: number; started: string; done: boolean }
 
@@ -21,7 +22,7 @@ declare global { interface Window { BF_V1?: Boot; BF_PAGE?: unknown; BM_WS?: unk
 
 const boot = window.BF_V1;
 if (boot) {
-  const page = toPage(boot.tree, boot.built, boot.links ?? {});
+  const page = toPage(boot.tree, boot.built, boot.links ?? {}, boot.media);
   window.BF_PAGE = page.data;
   let state: PageState = page.state, urls: Record<string, string> = {}, head = boot.workspace.head;
   const base = `api/v1/workspaces/${encodeURIComponent(boot.workspace.id)}`;
@@ -132,11 +133,21 @@ if (boot) {
   // Link checks, in the shape the page's activity panel reads (it was written for the Python server's jobs).
   const pageIdsByURL = new Map<string, number[]>();
   for (const i of page.data.keep) pageIdsByURL.set(i.u, [...(pageIdsByURL.get(i.u) ?? []), i.id]);
+  // A refresh re-checks links and takes snapshots: of the chosen pages again, or (for very many, Refresh all) of those
+  // with none yet, since each snapshot starts a browser. No Chrome installed: checking alone.
+  type SnapView = { id: string; total: number; done: number; failed: number; skipped: number; state: string };
+  const snapOf = new Map<string, { id: string; urls: string[] }>();
   const refresh = async (ids: number[]): Promise<{ job: string; total: number }> => {
     const nodes = ids.map(id => page.ids[id - 1]).filter((x): x is string => !!x);
     const { job } = await call<{ job: CheckView }>("POST", "linkchecks", { workspace: boot.workspace.id, nodes });
+    try {
+      const s = await call<{ job: SnapView }>("POST", "snapshots", { workspace: boot.workspace.id, nodes, force: nodes.length <= 300 });
+      snapOf.set(job.id, { id: s.job.id, urls: ids.map(id => page.data.keep[id - 1]?.u ?? "").filter(Boolean) });
+    } catch { /* no browser to take snapshots with, or snapshots already running */ }
     return { job: job.id, total: job.total };
   };
+  const thumbKey = async (u: string): Promise<string> =>
+    Array.from(new Uint8Array(await crypto.subtle.digest("SHA-1", new TextEncoder().encode(u))), b => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
   const job = async (id: string): Promise<Record<string, unknown>> => {
     let j: { job: CheckView; results?: Record<string, V1Link> };
     try { j = await call("GET", `linkchecks/${encodeURIComponent(id)}`); } catch { return { done: true, state: "lost", results: {}, rendered: 0 }; }
@@ -146,10 +157,27 @@ if (boot) {
       j = await call("GET", `linkchecks/${encodeURIComponent(id)}?results=1`);
       for (const [url, l] of Object.entries(j.results ?? {})) for (const pid of pageIdsByURL.get(url) ?? []) results[pid] = linkFields(l);
     }
-    return { state: v.state === "done" ? "done" : v.state, phase: "checking", checked: v.checked, total: v.total, done: v.done,
-      started: Date.parse(v.started) / 1000, results, rendered: 0, render_total: 0 };
+    const base = { state: v.state === "done" ? "done" : v.state, checked: v.checked, total: v.total, started: Date.parse(v.started) / 1000, results };
+    const snap = snapOf.get(id);
+    if (!v.done || !snap) return { ...base, phase: "checking", done: v.done, rendered: 0, render_total: 0 };
+    let sv: SnapView;
+    try { sv = (await call<{ job: SnapView }>("GET", `snapshots/${encodeURIComponent(snap.id)}`)).job; } catch { return { ...base, phase: "rendering", done: true, rendered: 0, render_total: 0 }; }
+    const rendered = sv.done + sv.failed + sv.skipped;
+    if (sv.state === "running") return { ...base, phase: "rendering", done: false, rendered, render_total: sv.total };
+    for (const u of snap.urls) {  // only beside a check result: a snapshot alone must not clear a page's status
+      const pids = (pageIdsByURL.get(u) ?? []).filter(pid => results[pid]);
+      if (!pids.length) continue;
+      const h = await thumbKey(u);
+      for (const pid of pids) results[pid] = { ...(results[pid] as object), h };
+    }
+    snapOf.delete(id);
+    return { ...base, state: v.state === "done" && sv.state === "cancelled" ? "cancelled" : base.state, phase: "rendering", done: true, rendered: sv.done, render_total: sv.total };
   };
-  const ctl = (id: string, verb: string): Promise<unknown> => call("POST", `linkchecks/${encodeURIComponent(id)}/${verb}`).catch(() => null);
+  const ctl = (id: string, verb: string): Promise<unknown> => {
+    const snap = snapOf.get(id);
+    if (verb === "cancel" && snap) void call("POST", `snapshots/${encodeURIComponent(snap.id)}/cancel`).catch(() => null);
+    return call("POST", `linkchecks/${encodeURIComponent(id)}/${verb}`).catch(() => null);
+  };
 
   const ws = {
     refresh, job, ctl,

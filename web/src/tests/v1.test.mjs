@@ -30,6 +30,11 @@ assert.equal(page.state.notes[1], "start here");
 assert.deepEqual(page.state.trashFrom[3], { path: "Bookmarks Bar/Dev ∕ Ops", index: 1 });
 assert.deepEqual(page.data.dupes, [], "a Trash entry that is not a duplicate is not listed as one");
 
+// Pictures: the site's icon by host (www. dropped), the page's snapshot by address.
+const withMedia = V.toPage(tree(), "", {}, { icons: { "go.dev": "56aef353c139.png" }, thumbs: { "https://github.com/": "abcdef0123456789" } });
+assert.deepEqual(withMedia.data.keep.map(i => [i.fv ?? null, i.h ?? null]), [["56aef353c139.png", null], [null, "abcdef0123456789"], [null, null]]);
+assert.equal(V.hostOf("https://WWW.Example.com:8080/x"), "example.com");
+
 // A copy merged away is listed in dupes, with the folder of the copy kept, and stays in the Trash.
 const merged = tree();
 merged.trash.push({ node: { id: "go2", kind: "bookmark", title: "Go again", url: "https://www.go.dev", added: 1500000000 }, from: "other", index: 0, at: 1, reason: "duplicate of go" });

@@ -137,6 +137,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		"workspace":  map[string]any{"id": x.ID, "name": x.Name, "head": x.Head, "notes": x.Notes, "locked": x.Locked, "archived": x.Archived},
 		"workspaces": all,
 		"tree":       t, "built": built.UTC().Format(time.RFC3339), "can": canUndo(h), "auth": auth, "links": links,
+		"media": s.mediaFor(t),
 	})
 	if err != nil {
 		writeErr(w, 500, err.Error())

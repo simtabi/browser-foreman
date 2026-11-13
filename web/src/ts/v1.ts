@@ -13,7 +13,12 @@ export interface V1Link { url: string; status: string; code?: number; final?: st
 
 /** s: the link check's status ("unchecked" until one runs), n its note, dk "page" or "host" for a dead link, nu the
  *  address a moved link now answers at; g: the folder it is in; o: the folder it came from. */
+/** The pictures the server has: each site's icon file by host, each page's snapshot key by address. */
+export interface Media { icons: Record<string, string>; thumbs: Record<string, string> }
+
 export interface PageItem { id: BookmarkId; u: string; t: string; a?: number; s: string; g: string; o: string; n?: string; dk?: string; nu?: string;
+  /** fv: the site's icon file (favicons/<fv>); h: the page's snapshot (thumbs/<h>.jpg). */
+  fv?: string; h?: string;
   /** For a merged copy (data.dupes): the folder of the bookmark kept for it. */
   k?: string; kg?: string }
 
@@ -50,7 +55,12 @@ export const DUPLICATE_OF = "duplicate of ";
 const seg = (title: string): string => title.replaceAll("/", "∕");
 const unseg = (name: string): string => name.replaceAll("∕", "/");
 
-export function toPage(t: V1Tree, built = "", links: Record<string, V1Link> = {}): Page {
+/** A link's host as the server keys icons: lower case, without "www." (media.Host). */
+export function hostOf(u: string): string {
+  try { return new URL(u).hostname.toLowerCase().replace(/^www\./, ""); } catch { return ""; }
+}
+
+export function toPage(t: V1Tree, built = "", links: Record<string, V1Link> = {}, media: Media = { icons: {}, thumbs: {} }): Page {
   const keep: PageItem[] = [], ids: string[] = [], folders: string[] = [], pathOf = new Map<string, string>(), placed = new Map<string, string>();
   const trashed: Page["trashed"] = {};
   const state: PageState = { root: { n: "", c: [], k: t.root.id }, titles: {}, notes: {}, gone: [], trashFrom: {} };
@@ -60,6 +70,9 @@ export function toPage(t: V1Tree, built = "", links: Record<string, V1Link> = {}
     const l = links[item.u];
     if (l) Object.assign(item, linkFields(l));
     if (b.added) item.a = b.added;
+    const fv = media.icons[hostOf(item.u)], h = media.thumbs[item.u];
+    if (fv) item.fv = fv;
+    if (h) item.h = h;
     keep.push(item); ids.push(b.id); placed.set(b.id, path);
     if (b.note) state.notes[id] = b.note;
     return id;

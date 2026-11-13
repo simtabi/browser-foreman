@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/events"
 	"github.com/simtabi/browser-foreman/src/internal/linkcheck"
+	"github.com/simtabi/browser-foreman/src/internal/media"
 	"github.com/simtabi/browser-foreman/src/internal/store"
 	"github.com/simtabi/browser-foreman/src/internal/tabs"
 	"github.com/simtabi/browser-foreman/src/internal/version"
@@ -80,6 +82,7 @@ func serveCmd() *cobra.Command {
 				Limit:    auth.NewLimiter(5, 15*time.Minute, 15*time.Minute),
 				Checker:  linkcheck.New(15 * time.Second),
 				Browsers: bs,
+				Media:    media.Store{Dir: filepath.Join(c.Storage.Path, "media")},
 				Dispatch: &webhooks.Dispatcher{
 					Store: hooks, Client: &http.Client{Timeout: c.Webhooks.Timeout.Duration}, Attempts: c.Webhooks.Attempts,
 					Backoff: 2 * time.Second, Now: time.Now,

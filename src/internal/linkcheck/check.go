@@ -274,3 +274,7 @@ func pageText(b []byte) (title, text string) {
 	}
 	return strings.TrimSpace(title), strings.TrimSpace(space.ReplaceAllString(t.String(), " "))
 }
+
+// IsPrivate reports whether an address is loopback, private, link-local or otherwise not on the public internet: the
+// addresses a check (or a snapshot) never visits.
+func IsPrivate(ip net.IP) bool { return privateIP(ip) }

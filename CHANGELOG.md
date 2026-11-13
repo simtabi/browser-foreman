@@ -103,6 +103,10 @@ ships.
   history and all (`GET /api/v1/workspaces?trash=1` lists it), `…/restore` brings it back, `…/purge` removes it for
   good with its id typed, and `…/reset` goes back to how it started as one undoable entry. The page's Workspaces
   window has In use and Trash tabs, and the workspace menu has Reset and Delete.
+- Site icons and page snapshots: icons are kept from the `ICON` data in imported bookmark files (no site is asked),
+  and `POST /api/v1/snapshots` takes snapshots with the installed Chrome, headless, in a throwaway profile, public
+  pages only. The page shows both and Refresh takes snapshots again. File names match the Python tool's, so its
+  icons and snapshots can be copied into `<storage>/media/{icons,thumbs}`.
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
 ### Changed

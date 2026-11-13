@@ -25,6 +25,7 @@ import (
 	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/events"
 	"github.com/simtabi/browser-foreman/src/internal/linkcheck"
+	"github.com/simtabi/browser-foreman/src/internal/media"
 	"github.com/simtabi/browser-foreman/src/internal/store"
 	"github.com/simtabi/browser-foreman/src/internal/tabs"
 	"github.com/simtabi/browser-foreman/src/internal/version"
@@ -44,8 +45,12 @@ type Server struct {
 	Checker  *linkcheck.Checker
 	Browsers *browsers.Service
 	Tabs     *tabs.Service
-	ext      extState
-	icons    iconCache
+	// Media keeps site icons and page snapshots; Snapper takes snapshots (nil: the installed Chrome, found when asked).
+	Media   media.Store
+	Snapper *media.Snapper
+	snaps   snapRunner
+	ext     extState
+	icons   iconCache
 	// Deliveries is the webhook delivery log (the dispatcher's Log writes to it); nil: none kept.
 	Deliveries *webhooks.Log
 	checks     checkRunner
@@ -122,7 +127,12 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/restore", s.require(store.RoleOwner, s.restore))
 	m.HandleFunc("GET /api/v1/settings", s.require(store.RoleOwner, s.settings))
 	m.HandleFunc("GET /api/v1/browsers", s.require(store.RoleViewer, s.listBrowsers))
-	m.HandleFunc("GET /api/v1/browsers/icon", s.browserIcon) // public: an <img> cannot send a token; guard refuses cross-site loads
+	m.HandleFunc("GET /api/v1/browsers/icon", s.browserIcon)      // public: an <img> cannot send a token; guard refuses cross-site loads
+	m.HandleFunc("GET /favicons/{name}", s.servePicture("icons")) // pictures for the page's <img>: see servePicture
+	m.HandleFunc("GET /thumbs/{name}", s.servePicture("thumbs"))
+	m.HandleFunc("POST /api/v1/snapshots", s.require(store.RoleEditor, s.startSnapshots))
+	m.HandleFunc("GET /api/v1/snapshots/{id}", s.require(store.RoleViewer, s.getSnapshots))
+	m.HandleFunc("POST /api/v1/snapshots/{id}/cancel", s.require(store.RoleEditor, s.cancelSnapshots))
 	m.HandleFunc("POST /api/v1/open", s.require(store.RoleOwner, s.openLinks))
 	m.HandleFunc("GET /api/v1/preferences", s.require(store.RoleViewer, s.getPrefs))
 	m.HandleFunc("PUT /api/v1/preferences", s.require(store.RoleOwner, s.putPrefs))
