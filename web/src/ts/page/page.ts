@@ -154,7 +154,9 @@ function persist() {
 function persistNow() { clearTimeout(saveTimer); const s = st(); if (s.edited) store.set("tree-" + mode, {root: plain(s.root), titles: s.titles, notes: s.notes, ratings: s.ratings, tags: s.tags, gone: [...s.gone], trashFrom: s.trashFrom}); }
 addEventListener("pagehide", persistNow);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") persistNow(); });
-function save() { st().edited = true; persist(); $("#edited").textContent = "Edited · kept in this browser"; }
+// With a server the edits are saved in the workspace (with its history); opened as a file, they stay in this browser.
+const EDITED = () => WS ? "Edited · saved in this workspace, with its history" : "Edited · kept in this browser";
+function save() { st().edited = true; persist(); $("#edited").textContent = EDITED(); }
 // Which folders are open is a view preference, saved on its own: it must never freeze the tree against a rebuild.
 const saveOpen = () => { store.set("open-" + mode, [...st().open]); };
 
@@ -451,7 +453,7 @@ function summary() {
 
 function setMode(m) {
   mode = m; marked.clear(); sel = 0;
-  $("#edited").textContent = st().edited ? "Edited · kept in this browser" : "";
+  $("#edited").textContent = st().edited ? EDITED() : "";
   build(); list.focus();
 }
 let qt; $("#q").oninput = () => { clearTimeout(qt); qt = setTimeout(() => { sel = 0; build(); PLACE.update({q: $("#q").value.trim()}); }, 150); };
@@ -489,6 +491,11 @@ on("#refreshAll", () => refresh(true));
 on("#paletteBtn", openPalette);
 on("#shortcutsBtn", openShortcuts);
 on("#settingsBtn", openSettings);
+// The ⋮ menu's Workspace section (hidden when the page runs without a server, where there are no workspaces).
+on("#wsAllBtn", () => wsUI()?.manage?.());
+on("#wsRenameBtn", () => wsUI()?.rename?.());
+on("#wsNotesBtn", () => wsUI()?.notes?.());
+for (const x of document.querySelectorAll(".ws-only")) x.hidden = !WS;
 // ---------- onboarding: a welcome on first open, then a guided tour that can be replayed any time ----------
 const TOUR = [
   [".hdr-views", "Bookmarks, open tabs and the timeline", "Switch between your bookmarks, the tabs open in your browsers, and a timeline of everything that happened. Open tabs are saved every few minutes, so after a crash you can see what was open and reopen anything that was lost."],

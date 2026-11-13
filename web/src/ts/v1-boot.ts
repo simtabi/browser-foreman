@@ -32,6 +32,9 @@ if (boot) {
     if (boot.auth.csrf) h["X-CSRF-Token"] = boot.auth.csrf;
     return h;
   };
+  // This is the workspace in use now: background tab snapshots are saved into its pool (its own, or the shared one).
+  // A viewer may not change that, and the page works the same either way.
+  void fetch(`${base}/open`, { method: "POST", headers: headers() }).catch(() => undefined);
   const newId = (): string => "f" + Array.from(crypto.getRandomValues(new Uint8Array(6)), b => b.toString(16).padStart(2, "0")).join("");
 
   // A save the server refused stays on screen until it is dealt with: a Tabler alert with what happened and what to

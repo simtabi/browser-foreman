@@ -40,18 +40,20 @@ const NOT_YET = (what: string): Answer => ({ status: 501, body: { error: `${what
 /** Answers one older call through the v1 routes, or null when it is not one this knows (it then goes out as is). */
 export async function legacy(method: string, path: string, query: string, body: any, call: Call, workspace: string): Promise<Answer | null> {
   const q = query ? "?" + query : "";
+  // Tab snapshots come from this workspace's pool (its own, or the shared one): every tab read names it.
+  const ws = `workspace=${encodeURIComponent(workspace)}`, qw = q ? `${q}&${ws}` : `?${ws}`;
   const ok = (b: unknown): Answer => ({ status: 200, body: b });
   const m = method.toUpperCase();
   if (m === "GET") {
     switch (path) {
       case "tabs": return ok(await call("GET", "tabs"));
-      case "tabs/snapshots": return ok(await call("GET", "tabs/snapshots" + q));
-      case "tabs/timeline": return ok(await call("GET", "tabs/timeline" + q));
+      case "tabs/snapshots": return ok(await call("GET", "tabs/snapshots" + qw));
+      case "tabs/timeline": return ok(await call("GET", "tabs/timeline" + qw));
       case "tabs/notes": return ok(await call("GET", "tabs/notes"));
       case "opened": return ok(await call("GET", `workspaces/${encodeURIComponent(workspace)}/opened`));
       case "snapshot-settings": return ok(snapshotSettings(await call("GET", "preferences")));
       case "tabs/status": {
-        const [p, st] = await Promise.all([call("GET", "preferences"), call("GET", "tabs/stored").catch(() => ({}))]);
+        const [p, st] = await Promise.all([call("GET", "preferences"), call("GET", "tabs/stored" + qw).catch(() => ({}))]);
         return ok({ settings: legacySettings(p), last_auto: null, snapshots: st.snapshots ?? 0, incognito_pages_stored: st.incognito_pages ?? 0 });
       }
       case "tabs/browsers": {

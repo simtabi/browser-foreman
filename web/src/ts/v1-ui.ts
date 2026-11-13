@@ -100,6 +100,7 @@ function install(W: V1): void {
     };
     const run = (fn: () => Promise<void>) => async () => { try { await fn(); } catch (e) { fail(e); } };
     const enc = (w: Info) => encodeURIComponent(w.id);
+    let ownTabs = new Set<string>();  // workspaces that keep their own tab snapshots (Preferences › tabs_own)
     const table = new DataTable<Info>({
       noun: "workspaces", size: 10, placeholder: "Search by name or id…",
       search: (w, q) => w.name.toLowerCase().includes(q) || w.id.includes(q),
@@ -118,6 +119,8 @@ function install(W: V1): void {
           if (w.id === W.id && !w.deleted) d.append(badge("open", "bg-primary-lt", "ti-eye"));
           if (w.archived) d.append(badge("archived", "bg-secondary-lt", "ti-archive"));
           if (w.locked) d.append(badge("locked", "bg-yellow-lt", "ti-lock"));
+          if (!w.deleted) { const t = badge(ownTabs.has(w.id) ? "own tab snapshots" : "shared tab snapshots", ownTabs.has(w.id) ? "bg-purple-lt" : "bg-secondary-lt", "ti-browser");
+            t.dataset.tip = ownTabs.has(w.id) ? "Open tabs, Timeline and History show only this workspace's tab snapshots." : "Uses the tab snapshots shared by every workspace that does not keep its own."; d.append(t); }
           if (!d.childElementCount) d.append(badge("in use", "bg-green-lt"));
           return d;
         } },
@@ -137,6 +140,24 @@ function install(W: V1): void {
         }) },
       ] : [
         w.id !== W.id && { l: "Open", ic: "ti-external-link", fn: () => nav(w.id) },
+        !w.locked && { l: "Rename…", ic: "ti-pencil", fn: run(async () => {
+          const name = (await askText({ title: "Rename workspace", label: "Name", value: w.name }))?.trim();
+          if (!name || name === w.name) return;
+          await W.call("PATCH", `workspaces/${enc(w)}`, { name });
+          if (w.id === W.id) { W.workspace.name = name; remount(); }
+          toast(`Renamed to “${name}”.`, "success"); await load();
+        }) },
+        !w.locked && { l: "Notes…", ic: "ti-notes", fn: run(async () => {
+          const v = await askText({ title: `Notes on “${w.name}”`, label: "What this set is, what is left to do", value: w.notes ?? "", multiline: true, hint: "⌘Enter saves" });
+          if (v == null || v === (w.notes ?? "")) return;
+          await W.call("PATCH", `workspaces/${enc(w)}`, { notes: v }); if (w.id === W.id) W.workspace.notes = v; toast("Notes saved.", "success"); await load();
+        }) },
+        { l: ownTabs.has(w.id) ? "Use the shared tab snapshots" : "Keep its own tab snapshots", ic: "ti-browser", fn: run(async () => {
+          const own = !ownTabs.has(w.id);
+          await W.call("PUT", `workspaces/${enc(w)}/tabs`, { own });
+          toast(own ? `“${w.name}” now keeps its own tab snapshots; the ones already taken stay shared.` : `“${w.name}” uses the shared tab snapshots again; its own stay kept.`, "success");
+          await load();
+        }) },
         !w.locked && { l: w.archived ? "Bring back from the archive" : "Archive", ic: w.archived ? "ti-archive-off" : "ti-archive", fn: run(async () => {
           await W.call("PATCH", `workspaces/${enc(w)}`, { archived: !w.archived }); toast(w.archived ? "Back in the list." : "Archived: kept, out of the way.", "success"); await load();
         }) },
@@ -157,6 +178,7 @@ function install(W: V1): void {
       table.rows(tab === "use" ? inUse : trash);
     };
     const load = async () => {
+      try { ownTabs = new Set((await W.call<{ tabs_own?: string[] }>("GET", "preferences")).tabs_own ?? []); } catch { ownTabs = new Set(); }
       try { inUse = (await W.call<{ workspaces: Info[] }>("GET", "workspaces")).workspaces; } catch { /* the page's own list will do */ }
       try { trash = (await W.call<{ workspaces: Info[] }>("GET", "workspaces?trash=1")).workspaces; } catch { trash = []; }
       paint();
@@ -522,12 +544,12 @@ function install(W: V1): void {
     const root = el("div", "dropdown"); root.id = "wsMenu";
     const btn = el("button", "btn"); btn.type = "button"; btn.dataset.dd = ""; btn.setAttribute("aria-label", "Workspace");
     btn.dataset.tip = "Workspace: one bookmark set, with its history";
-    const name = el("span", "text-truncate", W.workspace.name); name.style.maxWidth = "14rem";
+    const name = el("span", "text-truncate", W.workspace.name); name.dataset.tip = W.workspace.name;  // width: #hdrWs rules in template.html
     btn.append(icon("ti-stack-2", "me-1"), name);
     if (W.locked) { const b = el("span", "badge bg-yellow-lt ms-2"); b.append(icon("ti-lock", "me-1"), "locked"); btn.append(b); }
     if (W.workspace.archived) btn.append(el("span", "badge bg-secondary-lt ms-2", "archived"));
     btn.append(icon("ti-chevron-down", "ms-1"));
-    const dm = el("div", "dropdown-menu dropdown-menu-end");
+    const dm = el("div", "dropdown-menu");
     dm.append(el("h6", "dropdown-header", "Switch workspace"));
     const live = W.workspaces.filter(w => !w.archived), archived = W.workspaces.length - live.length;
     for (const w of live) dm.append(item(w.id === W.id ? "ti-check" : "ti-point", w.name, () => { if (w.id !== W.id) nav(w.id); }, w.id === W.id ? "active" : ""));
@@ -574,7 +596,10 @@ function install(W: V1): void {
 
   W.ui = {
     history, manage, importer, addFiles, addLinks, updateWs, browserHistory, resetWs, menu, download, toggleLock, backup, restore, extensions, duplicatesCsv,
+    rename, notes,
   };
-  const mount = () => { document.getElementById("wsMenu")?.remove(); document.querySelector("#edited")?.before(menu()); };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount); else mount();
+  // The workspace switcher sits in the top bar beside the logo, so it is there in every view (Bookmarks, Open tabs,
+  // Timeline): a workspace scopes all three. It was in the Bookmarks toolbar until 2026-11-13.
+  function remount(): void { document.getElementById("wsMenu")?.remove(); document.querySelector("#hdrWs")?.append(menu()); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", remount); else remount();
 }

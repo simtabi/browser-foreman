@@ -54,8 +54,9 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 /* Bookmarks bar: the workspace on the left, its actions on the right. */
 .tb-head { justify-content: space-between; }
 .tb-ws { display: flex; flex-direction: column; justify-content: center; min-width: 0; line-height: 1.15; }
-.tb-ws #wsMenu > .btn { border: 0; box-shadow: none; background: transparent; padding: 0; height: auto; font-weight: 600; font-size: .95rem; }
-.tb-ws #wsMenu > .btn:hover { color: var(--tblr-primary); }
+#hdrWs #wsMenu > .btn { font-weight: 600; max-width: 18rem; }
+#hdrWs #wsMenu > .btn .text-truncate { max-width: 12rem; }
+@media (max-width: 1100px) { #hdrWs #wsMenu > .btn .text-truncate { max-width: 7rem; } }
 .tb-ws #edited { font-size: .72rem; color: var(--tblr-secondary) !important; }
 .tb-acts { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-left: auto; }
 /* Show: one segmented control on one line; when the window is too narrow it scrolls sideways rather than breaking
@@ -67,7 +68,10 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 #chips .chip-n { font-size: .7rem; font-weight: 600; padding: 0 .4rem; border-radius: 999px; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); }
 #chips .nav-link.active .chip-n { background: var(--tblr-primary-lt); color: var(--tblr-primary); }
 #footTabs .nav-autosave { cursor: pointer; }
-.hdr-find { flex: 1 1 220px; max-width: 560px; }
+.hdr-find { flex: 1 1 220px; max-width: 560px; overflow: hidden; }  /* never drawn over the groups beside it */
+/* Room for the search as the window narrows: the workspace name and the view counts give way first. */
+.hdr-views { flex: none; }
+@media (max-width: 1400px) { #hdrWs #wsMenu > .btn .text-truncate { max-width: 8rem; } .hdr-views .app-nav-count { display: none; } .hdr-find .hdr-search #hq { min-width: 6rem; } }
 .hdr-search { flex-wrap: nowrap; }
 .hdr-search #hq { min-width: 9rem; }  /* the field never shrinks below a usable width; the labels beside it go first */
 @media (max-width: 1500px) { .hdr-search #paletteBtn .hide-narrow { display: none; } }
@@ -336,6 +340,14 @@ body.no-tree-thumbs .bm-fav { position: static; padding: 0; box-shadow: none; ba
 .fsum { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); border: 1px solid var(--tblr-border-color);
   border-radius: var(--tblr-card-border-radius, var(--tblr-border-radius-lg)); background: var(--tblr-bg-surface); }
 .fsum-main, .fsum-side { padding: 1rem 1.1rem; min-width: 0; }
+/* The summary follows its own width, not the window's: in a narrow details pane (grid layout, a small window) the
+   two columns stack, so About and its numbers never squeeze into one character per line. */
+#info { container-type: inline-size; }
+@container (max-width: 640px) {
+  .fsum { grid-template-columns: minmax(0, 1fr); }
+  .fsum-side { border-left: 0 !important; border-top: 1px solid var(--tblr-border-color); }
+}
+.fsum-fact b { min-width: 0; overflow-wrap: anywhere; }
 .fsum-side { border-left: 1px solid var(--tblr-border-color); }
 .fsum-head { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tblr-secondary); margin-bottom: .6rem; }
 .fsum-bar { height: .5rem; margin-bottom: .8rem; }
@@ -686,6 +698,8 @@ body { overflow-wrap: break-word; }
         <span class="hdr-logo"><i class="ti ti-browser-check"></i></span>
         <span class="hdr-title">Browser Foreman</span>
       </a>
+      <!-- The workspace: switch, rename, manage (v1-ui.ts menu); it scopes Bookmarks, Open tabs and Timeline. -->
+      <div id="hdrWs"></div>
     </div>
     <!-- 2. Where you are: the three views -->
     <nav class="hdr-group hdr-views" aria-label="Views">
@@ -781,8 +795,13 @@ body { overflow-wrap: break-word; }
       <div class="dropdown">
         <button class="btn btn-icon" data-dd aria-label="More" data-tip="View, settings, help"><i class="ti ti-dots-vertical"></i></button>
         <div class="dropdown-menu dropdown-menu-end">
-          <!-- The app menu: help, then Settings. Undo, redo and the theme sit in the top bar; resets, deletes and assistant access live in Settings. -->
+          <!-- The app menu: the workspace, help, then Settings. Undo, redo and the theme sit in the top bar; resets, deletes and assistant access live in Settings. -->
           <!-- Expand / collapse all folders moved to a toggle in the Folders card header (2026-11-13). -->
+          <h6 class="dropdown-header ws-only">Workspace</h6>
+          <a class="dropdown-item ws-only" href="#" id="wsAllBtn"><i class="ti ti-stack-2 me-2"></i><span class="flex-fill">All workspaces…</span></a>
+          <a class="dropdown-item ws-only" href="#" id="wsRenameBtn"><i class="ti ti-pencil me-2"></i><span class="flex-fill">Rename this workspace…</span></a>
+          <a class="dropdown-item ws-only" href="#" id="wsNotesBtn"><i class="ti ti-notes me-2"></i><span class="flex-fill">Notes…</span></a>
+          <div class="dropdown-divider ws-only"></div>
           <h6 class="dropdown-header">Help</h6>
           <a class="dropdown-item" href="#" id="helpBtn"><i class="ti ti-help-circle me-2"></i><span class="flex-fill">Help</span><kbd>F1</kbd></a>
           <a class="dropdown-item" href="#" id="shortcutsBtn"><i class="ti ti-keyboard me-2"></i><span class="flex-fill">Keyboard shortcuts</span><kbd>?</kbd></a>

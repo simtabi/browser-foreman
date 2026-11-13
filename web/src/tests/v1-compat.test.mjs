@@ -19,7 +19,7 @@ const call = async (method, path, body) => {
   if (path === "tabs/snapshots/2026-11-12_090000") return { at: "t", reason: "auto", state: { browsers: [{ browser: "Safari" }], summary: { tabs: 1 } } };
   if (path === "extension/status") return { extensions: [{ name: "extension:Safari" }] };
   if (path === "extension/commands") return { command: { id: "cmd_1" } };
-  if (path === "tabs/stored") return { snapshots: 240, incognito_pages: 3 };
+  if (path.startsWith("tabs/stored")) return { snapshots: 240, incognito_pages: 3 };
   if (path === "linkchecks") return { running: null, runs: [{ id: "lc_1", state: "done", done: true, total: 8, checked: 8, newly_broken: 2, fixed: 0, started: "s", ended: "e" }] };
   return { passthrough: path };
 };
@@ -33,6 +33,12 @@ assert.equal(a.body.system_default, "Safari");
 // Snapshot settings: only those four keys reach PUT preferences, whatever else is sent.
 a = await run("POST", "snapshot-settings", "", { snapshot_width: 1440, snapshot_height: 900, autosave: false });
 assert.equal(calls.at(-1), 'PUT preferences {"snapshot_width":1440,"snapshot_height":900}');
+
+// Tab reads name the workspace, so the server answers from its pool.
+await run("GET", "tabs/timeline", "days=7", undefined);
+assert.equal(calls.at(-1), "GET tabs/timeline?days=7&workspace=main");
+await run("GET", "tabs/snapshots", "", undefined);
+assert.equal(calls.at(-1), "GET tabs/snapshots?workspace=main");
 
 // The Open tabs panel's counts come from tabs/stored (they read 0 before).
 a = await run("GET", "tabs/status", "", undefined);
