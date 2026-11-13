@@ -10,7 +10,8 @@ straight in, and a workspace written back into its bookmarks.
 make extension
 ```
 
-That builds `web/dist/extension/chromium`, `firefox` and `safari`. Installing is yours to do, in each browser:
+That builds `web/dist/extension/chromium`, `firefox` and `safari`, each with its icons (the web interface's logo
+mark, drawn at 16, 32, 48 and 128 pixels by the build). Installing is yours to do, in each browser:
 
 | Browser | Load it |
 |---|---|
@@ -40,7 +41,9 @@ revokes it. The extension only talks to a server on this computer (`127.0.0.1` o
   minutes after each report, that browser is not read through automation, and browsers automation cannot read
   (Firefox) appear too.
 - **Commands.** The server can ask it to open links, as tabs or as one named tab group
-  (`POST /api/v1/extension/commands`, owner). Where a browser has no tab groups, the links open in a new window.
+  (`POST /api/v1/extension/commands`, owner). Where a browser has no tab groups, the links open in a new window. In
+  the web interface, opening a folder's links *one window per folder* opens each folder as a tab group named after
+  it in a browser whose extension is connected, and as a window of its own elsewhere.
 - **Read bookmarks.** *Read this browser's bookmarks into Browser Foreman* takes the browser's whole bookmark tree
   into a workspace (`<browser>-live`), as one history entry. Each item keeps the browser's own id.
 - **Write a workspace back.** Choose a workspace read from this browser and edited, see exactly what would change

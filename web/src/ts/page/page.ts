@@ -1304,8 +1304,10 @@ async function openLinks(how, ids = targetIds(), confirmed = false, browser = nu
     if (how === "grouped") for (const id of ids) { const u = ITEM.get(id).u; if (!isWeb(u)) continue; const f = PARENT.get(id); const g = groups.get(f) || []; g.push(u); groups.set(f, g); }
     else groups.set(null, urls);
     let opened = 0;
-    for (const list of groups.values()) for (let k = 0; k < list.length; k += 200)
-      opened += (await tokenPost("api/open", {how: how === "grouped" ? "window" : how, urls: list.slice(k, k + 200), ...(browser ? {browser} : {})})).opened || 0;
+    // Grouped: the server opens each folder as a tab group named after it where the browser's extension is connected,
+    // else as a window of its own.
+    for (const [f, list] of groups) for (let k = 0; k < list.length; k += 200)
+      opened += (await tokenPost("api/open", {how: how === "grouped" ? "grouped" : how, urls: list.slice(k, k + 200), ...(f ? {title: nice(f.n)} : {}), ...(browser ? {browser} : {})})).opened || 0;
     toast(`Opened ${opened} in ${browser ? `new tabs in ${browser}` : how === "grouped" ? `${groups.size} new ${BROWSER_NAME} window${groups.size === 1 ? "" : "s"}, one per folder` : where}`, "success");
     return opened === urls.length;
   } catch (e) { toast(String(e.message || e), "danger", `${BROWSER_NAME} could not open them`); return false; }

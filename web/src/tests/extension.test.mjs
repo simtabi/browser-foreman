@@ -80,4 +80,10 @@ assert.throws(() => A.plan(browser(), { id: "root", kind: "folder", title: "", c
 // The browser's own top folders are never moved or removed, even when the workspace leaves one out.
 const keepTops = A.plan(browser(), { id: "root", kind: "folder", title: "", children: [{ id: "ext-1", kind: "folder", title: "Bookmarks bar", children: [] }] });
 ok(!keepTops.steps.some(s => s.id === "1" || s.id === "2"), "roots are left alone");
+// The icon: a real PNG of the asked size, mostly the mark's blue with white in the middle.
+const { iconPNG } = await import(join(here, "..", "extension-icon.mjs"));
+for (const size of [16, 128]) {
+  const png = iconPNG(size);
+  eq([png.subarray(1, 4).toString(), png.readUInt32BE(16), png.readUInt32BE(20)], ["PNG", size, size], `icon ${size}`);
+}
 console.log(`extension: ${n} checks passed`);

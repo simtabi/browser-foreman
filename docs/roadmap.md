@@ -73,9 +73,9 @@ pull request, with tests and docs.
 - Live tabs and tab groups, bookmark editing in place (no import or export round trip), all through the local API with
   a token the extension is paired with.
 
-- Done: pairing, tabs and tab groups, commands, reading and writing bookmarks in place. Not yet: store listings
-  (Chrome Web Store, Firefox Add-ons, App Store), extension icons, opening a folder as a tab group from the web
-  interface's own menus.
+- Done: pairing, tabs and tab groups, commands, reading and writing bookmarks in place, icons, and opening a folder
+  as a tab group from the web interface. Not yet: store listings (Chrome Web Store, Firefox Add-ons, App Store),
+  which need the owner's developer accounts.
 
 ## Phase 7 — Landing page and release (next)
 

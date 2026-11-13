@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, copyFileSync, writeFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { iconPNG } from "./extension-icon.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -16,7 +17,9 @@ const hosts = ["http://127.0.0.1/*", "http://localhost/*"];
 const base = {
   manifest_version: 3, name: "Browser Foreman", version,
   description: "Your tabs and bookmarks, kept by Browser Foreman on this computer.",
-  host_permissions: hosts, action: { default_popup: "popup.html", default_title: "Browser Foreman" },
+  host_permissions: hosts,
+  icons: { 16: "icons/16.png", 32: "icons/32.png", 48: "icons/48.png", 128: "icons/128.png" },
+  action: { default_popup: "popup.html", default_title: "Browser Foreman", default_icon: { 16: "icons/16.png", 32: "icons/32.png" } },
 };
 const manifests = {
   chromium: { ...base, permissions: ["tabs", "tabGroups", "bookmarks", "storage", "alarms"], background: { service_worker: "background.js" }, minimum_chrome_version: "116" },
@@ -32,6 +35,8 @@ for (const [target, manifest] of Object.entries(manifests)) {
       target: "es2022", minify: false, legalComments: "eof", logLevel: "warning" });
   }
   copyFileSync(join(src, "popup.html"), join(out, "popup.html"));
+  mkdirSync(join(out, "icons"), { recursive: true });
+  for (const size of [16, 32, 48, 128]) writeFileSync(join(out, "icons", `${size}.png`), iconPNG(size));
   writeFileSync(join(out, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
   console.log(`extension: dist/extension/${target}`);
 }

@@ -20,6 +20,16 @@ export function v1Settings(s: Record<string, any>): Record<string, unknown> {
   return out;
 }
 
+/** The browser to send a tab group to: the one asked for, else the first that opens links (the system default
+ *  resolved), provided its extension is connected; null otherwise. */
+async function groupTarget(asked: string | undefined, call: Call): Promise<string | null> {
+  const [b, st] = await Promise.all([call("GET", "browsers"), call("GET", "extension/status")]);
+  const paired = new Set<string>((st.extensions ?? []).map((x: { name: string }) => x.name.replace(/^extension:/, "")));
+  let name = asked ?? (b.open_with ?? [])[0];
+  if (name === "System default") name = b.default;
+  return name && paired.has(name) ? name : null;
+}
+
 const NOT_YET = (what: string): Answer => ({ status: 501, body: { error: `${what} is not available with this server yet` } });
 
 /** Answers one older call through the v1 routes, or null when it is not one this knows (it then goes out as is). */
@@ -78,7 +88,16 @@ export async function legacy(method: string, path: string, query: string, body: 
     case "open": {
       const urls: string[] = body?.urls ?? [];
       const browsers = body?.browser ? [body.browser] : body?.browsers;
-      const r = await call("POST", "open", { urls, how: body?.how ?? "tabs", ...(browsers ? { browsers } : {}) });
+      if (body?.how === "grouped") {
+        // A named tab group when the browser's extension is connected; otherwise a window of its own.
+        const target = await groupTarget(body?.browser, call);
+        if (target) {
+          await call("POST", "extension/commands", { browser: target, kind: "open-group", urls, title: String(body?.title ?? "").slice(0, 100) });
+          return ok({ opened: urls.length, grouped: true });
+        }
+      }
+      const how = body?.how === "grouped" ? "window" : body?.how ?? "tabs";
+      const r = await call("POST", "open", { urls, how, ...(browsers ? { browsers } : {}) });
       const done = (r.opened ?? []).filter((o: any) => o.ok).length;
       return ok({ opened: done * urls.length, results: r.opened });
     }

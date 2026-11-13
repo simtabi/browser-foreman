@@ -17,6 +17,8 @@ const call = async (method, path, body) => {
   if (path === "open") return { opened: [{ browser: "Safari", ok: true }, { browser: "Arc", ok: false }] };
   if (path === "tabs/close") return { closed: 2, skipped: ["https://x/: changed since it was read"], undo_snapshot: "2026-11-12_090000" };
   if (path === "tabs/snapshots/2026-11-12_090000") return { at: "t", reason: "auto", state: { browsers: [{ browser: "Safari" }], summary: { tabs: 1 } } };
+  if (path === "extension/status") return { extensions: [{ name: "extension:Safari" }] };
+  if (path === "extension/commands") return { command: { id: "cmd_1" } };
   if (path === "linkchecks") return { running: null, runs: [{ id: "lc_1", state: "done", done: true, total: 8, checked: 8, newly_broken: 2, fixed: 0, started: "s", ended: "e" }] };
   return { passthrough: path };
 };
@@ -30,6 +32,14 @@ assert.equal(a.body.system_default, "Safari");
 a = await run("POST", "open", "", { urls: ["https://go.dev/", "https://pkg.go.dev/"], how: "window", browser: "Safari" });
 assert.equal(a.body.opened, 2);
 assert.equal(calls.at(-1), 'POST open {"urls":["https://go.dev/","https://pkg.go.dev/"],"how":"window","browsers":["Safari"]}');
+
+// Grouped: the default (Safari) has a connected extension, so the folder becomes a named tab group there.
+a = await run("POST", "open", "", { urls: ["https://go.dev/"], how: "grouped", title: "Dev" });
+assert.equal(calls.at(-1), 'POST extension/commands {"browser":"Safari","kind":"open-group","urls":["https://go.dev/"],"title":"Dev"}');
+assert.equal(a.body.grouped, true);
+// A browser with no extension: a window per folder, as before.
+a = await run("POST", "open", "", { urls: ["https://go.dev/"], how: "grouped", title: "Dev", browser: "Arc" });
+assert.equal(calls.at(-1), 'POST open {"urls":["https://go.dev/"],"how":"window","browsers":["Arc"]}');
 
 a = await run("POST", "tabs/settings", "", { open_with: "Safari", interval: 600, tracked_browsers: ["Safari"], onboarded_browsers: true });
 assert.equal(calls.at(-1), 'PUT preferences {"open_with":["Safari"],"interval_seconds":600,"tracked":["Safari"]}', "older names map to v1; onboarded is dropped");
@@ -49,4 +59,4 @@ assert.equal(calls.at(-1), 'POST linkchecks {"workspace":"main"}');
 
 assert.equal((await run("POST", "tabs/delete", "", {})).status, 501, "unported features answer plainly");
 assert.equal(await run("GET", "ws/main/history", "", undefined), null, "unknown calls are not swallowed");
-console.log("v1-compat: 13 checks passed");
+console.log("v1-compat: 16 checks passed");
