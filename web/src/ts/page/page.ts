@@ -1314,12 +1314,11 @@ function build(keepView = false) {
     const keys = el("button", "btn btn-ghost-secondary btn-icon btn-sm"); keys.type = "button"; keys.setAttribute("aria-label", "Keyboard shortcuts"); keys.append(icon("ti-keyboard"));
     keys.dataset.tip = (readOnly() ? "" : "Drag to move. ") + "→ open · ← close · Space select · . menu. Click for every shortcut.";
     keys.onclick = () => openShortcuts();
-    // List or grid (thumbnail cards), kept in this browser.
-    const lay = el("div", "btn-group btn-group-sm layout-toggle"); lay.setAttribute("role", "group"); lay.setAttribute("aria-label", "Layout");
-    for (const [k, ic, tip] of [["list", "ti-list", "List"], ["grid", "ti-layout-grid", "Grid: thumbnails"]]) {
-      const b = el("button", "btn btn-icon" + (LAYOUT === k ? " active" : "")); b.type = "button"; b.dataset.tip = tip; b.setAttribute("aria-label", tip);
-      b.setAttribute("aria-pressed", String(LAYOUT === k)); b.append(icon(ic)); b.onclick = () => setLayout(k); lay.append(b);
-    }
+    // List or grid (thumbnail cards): one toggle showing the layout it switches to; the choice is kept in this browser.
+    const grid = LAYOUT === "grid", next = grid ? "list" : "grid", tip = grid ? "Show as a list" : "Show as a grid of thumbnails";
+    const lay = el("button", "btn btn-ghost-secondary btn-icon btn-sm layout-toggle"); lay.type = "button";
+    lay.dataset.tip = tip; lay.setAttribute("aria-label", tip); lay.setAttribute("aria-pressed", String(grid));
+    lay.append(icon(grid ? "ti-list" : "ti-layout-grid")); lay.onclick = () => setLayout(next);
     const parts = [lay, keys];
     if (readOnly()) { const b = el("span", "badge bg-yellow-lt"); b.append(icon("ti-lock", "me-1"), "Read-only"); b.dataset.tip = "These copies were merged into the bookmarks you kept. Open, copy or look them up here; to move bookmarks, use All bookmarks."; parts.unshift(b); }
     hint.replaceChildren(...parts);

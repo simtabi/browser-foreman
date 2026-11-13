@@ -150,6 +150,13 @@ ships.
 
 ### Changed
 
+- Docs to the Simtabi and laranail standard: new reference pages for workspaces, labels and page snapshots, new
+  recipes for rating and tagging and for keeping tabs per workspace, the web interface page brought up to date (the
+  layout, list and grid, labels, keyboard, menus, where things are kept), the REST API page listing the new routes
+  and fields, and a Go test (`internal/docscheck`) that fails when a page lacks its title or footer, the README index
+  misses a page or lists one that does not exist, or the README's sections are out of order.
+- List / grid is one toggle that shows the layout it switches to; on phones the header buttons wrap and bookmark
+  rows drop their date so titles have room.
 - Interface pass: your rating and tags are labelled rows of a bookmark's Details, and on its row they sit under the
   address instead of taking room from the title; letter tiles use a dark tint in dark mode; the Timeline's kinds are
   Tabler selectgroup pills; Open tabs shows placeholders while it loads; actions that delete or close are solid danger

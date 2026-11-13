@@ -607,7 +607,6 @@ body.layout-grid .app-main { grid-template-columns: minmax(0, 1.7fr) minmax(320p
 .bm-grid > .bm-row .bm-path, .bm-grid > .bm-row .bm-desc { display: none; }
 .bm-grid > .bm-row.sel { border-color: var(--tblr-primary); box-shadow: 0 0 0 1px var(--tblr-primary); }
 .bm-grid > .bm-row:hover { border-color: var(--tblr-border-color-dark, var(--tblr-border-color)); }
-.layout-toggle .btn.active { background: var(--tblr-bg-surface-secondary); color: var(--tblr-primary); }
 @media (max-width: 900px) { body.layout-grid .app-main { grid-template-columns: 1fr; } }
 /* Browser extension dialog (v1-ui.ts extensions): supported browsers as cards, the pairing code, the connected list. */
 .ext-section { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tblr-secondary); margin: 1.25rem 0 .6rem; }
@@ -643,6 +642,9 @@ body.layout-grid .app-main { grid-template-columns: minmax(0, 1.7fr) minmax(320p
 .range-menu { min-width: 12rem; }
 .range-menu.has-custom.show { display: flex; flex-wrap: nowrap; width: max-content; max-width: calc(100vw - 1rem); padding: 0; }
 @media (max-width: 575.98px) { .range-menu.has-custom.show { flex-wrap: wrap; } }
+/* Phones: the header's buttons wrap instead of running past the edge, and a bookmark row gives its title the room its
+   date took (the date is in the details). */
+@media (max-width: 575.98px) { .hdr-actions { flex-wrap: wrap; max-width: 100%; row-gap: .4rem; } #list .bm-row .bm-date { display: none; } }
 .range-menu.has-custom .range-quick { padding: .25rem 0; min-width: 11rem; }
 .range-options.cols-2 { display: grid; grid-template-columns: 1fr 1fr; min-width: 16rem; }
 .range-options .dropdown-item { white-space: nowrap; }
