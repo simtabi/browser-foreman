@@ -612,10 +612,19 @@ body.no-tree-dates #list .bm-date { display: none !important; }
 #list.grid > .bm-row.sel:not(.folder) { border-color: var(--tblr-primary); box-shadow: 0 0 0 1px var(--tblr-primary); }
 #list.grid > .bm-row:not(.folder):hover { border-color: var(--tblr-border-color-dark, var(--tblr-border-color)); }
 .layout-toggle:focus:not(:focus-visible), .layout-toggle:active { background: transparent; color: inherit; box-shadow: none; }  /* no dark block after a click */
+/* Buttons and menus show their focus ring for the keyboard only: a click, or a dialog focusing its safe choice, leaves
+   no outline or grey block behind. */
+.btn:focus:not(:focus-visible), .form-select:focus:not(:focus-visible), .dropdown-item:focus:not(:focus-visible) { box-shadow: none; }
+.btn:not(.btn-primary):not(.btn-danger):not([class*="btn-ghost"]):focus:not(:focus-visible) { background-color: var(--tblr-bg-surface); }
 /* Workspace looks (ts/wslook.ts): the badge, the menu rows, the Appearance picker, and the top bar's strip in the
    colour of the workspace you are in. */
 .app-head { box-shadow: inset 0 3px 0 var(--ws-accent, transparent); }
-.ws-badge { flex: none; } .ws-badge .ti { font-size: 1rem; } .avatar-sm.ws-badge .ti { font-size: 1.15rem; } .avatar-md.ws-badge .ti { font-size: 1.5rem; }
+.ws-badge, .dropdown-item > .ws-badge, .btn > .ws-badge { flex: 0 0 auto !important; } .ws-badge .ti { font-size: 1rem; }  /* menu rows and buttons stretch children; a badge keeps its size */
+.ws-badge.avatar-xs { width: 1.5rem; height: 1.5rem; } .ws-badge.avatar-sm { width: 2rem; height: 2rem; } .ws-badge.avatar-md { width: 2.75rem; height: 2.75rem; }
+/* The switcher is a pill in the workspace's colour, so you always see which one you are in. */
+#hdrWs #wsMenu > .btn { border-radius: 999px; padding-left: .3rem; padding-right: .75rem; border-color: color-mix(in srgb, var(--ws-accent, var(--tblr-border-color)) 45%, var(--tblr-border-color));
+  background: color-mix(in srgb, var(--ws-accent, transparent) 8%, var(--tblr-bg-surface)); }
+.ws-item.active { background: color-mix(in srgb, var(--ws-accent, var(--tblr-primary)) 10%, transparent); } .avatar-sm.ws-badge .ti { font-size: 1.15rem; } .avatar-md.ws-badge .ti { font-size: 1.5rem; }
 .ws-item { display: flex; align-items: center; }
 #wsMenu > .btn { display: inline-flex; align-items: center; }
 .ws-look-preview { display: flex; align-items: center; gap: .75rem; padding: .75rem; border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-lg); }
@@ -700,7 +709,8 @@ body { overflow-wrap: break-word; }
 /* Menus: a shortcut key sits at the right edge, never touching its label. */
 .dropdown-item > kbd { margin-left: auto; padding-left: .35rem; flex: none; }
 .dropdown-item > .flex-fill + kbd { margin-left: 1rem; }
-.dropdown-item .dd-note { margin-left: auto; padding-left: 1rem; text-align: right; white-space: nowrap; }
+.dropdown-item .dd-note { margin-left: auto; white-space: nowrap; font-weight: 500; }
+.dropdown-item:has(.dd-note) .flex-fill { padding-right: 1rem; }
 /* A menu button's chevron points up while its menu is open (aria-expanded, set by src/web/ts/menu.ts). */
 [data-dd] .ti-chevron-down, [aria-expanded] > .ti-chevron-down { transition: transform .15s ease; }
 [data-dd][aria-expanded="true"] .ti-chevron-down, .btn[aria-expanded="true"] > .ti-chevron-down { transform: rotate(180deg); }

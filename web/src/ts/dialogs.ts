@@ -65,7 +65,7 @@ export function askConfirm({ title, body, ok = "Continue", no = "Cancel", danger
     const done = (v: boolean) => { hideModal("#confirmModal"); yes.onclick = noBtn.onclick = null; document.removeEventListener("keydown", key, true); resolve(v); };
     yes.onclick = () => done(true); noBtn.onclick = () => done(false);
     document.addEventListener("keydown", key, true);
-    showModal("#confirmModal"); setTimeout(() => noBtn.focus(), 30);
+    showModal("#confirmModal"); setTimeout(() => noBtn.focus({ focusVisible: false } as FocusOptions), 30);  // Esc and Enter still work; no ring until the keyboard moves
   });
 }
 

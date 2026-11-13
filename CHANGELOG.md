@@ -139,6 +139,9 @@ ships.
 
 ### Fixed
 
+- Buttons and menus show a focus ring for the keyboard only, so a click (or a dialog focusing its safe choice, as the
+  welcome's *Not now*) leaves no outline or grey block; workspace badges keep their size in menus and buttons; the
+  welcome counts the workspace's own bookmarks and those in the Trash (it read 5,996 of 5,416).
 - The welcome text no longer calls the browser extension planned.
 - Merging the same file again no longer refills the Trash: copies it already holds as duplicates of the same kept
   bookmark are skipped and counted (`already_in_trash`). A test workspace merged ~60 times had 617,515 such copies.
@@ -153,6 +156,8 @@ ships.
 
 ### Changed
 
+- The workspace switcher is a pill tinted in the workspace's colour, and the Browsers menu shows each browser's state
+  as a pill: green with windows, grey when not running, amber when it needs attention.
 - List and grid switch instantly and keep the panes' widths: the grid is CSS on the same rows (nothing is rebuilt),
   and long lists lay out only what is near the screen (`content-visibility`).
 - Docs to the Simtabi and laranail standard: new reference pages for workspaces, labels and page snapshots, new

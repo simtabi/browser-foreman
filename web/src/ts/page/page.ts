@@ -555,7 +555,7 @@ addEventListener("resize", () => { if (tourAt >= 0) paintTour(); });
 // Welcome, shown once: what this is, how to get bookmarks in and out, and an offer of the tour.
 async function welcome() {
   const go = await askConfirm({title: `Welcome to ${APP.name}`, ok: "Take the 1-minute tour", no: "Not now", danger: false,
-    body: `${APP.name} keeps your bookmarks clean and your tabs safe. This build holds ${DATA.keep.length.toLocaleString()} of your bookmarks (from ${DATA.total.toLocaleString()}), checked and sorted into one structure built on your own folders, and Open tabs saves your browser windows so a crash never loses them. ` +
+    body: `${APP.name} keeps your bookmarks clean and your tabs safe. This workspace holds ${liveItems().length.toLocaleString()} of your bookmarks, checked and sorted into one structure built on your own folders (${trashCount().toLocaleString()} more wait in the Trash), and Open tabs saves your browser windows so a crash never loses them. ` +
       "Review and edit here; nothing changes in your browser until you download the import file and import it, or write it back with the browser extension (Browsers › Browser extensions…)."});
   try { localStorage.setItem(STORE + ":onboarded", "1"); } catch {}
   if (go) tour(0);
@@ -1629,8 +1629,10 @@ const TRASH_WIN = new TrashDialog({
 });
 function openTrash() { if (readOnly()) return toast("Switch to the Bookmarks tree to see the Trash"); TRASH_WIN.open(); }
 on("#trashBtn", openTrash);
+// Bookmarks in the Trash (folders count what they hold).
+function trashCount() { const bin = trashFolder(); return bin ? descendants(bin).length : 0; }
 function paintTrashBadge() {
-  const bin = trashFolder(), n = bin ? descendants(bin).length : 0, b = $("#trashBadge");
+  const n = trashCount(), b = $("#trashBadge");
   if (b) b.textContent = n ? n.toLocaleString() : "";
 }
 
@@ -1909,6 +1911,12 @@ const SCOPE = new BrowserScope(STORE + ":scope").onChange(() => {
 const inScope = name => SCOPE.has(name);
 let LIVE_STATE = null;  // the last live read, so the Browsers menu can say which browsers are running
 window.BF_IN_SCOPE = inScope;  // the clean-up panel (components.ts) asks the same question
+// A browser's state in the Browsers menu as a pill: green while it has windows, grey when it is not running, amber
+// for anything that needs attention (not tracked, cannot be read).
+function stateBadge(note) {
+  const tone = /\bwindow/.test(note) ? "bg-green-lt" : /not running/.test(note) ? "bg-secondary-lt" : "bg-yellow-lt";
+  return el("span", `dd-note badge ${tone}`, note);
+}
 function paintScope() {
   let wrap = Dom.one("scope");
   if (!wrap) { wrap = Dom.write(el("div", "dropdown"), "scope", ""); $("#bkBrowsers")?.before(wrap); }
@@ -1918,7 +1926,7 @@ function paintScope() {
   b.dataset.tip = "Which browsers to show (all, some or none); tracking, opening links and access";
   const m = el("div", "dropdown-menu dropdown-menu-end");
   const row = (label, checked, fn, mixed = false, note = "", ic = null) => { const l = el("label", "dropdown-item d-flex align-items-center gap-2"); const c = el("input", "form-check-input m-0"); c.type = "checkbox"; c.checked = checked; c.indeterminate = mixed;
-    c.onchange = () => fn(c.checked); l.append(c, ...(ic ? [icon(ic)] : []), el("span", "flex-fill", label)); if (note) l.append(el("span", "dd-note text-secondary small", note)); l.onclick = e => e.stopPropagation(); m.append(l); };
+    c.onchange = () => fn(c.checked); l.append(c, ...(ic ? [icon(ic)] : []), el("span", "flex-fill", label)); if (note) l.append(stateBadge(note)); l.onclick = e => e.stopPropagation(); m.append(l); };
   if (names.length) {
     m.append(el("h6", "dropdown-header", "Show tabs and history from"));
     row("All browsers", SCOPE.isAll, on => SCOPE.setAll(on), !SCOPE.isAll && !SCOPE.isNone);
