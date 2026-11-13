@@ -98,14 +98,17 @@ func pages(st State) map[pageKey]string {
 }
 
 // Timeline lists the snapshots of the last `days` days, oldest first, each with what opened and closed since the
-// one before (compared by address, per mode; private pages appear only where they were kept). At most `limit` pages
-// are listed per step; the counts are complete.
+// one before (compared by address, per mode; private pages appear only where they were kept). days 0 means every
+// snapshot kept. At most `limit` pages are listed per step; the counts are complete.
 func (s *Service) Timeline(ctx context.Context, days int, names []string, limit int) ([]Step, error) {
 	all, err := s.Data.TabSnapshots(ctx, 0)
 	if err != nil {
 		return nil, err
 	}
-	since := s.Now().Add(-time.Duration(days) * 24 * time.Hour)
+	var since time.Time // days 0: no lower bound
+	if days > 0 {
+		since = s.Now().Add(-time.Duration(days) * 24 * time.Hour)
+	}
 	// all is newest first: walk it backwards, starting from the last snapshot before the window.
 	start := len(all) - 1
 	for start > 0 && all[start-1].At.Before(since) {

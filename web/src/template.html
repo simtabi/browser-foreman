@@ -389,9 +389,20 @@ body.no-tree-thumbs .bm-fav { position: static; padding: 0; box-shadow: none; ba
    content below it continues at the same rhythm instead of each block guessing its own top padding. */
 #info, #body { border-top: 0 !important; }
 .nav-browsers { height: 1.75rem; padding: 0 .6rem; font-size: .78rem; }
-.br-table { border: 1px solid var(--tblr-border-color); border-radius: var(--tblr-border-radius-lg); overflow: hidden; }
-.br-table th { white-space: nowrap; }
-.br-foot { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; padding: .6rem .85rem; border-top: 1px solid var(--tblr-border-color); background: var(--tblr-bg-surface-secondary); }
+/* Browsers dialog: borderless rows; the two switch columns line up under their headings. */
+.br-cols, .br-row { display: grid; grid-template-columns: 1.75rem minmax(0, 1fr) 5.5rem 5.5rem; align-items: center; column-gap: .75rem; }
+.br-cols { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tblr-secondary); padding: 0 0 .4rem; }
+.br-cols > span:not(:first-child) { text-align: center; }
+.br-row { padding: .85rem 0; }
+.br-cols > span:first-child { grid-column: 1 / 3; }
+.br-row + .br-row { border-top: 1px solid var(--tblr-border-color-translucent, var(--tblr-border-color)); }
+.br-row > .form-switch { justify-self: center; padding-left: 0; } .br-row > .form-switch .form-check-input { float: none; margin: 0; }
+.br-row.is-muted .br-main > .fw-medium { color: var(--tblr-secondary); }
+.br-ico { width: 1.75rem; height: 1.75rem; object-fit: contain; align-self: start; margin-top: .1rem; }
+.br-badges { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .4rem; }
+.br-badges .badge { font-weight: 500; }
+.br-section { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--tblr-border-color-translucent, var(--tblr-border-color)); }
+.br-head { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tblr-secondary); margin-bottom: .6rem; }
 .cl-groups { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .75rem; }
 .cl-group { display: inline-flex; align-items: center; gap: .4rem; border: 1px solid var(--tblr-border-color); background: transparent; border-radius: 999px; padding: .3rem .7rem; font-size: .8rem; color: var(--tblr-body-color); }
 .cl-group.active { border-color: var(--tblr-primary); color: var(--tblr-primary); background: var(--tblr-primary-lt, rgba(32,107,196,.08)); }
@@ -562,10 +573,11 @@ body.no-tree-dates #list .bm-date { display: none !important; }
 .tb-pick:has(select:focus-visible) { box-shadow: 0 0 0 .25rem rgba(var(--tblr-primary-rgb), .25); }
 .tb-pick.is-set { border-color: var(--tblr-primary); }
 .tb-pick.is-set b { color: var(--tblr-primary); }
-.date-menu { min-width: 16rem; }
-.date-presets { display: grid; grid-template-columns: 1fr 1fr; }
-.date-presets .dropdown-item { white-space: nowrap; }
-.date-presets .dropdown-item.active { font-weight: 500; }
+/* RangePicker (ts/rangepick.ts): the period menu, the same everywhere. */
+.range-menu { min-width: 12rem; }
+.range-options.cols-2 { display: grid; grid-template-columns: 1fr 1fr; min-width: 16rem; }
+.range-options .dropdown-item { white-space: nowrap; }
+.range-options .dropdown-item.active { font-weight: 500; }
 .date-custom { padding: .25rem 1rem .75rem; }
 @media (max-width: 991px) { .tb-sep { display: none; } .tb-label { width: 100%; } }
 #jobPanel { position: fixed; right: 1rem; bottom: 1rem; width: 380px; z-index: 1085; }
@@ -648,36 +660,49 @@ body { overflow-wrap: break-word; }
               <p class="text-secondary small" x-show="onboarding">These are the browsers installed on this Mac. Tick the ones whose open tabs should be saved, and choose which ones open links: one, some, or all at once. You can change this any time from the Browsers button.</p>
               <div class="pane-note" x-show="loading"><span class="spinner-border spinner-border-sm"></span><span>Looking for installed browsers…</span></div>
               <div class="pane-note text-danger" x-show="error" x-text="error"></div>
-              <!-- One row per browser; one column per thing Browser Foreman does with it. -->
-              <div class="table-responsive br-table" x-show="!loading">
-                <table class="table table-vcenter card-table mb-0">
-                  <thead><tr><th>Browser</th><th class="text-center" data-tip="Save this browser's open tabs">Track tabs</th><th class="text-center" data-tip="Links you open from here open in every ticked browser at once">Opens links</th><th>Bookmarks</th><th>History</th></tr></thead>
-                  <tbody>
-                    <template x-for="b in installed" :key="b.name">
-                      <tr :class="!readable(b) && 'text-secondary'">
-                        <td><div class="fw-medium d-flex align-items-center gap-2"><img class="browser-ico" :src="'api/v1/browsers/icon?name=' + encodeURIComponent(b.name)" alt="" width="20" height="20" @error="$el.style.visibility = 'hidden'"><span x-text="b.name"></span></div><div class="text-secondary small" x-text="can(b)"></div></td>
-                        <td class="text-center"><label class="form-check form-switch d-inline-block m-0" :data-tip="readable(b) ? 'Save this browser\'s open tabs' : 'This browser gives no way to read its tabs'">
-                          <input type="checkbox" class="form-check-input" :checked="isTracked(b.name)" :disabled="!readable(b)" @change="toggle(b)" :aria-label="'Track tabs in ' + b.name"></label></td>
-                        <td class="text-center"><input type="checkbox" class="form-check-input" :checked="opensIn(b.name)" @change="toggleOpen(b.name); $event.target.checked = opensIn(b.name)" :aria-label="b.name + ' opens links'"></td>
-                        <td><span class="small" :class="bookmarks(b.name).cls" :data-tip="bookmarks(b.name).tip" x-text="bookmarks(b.name).label"></span></td>
-                        <td><span class="small" :class="history(b.name).cls" x-text="history(b.name).label"></span></td>
-                      </tr>
-                    </template>
-                  </tbody>
-                </table>
-                <div class="text-secondary small p-3" x-show="!installed.length">No supported browser was found in Applications.</div>
-                <div class="br-foot" x-show="installed.length">
-                  <label class="m-0 d-inline-flex align-items-center gap-2" data-tip="Links open wherever macOS opens web links (System Settings › Desktop &amp; Dock › Default web browser)"><input type="checkbox" class="form-check-input m-0" :checked="useSystem" @change="setUseSystem($event.target.checked)"><span class="small" x-text="'Use the ' + systemLabel.replace('System default', 'system default browser')"></span></label>
-                  <label class="m-0 d-inline-flex align-items-center gap-2" x-show="installed.length > 1"><input type="checkbox" class="form-check-input m-0" :checked="allOpen" @change="openInAll($event.target.checked)"><span class="small">Open links in every browser at once</span></label>
-                  <span class="ms-auto d-inline-flex gap-2">
-                    <button type="button" class="btn btn-sm" @click="importBookmarks()"><i class="ti ti-file-import me-1"></i>Import bookmarks…</button>
-                    <button type="button" class="btn btn-sm" x-show="Object.values(historyOf).includes('blocked') || profiles.some(p => !p.readable)" @click="fixHistory()" data-tip="macOS keeps browser bookmark and history files behind Full Disk Access"><i class="ti ti-shield-lock me-1"></i>Allow reading (Full Disk Access)…</button>
-                  </span>
+              <!-- One row per browser: name and what it allows on the left, its two switches on the right. No table rules:
+                   rows are separated by space and one hairline. -->
+              <div class="br-list" x-show="!loading && installed.length">
+                <div class="br-cols"><span></span><span>Track tabs</span><span>Opens links</span></div>
+                <template x-for="b in installed" :key="b.name">
+                  <div class="br-row" :class="!readable(b) && 'is-muted'">
+                    <img class="br-ico" :src="'api/v1/browsers/icon?name=' + encodeURIComponent(b.name)" alt="" width="28" height="28" @error="$el.style.visibility = 'hidden'">
+                    <div class="br-main">
+                      <div class="fw-medium" x-text="b.name"></div>
+                      <div class="text-secondary small" x-text="can(b)"></div>
+                      <div class="br-badges">
+                        <span class="badge" :class="bookmarks(b.name).cls.replace('text-', 'bg-') + '-lt'" :data-tip="bookmarks(b.name).tip"><i class="ti ti-bookmarks me-1"></i>Bookmarks: <span x-text="bookmarks(b.name).label"></span></span>
+                        <span class="badge" :class="history(b.name).cls.replace('text-', 'bg-') + '-lt'"><i class="ti ti-history me-1"></i>History: <span x-text="history(b.name).label"></span></span>
+                      </div>
+                    </div>
+                    <label class="form-check form-switch m-0" :data-tip="readable(b) ? 'Save this browser\'s open tabs' : 'This browser gives no way to read its tabs'">
+                      <input type="checkbox" class="form-check-input" :checked="isTracked(b.name)" :disabled="!readable(b)" @change="toggle(b)" :aria-label="'Track tabs in ' + b.name"></label>
+                    <label class="form-check form-switch m-0" data-tip="Links you open from here open in every browser switched on">
+                      <input type="checkbox" class="form-check-input" :checked="opensIn(b.name)" @change="toggleOpen(b.name); $event.target.checked = opensIn(b.name)" :aria-label="b.name + ' opens links'"></label>
+                  </div>
+                </template>
+              </div>
+              <div class="text-secondary small" x-show="!loading && !installed.length">No supported browser was found in Applications.</div>
+              <!-- How links open: the two choices that are not per browser. -->
+              <div class="br-section" x-show="installed.length">
+                <div class="br-head">Opening links</div>
+                <label class="form-check form-switch mb-2" data-tip="System Settings › Desktop &amp; Dock › Default web browser"><input type="checkbox" class="form-check-input" :checked="useSystem" @change="setUseSystem($event.target.checked)"><span class="form-check-label" x-text="'Use the ' + systemLabel.replace('System default', 'system default browser')"></span></label>
+                <label class="form-check form-switch mb-0" x-show="installed.length > 1"><input type="checkbox" class="form-check-input" :checked="allOpen" @change="openInAll($event.target.checked)"><span class="form-check-label">Open links in every browser at once</span></label>
+              </div>
+              <!-- Only when macOS blocks reading bookmark or history files. -->
+              <div class="alert alert-warning mt-3 mb-0" role="alert" x-show="Object.values(historyOf).includes('blocked') || profiles.some(p => !p.readable)">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                  <i class="ti ti-shield-lock alert-icon"></i>
+                  <div class="flex-fill"><div class="alert-title">macOS blocks reading bookmarks and history</div><div class="text-secondary small">Give Browser Foreman Full Disk Access, or export from the browser and import that file.</div></div>
+                  <button type="button" class="btn btn-sm" @click="fixHistory()">Allow reading…</button>
                 </div>
               </div>
-              <p class="text-secondary small mt-3 mb-0">Reading tabs uses macOS Automation; the first read of each browser makes macOS ask you once. Firefox and similar browsers can't be read this way yet; the browser extension will cover them.</p>
+              <p class="text-secondary small mt-3 mb-0">Reading tabs uses macOS Automation; the first read of each browser makes macOS ask you once. Firefox and similar browsers are read from their session files.</p>
             </div>
-            <div class="modal-footer"><button type="button" class="btn" @click="hide()" x-text="onboarding ? 'Later' : 'Cancel'"></button><button type="button" class="btn btn-primary" @click="save()">Save</button></div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-ghost-secondary me-auto" x-show="installed.length" @click="importBookmarks()"><i class="ti ti-file-import me-1"></i>Import bookmarks…</button>
+              <button type="button" class="btn" @click="hide()" x-text="onboarding ? 'Later' : 'Cancel'"></button><button type="button" class="btn btn-primary" @click="save()">Save</button>
+            </div>
           </div></div>
         </div>
         <div class="modal-backdrop fade show" x-show="open" x-cloak></div>
@@ -687,6 +712,8 @@ body { overflow-wrap: break-word; }
         <button type="button" class="btn btn-icon" id="undo" data-brofo-action="undo" aria-label="Undo"><i class="ti ti-arrow-back-up"></i></button>
         <button type="button" class="btn btn-icon" id="redo" data-brofo-action="redo" aria-label="Redo"><i class="ti ti-arrow-forward-up"></i></button>
       </div>
+      <!-- Expand / collapse all in the view you are in (FoldCenter, ts/fold.ts paints it; hidden where nothing folds). -->
+      <button type="button" class="btn btn-icon" id="foldBtn" hidden></button>
       <!-- Shows the theme it switches to, as Tabler's own toggle does: a moon in light mode, a sun in dark. -->
       <button type="button" class="btn btn-icon theme-toggle" id="themeBtn" aria-label="Switch dark / light">
         <i class="ti ti-moon theme-to-dark" data-tip="Switch to dark"></i><i class="ti ti-sun theme-to-light" data-tip="Switch to light"></i>
@@ -739,18 +766,12 @@ body { overflow-wrap: break-word; }
       <div class="tb-row">
         <span class="tb-label">View</span>
         <div class="tb-fields" id="view"></div>
-        <!-- When bookmarks were added: one dropdown holding the presets and a custom range, so the row stays one line. -->
-        <div class="dropdown" id="dates">
-          <button class="btn btn-sm tb-pick" data-dd aria-expanded="false" id="dateBtn"><i class="ti ti-calendar-time text-secondary"></i><span class="tb-pick-label">Added</span><b id="dateLabel">Any time</b><i class="ti ti-chevron-down text-secondary"></i></button>
-          <div class="dropdown-menu date-menu" id="datePresets">
-            <h6 class="dropdown-header">Bookmarks added…</h6>
-            <div class="date-presets" id="datePresetList"></div>
-            <div class="dropdown-divider"></div>
-            <h6 class="dropdown-header">Custom range</h6>
-            <div class="date-custom">
-              <label class="form-label small mb-1" for="dFrom">From</label><input type="datetime-local" class="form-control form-control-sm" id="dFrom">
-              <label class="form-label small mb-1 mt-2" for="dTo">To</label><input type="datetime-local" class="form-control form-control-sm" id="dTo">
-            </div>
+        <!-- When bookmarks were added: a RangePicker (ts/rangepick.ts) with the presets and a custom range. -->
+        <div id="dates"></div>
+        <div class="d-none" id="dateCustom">
+          <div class="date-custom">
+            <label class="form-label small mb-1" for="dFrom">From</label><input type="datetime-local" class="form-control form-control-sm" id="dFrom">
+            <label class="form-label small mb-1 mt-2" for="dTo">To</label><input type="datetime-local" class="form-control form-control-sm" id="dTo">
           </div>
         </div>
         <button class="btn btn-sm btn-ghost-secondary ms-auto" id="clearFilters" disabled><i class="ti ti-filter-off me-1"></i>Clear filters</button>
@@ -761,10 +782,7 @@ body { overflow-wrap: break-word; }
 
 <section id="timelineView" class="timeline-view" hidden aria-label="Timeline">
   <div class="tl-top">
-    <div class="btn-group" role="group" aria-label="Range" id="tlRange" data-brofo-timeline="range">
-      <button class="btn btn-sm" data-days="1">24 hours</button><button class="btn btn-sm" data-days="7">7 days</button>
-      <button class="btn btn-sm" data-days="30">30 days</button><button class="btn btn-sm" data-days="365">A year</button><button class="btn btn-sm" data-days="0">All</button>
-    </div>
+    <div id="tlRange" data-brofo-timeline="range"></div>
     <div class="tl-kinds" id="tlKinds" data-brofo-timeline="kinds"></div>
     <div class="input-icon ms-auto tl-search d-none"><span class="input-icon-addon"><i class="ti ti-search"></i></span>
       <input type="search" class="form-control form-control-sm" id="tlQ" data-brofo-timeline="query" placeholder="Search the timeline…" aria-label="Search the timeline"></div>

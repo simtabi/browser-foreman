@@ -6,6 +6,8 @@ import { Dom } from "../dom";
 import { PlaceMemory } from "../place";
 import { HistoryAccessPanel } from "../history";
 import { Pager } from "../pager";
+import { RangePicker } from "../rangepick";
+import { FoldCenter } from "../fold";
 import { ViewSearch } from "../search";
 import { UndoCenter } from "../undo";
 import { Poller } from "../poller";
@@ -183,6 +185,14 @@ const UNDO = new UndoCenter()
     undo, redo})
   .register("tabs", {undoLabel: () => tabHistory.undoLabel, redoLabel: () => tabHistory.redoLabel, undo: () => tabHistory.undo(), redo: () => tabHistory.redo()});
 const UNDO_LABEL = k => UNDO.label(k);
+// Expand / collapse all: one header button for every view (ts/fold.ts). Open tabs registers itself in TABS.
+let FOLD = null;
+function setupFold() {
+  FOLD = new FoldCenter($("#foldBtn")).register("bookmarks", {
+    anyOpen: () => rows.some(r => r.kind === "folder" && !r.trash) ? rows.some(r => r.kind === "folder" && !r.trash && r.open) : null,
+    expand: () => { expandAllFolders(); list.focus(); }, collapse: () => { collapseAllFolders(); list.focus(); }})
+    .register("tabs", TABS.fold).show(view_);
+}
 addEventListener("bf:undo", () => UNDO.refresh());
 document.addEventListener("click", e => {
   const b = e.target.closest?.("[data-brofo-undo] [data-brofo-action]"); if (!b) return;
@@ -326,11 +336,11 @@ function buildToolbar() {
   $("#dFrom").value = view.from; $("#dTo").value = view.to;
   $("#dFrom").onchange = () => { datePreset = ""; setView("from", $("#dFrom").value); sel = 0; build(); };
   $("#dTo").onchange = () => { datePreset = ""; setView("to", $("#dTo").value); sel = 0; build(); };
-  for (const [label, fn] of DATE_PRESETS) {
-    const a = el("a", "dropdown-item", label); a.href = "#"; a.dataset.preset = label;
-    a.onclick = e => { e.preventDefault(); closeDropdowns(); setDates(...fn(), label); };
-    $("#datePresetList").append(a);
-  }
+  const custom = $("#dateCustom").firstElementChild; $("#dateCustom").remove();
+  DATES = new RangePicker({label: "Added", heading: "Bookmarks added…", defaultKey: "Any time", value: "Any time",
+    options: DATE_PRESETS.map(([label]) => ({key: label, label})), custom: {heading: "Custom range", body: custom},
+    onPick: key => { const p = DATE_PRESETS.find(x => x[0] === key); if (p) setDates(...p[1](), key); }});
+  $("#dates").replaceWith(DATES.el); DATES.el.id = "dates";
   $("#clearFilters").onclick = clearFilters;
   paintChips();
 }
@@ -348,15 +358,15 @@ const DATE_PRESETS = [
 ];
 function setDates(from, to, preset = "") { datePreset = from || to ? preset : ""; setView("from", iso(from)); setView("to", iso(to)); $("#dFrom").value = view.from; $("#dTo").value = view.to; sel = 0; build(); }
 // The Added picker's label: the preset chosen, else the range typed, else "Any time".
-let datePreset = "";
+let datePreset = "", DATES = null;
 function paintDates() {
+  if (!DATES) return;
   const day = v => v ? new Date(v).toLocaleDateString(undefined, {day: "numeric", month: "short", year: "numeric"}) : "";
   const f = day(view.from), t = day(view.to);
-  $("#dateLabel").textContent = datePreset || (f && t ? `${f} – ${t}` : f ? `Since ${f}` : t ? `Before ${t}` : "Any time");
-  $("#dateBtn").classList.toggle("is-set", !!(view.from || view.to));
-  for (const a of $("#datePresetList").children) a.classList.toggle("active", !!datePreset && a.dataset.preset === datePreset);
-}
-function setFilter(k) { filter = k; paintChips(); marked.clear(); sel = 0; build(); list.focus(); if (!restoringPlace) PLACE.update({filter: k === "all" ? "" : k}); }
+  if (datePreset) DATES.set(datePreset);
+  else if (!f && !t) DATES.set("Any time");
+  else DATES.set("", f && t ? `${f} – ${t}` : f ? `Since ${f}` : `Before ${t}`);
+}function setFilter(k) { filter = k; paintChips(); marked.clear(); sel = 0; build(); list.focus(); if (!restoringPlace) PLACE.update({filter: k === "all" ? "" : k}); }
 // The chips count what the tree holds now, outside the Trash (moved, renamed, trashed or deleted bookmarks included);
 // they used to count the original set, so "Dead links 470" stayed after every dead link had been deleted.
 function paintChipCounts() {
@@ -510,7 +520,7 @@ const SEARCH = new ViewSearch($("#hq")).view("bookmarks", $("#q"), "Search bookm
 function setAppView(v, {restoring = false} = {}) {
   view_ = v; closeDropdowns(); hideTip();
   if (!restoring) PLACE.update({view: v}, {push: true});
-  SEARCH.show(v); UNDO.show(v);
+  SEARCH.show(v); UNDO.show(v); FOLD?.show(v);
   for (const b of Dom.all("view")) { const on = Dom.read(b, "view") === v; b.classList.toggle("active", on); b.setAttribute("aria-selected", on); }
   document.body.classList.toggle("view-tabs", v === "tabs");
   $("#tabsView").hidden = v !== "tabs"; $("#timelineView").hidden = v !== "timeline";
@@ -731,7 +741,7 @@ const TABS = (() => {
     const hidden = every.length - wins.length;
     const match = t => !q || (t.title + " " + t.url).toLowerCase().includes(q);
     for (const x of wins) { x.missing = isLive ? [] : (x.w.tabs || []).filter(t => /^https?:/i.test(t.url) && !now.has(t.url)); if (x.missing.length) missingAll.push(x); }
-    shown = wins;
+    shown = wins; queueMicrotask(() => FOLD?.refresh());
     const norm = sortWins(wins.filter(x => !x.inc)), inc = sortWins(wins.filter(x => x.inc)), count = xs => xs.reduce((n, x) => n + cnt(x), 0);
     // Summary strip: what is in this moment, normal and incognito apart.
     const strip = el("div", "tabs-strip");
@@ -897,7 +907,13 @@ const TABS = (() => {
   addEventListener("bf:settings", () => LIVE.every(SET.liveMs));
   // The snapshot to show when the view next opens (a restored place); select() falls back to live if it is gone.
   const prefer = id => { cur = id; };
-  return {open, snapNow, select, prefer};
+  // For the header's Expand / collapse all (ts/fold.ts): the windows drawn now.
+  const fold = {
+    anyOpen: () => shown.length ? shown.some(x => !collapsed.has(wkey(x))) : null,
+    expand: () => { shown.forEach(x => collapsed.delete(wkey(x))); setPref("collapsed", [...collapsed]); paint(); },
+    collapse: () => { shown.forEach(x => collapsed.add(wkey(x))); setPref("collapsed", [...collapsed]); paint(); },
+  };
+  return {open, snapNow, select, prefer, fold};
 })();
 // ---------- timeline: tab snapshots, edits and bookmarks added, as one feed and two charts ----------
 // The Timeline view lives in src/web/ts/views/timeline.ts (typed); this hands it what it needs from the page.
@@ -1246,13 +1262,7 @@ function build(keepView = false) {
     const keys = el("button", "btn btn-ghost-secondary btn-icon btn-sm"); keys.type = "button"; keys.setAttribute("aria-label", "Keyboard shortcuts"); keys.append(icon("ti-keyboard"));
     keys.dataset.tip = (readOnly() ? "" : "Drag to move. ") + "→ open · ← close · Space select · . menu. Click for every shortcut.";
     keys.onclick = () => openShortcuts();
-    // One toggle: collapses while any folder is open, expands when every one is closed.
-    const anyOpen = rows.some(r => r.kind === "folder" && !r.trash && r.open);
-    const fold = el("button", "btn btn-ghost-secondary btn-icon btn-sm"); fold.type = "button"; fold.id = "foldAll";
-    fold.setAttribute("aria-label", anyOpen ? "Collapse all folders" : "Expand all folders"); fold.setAttribute("aria-pressed", String(!anyOpen));
-    fold.append(icon(anyOpen ? "ti-chevrons-up" : "ti-chevrons-down")); fold.dataset.tip = anyOpen ? "Collapse all folders (-)" : "Expand all folders";
-    fold.onclick = () => { if (anyOpen) collapseAllFolders(); else expandAllFolders(); list.focus(); };
-    const parts = [fold, keys];
+    const parts = [keys];
     if (readOnly()) { const b = el("span", "badge bg-yellow-lt"); b.append(icon("ti-lock", "me-1"), "Read-only"); b.dataset.tip = "These copies were merged into the bookmarks you kept. Open, copy or look them up here; to move bookmarks, use All bookmarks."; parts.unshift(b); }
     hint.replaceChildren(...parts);
   }
@@ -1260,7 +1270,7 @@ function build(keepView = false) {
   tt.replaceChildren(readOnly() ? "Removed duplicates" : grouped() ? "Grouped by " + $("#v-group").selectedOptions[0].text.toLowerCase() : "Folders",
     el("span", "badge bg-secondary-lt ms-2", total.toLocaleString()));
   sel = Math.min(sel, Math.max(rows.length - 1, 0));
-  draw(); if (!keepView) show();
+  draw(); if (!keepView) show(); FOLD?.refresh();
 }
 
 // A row's element by its index in `rows` (separators sit between rows, so position in the list is not the index).
@@ -2304,6 +2314,7 @@ document.addEventListener("keydown", e => {
   KEY_ACTIONS[hit.action]();
 });
 
+setupFold();
 buildToolbar();
 summary();
 tipsFromTitles();

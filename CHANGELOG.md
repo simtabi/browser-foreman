@@ -112,8 +112,16 @@ ships.
   `Sessions/Session_*`), which never holds private windows. Firefox and Zen are read the same way on macOS.
 - `GET /api/v1/openapi.json`: the API as OpenAPI 3.1, kept in step with the routes by a test.
 
+### Fixed
+
+- The Timeline's All range showed no tab snapshots: `days=0` now means every snapshot kept.
+
 ### Changed
 
+- One period picker everywhere (`ts/rangepick.ts`): the Timeline's range buttons, Browser history's select and the
+  Added filter are the same compact dropdown. One Expand / Collapse all button (`ts/fold.ts`) sits beside Undo and
+  Redo and acts on the view you are in: folders in Bookmarks, windows in Open tabs. The Browsers dialog is borderless
+  rows with switches and status badges, a warning only when macOS blocks reading, and Import in the footer.
 - The View row is one line: Group by, Sort and Folders are compact pickers showing their value (outlined when not the
   default), and the two date-time fields and Presets became one Added dropdown with presets and a custom range. Clear
   filters sits at the end of that row and is disabled when nothing is filtered. Tree rows no longer show their letter

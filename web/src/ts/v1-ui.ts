@@ -6,6 +6,7 @@ import { askConfirm, askText, hideModal, showModal, toast } from "./dialogs";
 import { closeDropdowns } from "./menu";
 import { el, fmtDate, icon } from "./ui";
 import { DataTable, avatar, by, nameCell } from "./datatable";
+import { RangePicker } from "./rangepick";
 
 interface Info { id: string; name: string; head: number; notes?: string; locked?: boolean; archived?: boolean; deleted?: string; bookmarks?: number }
 interface Entry { seq: number; at: string; op: string; summary: string }
@@ -336,9 +337,9 @@ function install(W: V1): void {
   function browserHistory(): void {
     const { body, foot, dock } = modal("v1History2", "Browser history", "xl");
     body.classList.add("p-0");
-    const days = el("select", "form-select w-auto"); days.setAttribute("aria-label", "How far back");
-    for (const [v, t] of [["1", "Today"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 3 months"], ["365", "Last year"]]) days.append(new Option(t, v));
-    days.value = "30";
+    const days = new RangePicker({ label: "Visited", heading: "Pages visited in…", value: "30", defaultKey: "30",
+      options: [{ key: "1", label: "Today" }, { key: "7", label: "Last 7 days" }, { key: "30", label: "Last 30 days" },
+        { key: "90", label: "Last 3 months" }, { key: "365", label: "Last year" }], onPick: () => void load() });
     const sw = el("label", "form-check form-switch m-0"), only = el("input", "form-check-input"); only.type = "checkbox"; only.checked = true;
     sw.append(only, el("span", "form-check-label", "Not bookmarked only"));
     const note = el("div"), status = el("div", "text-secondary small px-3 pt-3");
@@ -347,7 +348,7 @@ function install(W: V1): void {
     const paintSave = () => { save.disabled = !table.picked.size || !!W.locked; save.replaceChildren(icon("ti-bookmark-plus", "me-1"), table.picked.size ? `Save ${table.picked.size} as bookmarks` : "Save as bookmarks"); };
     const table: DataTable<Visit> = new DataTable<Visit>({
       noun: "pages", size: 25, sizes: [25, 50, 100, 250], placeholder: "Search titles and addresses…",
-      search: (r, q) => (r.title + " " + r.url).toLowerCase().includes(q), tools: [days, sw],
+      search: (r, q) => (r.title + " " + r.url).toLowerCase().includes(q), tools: [days.el, sw],
       empty: { title: "No visits here", text: "Try a longer time, or turn off Not bookmarked only.", icon: "ti-history" },
       pick: { key: r => r.url, disabled: r => !!r.bookmarked, onPick: () => paintSave() },
       columns: [
@@ -374,7 +375,7 @@ function install(W: V1): void {
       note.replaceChildren(); const sp = el("div", "p-4 text-center text-secondary"); sp.append(el("span", "spinner-border spinner-border-sm me-2"), "Reading your browsers' history…"); note.append(sp);
       try {
         const j = await W.call<{ visits: Visit[]; read: number; skipped: { Browser: string; Profile: string; Why: string }[] }>("GET",
-          `history?${new URLSearchParams({ days: days.value, limit: "5000", workspace: W.id })}`);
+          `history?${new URLSearchParams({ days: days.key, limit: "5000", workspace: W.id })}`);
         rows = j.visits; note.replaceChildren(); blockedAll = !j.read && j.skipped.length > 0;
         if (j.skipped.length) {
           // One line per reason, naming the browsers it applies to, and the way out where there is one.
@@ -399,7 +400,7 @@ function install(W: V1): void {
         paint();
       } catch (e) { note.replaceChildren(el("div", "alert alert-danger m-3", e instanceof Error ? e.message : String(e))); }
     };
-    days.onchange = () => void load(); only.onchange = paint;
+    only.onchange = paint;
     save.onclick = async () => {
       const links = rows.filter(r => table.picked.has(r.url)).map(r => ({ url: r.url, title: r.title }));
       try { await addLinks(`From history ${new Date().toLocaleDateString()}`, links, { parent: "Saved tabs", reload: true }); hideModal("#v1History2"); }

@@ -8,6 +8,7 @@
 
 import { Dom } from "../dom";
 import { Pager } from "../pager";
+import { RangePicker } from "../rangepick";
 import type { BrowserScope } from "../scope";
 import { el, icon, plural, svg } from "../ui";
 
@@ -42,7 +43,12 @@ const EDIT_ICON: Record<string, string> = { migrate: "ti-arrows-exchange", start
 const dayKey = (d: Date) => d.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 const timeOf = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
+/** The Timeline's periods; 0 is everything kept. */
+const RANGES = [{ key: "1", label: "24 hours" }, { key: "7", label: "7 days" }, { key: "30", label: "30 days" },
+  { key: "365", label: "A year" }, { key: "0", label: "All" }];
+
 export class TimelineView {
+  private range: RangePicker | null = null;
   private days: number;
   private readonly on = new Set<Kind>(KINDS.map(k => k[0]));
   private tabs: { snapshots: TabSnap[] } | null = null;
@@ -78,10 +84,13 @@ export class TimelineView {
   }
 
   private paintControls(): void {
-    for (const b of Array.from(this.part("range")?.children ?? []) as HTMLElement[]) {
-      b.classList.toggle("active", Number(b.dataset.days) === this.days);
-      b.onclick = async () => { this.days = Number(b.dataset.days); try { localStorage.setItem(this.d.storeKey, String(this.days)); } catch { /* this visit only */ } await this.open(); };
+    const host = this.part("range");
+    if (host && !this.range) {
+      this.range = new RangePicker({ label: "Range", heading: "Show the last…", value: String(this.days), defaultKey: "7", options: RANGES,
+        onPick: async key => { this.days = Number(key); try { localStorage.setItem(this.d.storeKey, key); } catch { /* this visit only */ } await this.open(); } });
+      host.replaceChildren(this.range.el);
     }
+    this.range?.set(String(this.days));
     const k = this.part("kinds"); if (!k) return;
     k.replaceChildren();
     for (const [id, label, ic] of KINDS) {
