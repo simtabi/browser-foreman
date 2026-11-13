@@ -114,6 +114,10 @@ ships.
 
 ### Changed
 
+- The toolbar: Show is one Tabler segmented control on a single row with short labels (full names in the tooltips),
+  the Download button and its menu arrow follow Bootstrap's nested button group (both outer corners rounded, a
+  bright divider, no outline after a click), and Expand / Collapse all folders moved from the app menu to one toggle
+  in the Folders header.
 - The web interface fits a 375px phone: no sideways scrolling, secondary table columns hidden on small screens, and
   long names cut with an ellipsis. Scripts and stylesheets carry a content hash (`?v=`), so a new build is never
   served from the browser's cache, and every History entry migrated from the Python version has a readable label.

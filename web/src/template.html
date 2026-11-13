@@ -53,8 +53,15 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .tb-ws #wsMenu > .btn:hover { color: var(--tblr-primary); }
 .tb-ws #edited { font-size: .72rem; color: var(--tblr-secondary) !important; }
 .tb-acts { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-left: auto; }
-#chips .chip-n { font-size: .7rem; font-weight: 600; margin-left: .4rem; padding: 0 .35rem; border-radius: 999px; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); }
-#chips .btn-primary .chip-n { background: rgba(255,255,255,.2); color: inherit; }
+/* Show: one segmented control on one line; when the window is too narrow it scrolls sideways rather than breaking
+   into an uneven second row. */
+#chips { --tblr-nav-height: 2.125rem; --tblr-nav-link-padding-x: .65rem; flex-wrap: nowrap; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+#chips::-webkit-scrollbar { display: none; }
+#chips .nav-link { flex: 0 0 auto; font-size: .8125rem; gap: .4rem; }
+#chips .nav-link .ti { font-size: 1rem; }
+#chips .nav-link.active { color: var(--tblr-primary); font-weight: 500; }
+#chips .chip-n { font-size: .7rem; font-weight: 600; padding: 0 .4rem; border-radius: 999px; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); }
+#chips .nav-link.active .chip-n { background: var(--tblr-primary-lt); color: var(--tblr-primary); }
 #footTabs .nav-autosave { cursor: pointer; }
 .hdr-find { flex: 1 1 220px; max-width: 560px; }
 .hdr-search { flex-wrap: nowrap; }
@@ -66,13 +73,12 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .hdr-search #paletteBtn { white-space: nowrap; }
 .hdr-search #paletteBtn kbd { background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); border: 1px solid var(--tblr-border-color); box-shadow: none; font-size: .7rem; }
 .hdr-actions { flex: none; margin-left: auto; gap: .5rem; }
-/* Download split button: Tabler joins buttons only when they are direct children of .btn-group, and the arrow sits in
-   a .dropdown wrapper, so join the two by hand: square inner corners, one shared border. */
-#ioGroup { display: inline-flex; }
-#ioGroup > #download { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-#ioGroup > .dropdown > .btn { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: -1px; padding-left: .55rem; padding-right: .55rem;
-  border-left-color: color-mix(in srgb, #fff 35%, var(--tblr-primary)); }
-#ioGroup > .dropdown > .btn:focus-visible, #ioGroup > #download:focus-visible { position: relative; z-index: 1; }
+/* Download + menu: Bootstrap's nested button group (the arrow and its menu in an inner .btn-group), so both outer
+   corners stay rounded; a bright divider between the two, and the focus ring only for the keyboard. */
+#ioGroup > .btn-group > .btn { border-left-color: color-mix(in srgb, #fff 45%, var(--tblr-primary)); }
+#ioGroup .btn:focus:not(:focus-visible) { box-shadow: none; }
+#ioGroup .dropdown-toggle::after { display: none; }  /* the chevron icon is the caret */
+#ioGroup .btn:focus-visible { position: relative; z-index: 2; }
 .hdr-actions #updateCount:empty, .hdr-actions #updateCount[hidden] { display: none; }
 #q::placeholder { color: var(--tblr-secondary); }
 @media (min-width: 1100px) { .app-head > .container-fluid { flex-wrap: nowrap; } }
@@ -673,12 +679,8 @@ body { overflow-wrap: break-word; }
       <div class="dropdown">
         <button class="btn btn-icon" data-dd aria-label="More" data-tip="View, settings, help"><i class="ti ti-dots-vertical"></i></button>
         <div class="dropdown-menu dropdown-menu-end">
-          <!-- The app menu: view, help, then Settings. Undo, redo and the theme sit in the top bar; resets, deletes and assistant access live in Settings. -->
-          <!-- View holds Bookmarks-only items, so the header and its divider hide with them in other views. -->
-          <h6 class="dropdown-header bm-only">View</h6>
-          <a class="dropdown-item bm-only" href="#" id="expandAll"><i class="ti ti-chevrons-down me-2"></i><span class="flex-fill">Expand all folders</span></a>
-          <a class="dropdown-item bm-only" href="#" id="collapseAll"><i class="ti ti-chevrons-up me-2"></i><span class="flex-fill">Collapse all folders</span><kbd>-</kbd></a>
-          <div class="dropdown-divider bm-only"></div>
+          <!-- The app menu: help, then Settings. Undo, redo and the theme sit in the top bar; resets, deletes and assistant access live in Settings. -->
+          <!-- Expand / collapse all folders moved to a toggle in the Folders card header (2026-11-13). -->
           <h6 class="dropdown-header">Help</h6>
           <a class="dropdown-item" href="#" id="helpBtn"><i class="ti ti-help-circle me-2"></i><span class="flex-fill">Help</span><kbd>F1</kbd></a>
           <a class="dropdown-item" href="#" id="shortcutsBtn"><i class="ti ti-keyboard me-2"></i><span class="flex-fill">Keyboard shortcuts</span><kbd>?</kbd></a>
@@ -705,10 +707,10 @@ body { overflow-wrap: break-word; }
         <button class="btn" id="refreshAll" data-tip="Re-check every link and retake every snapshot"><i class="ti ti-refresh"></i><span class="hide-narrow ms-1">Refresh all</span></button>
       </div>
       <button class="btn" id="trashBtn" data-tip="Everything in the Trash: put back, or delete permanently"><i class="ti ti-trash"></i><span class="hide-narrow ms-1">Trash</span><span class="badge bg-secondary-lt ms-2" id="trashBadge"></span></button>
-      <div class="btn-group" id="ioGroup">
+      <div class="btn-group" id="ioGroup" role="group">
         <button class="btn btn-primary" id="download" data-tip="A bookmarks file any browser imports (Trash left out)"><i class="ti ti-download me-1"></i>Download</button>
-        <div class="dropdown">
-          <button class="btn btn-primary dropdown-toggle-split" data-dd aria-label="Import and export" data-tip="Import, export, history"><i class="ti ti-chevron-down"></i></button>
+        <div class="btn-group" role="group">
+          <button class="btn btn-primary btn-icon dropdown-toggle" data-dd aria-label="Import and export" aria-expanded="false" data-tip="Import, export, history"><i class="ti ti-chevron-down"></i></button>
           <div class="dropdown-menu dropdown-menu-end" id="ioMenu"></div>
         </div>
       </div>
@@ -716,7 +718,7 @@ body { overflow-wrap: break-word; }
       </div>
       <div class="tb-row">
         <span class="tb-label">Show</span>
-        <div class="btn-group flex-wrap" role="group" aria-label="Show" id="chips"></div>
+        <nav class="nav nav-segmented" role="tablist" aria-label="Show" id="chips"></nav>
         <input type="search" id="q" class="d-none" aria-hidden="true" tabindex="-1"><!-- the bookmark query; typed in the header search -->
       </div>
       <div class="tb-row">

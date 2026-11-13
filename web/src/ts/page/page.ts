@@ -53,6 +53,8 @@ const STATUS_ICON = {dead: "ti-alert-triangle", moved: "ti-arrow-forward-up", "m
 const FILTERS = [["all", "All bookmarks", "ti-list"], ["prot", "Untouched folders", "ti-lock"], ["dead", "Dead links", "ti-alert-triangle"],
   ["moved", "Moved (update ready)", "ti-arrow-forward-up"], ["moved-elsewhere", "Redirects elsewhere", "ti-arrows-split"],
   ["unverified", "Could not verify", "ti-help-circle"], ["needs-login", "Requires login", "ti-lock-open"], ["dupes", "Removed duplicates", "ti-copy"]];
+// The Show control's segment labels; the full names above stay in tooltips, the palette and the details pane.
+const FILTER_SHORT = {all: "All", prot: "Untouched", dead: "Dead", moved: "Moved", "moved-elsewhere": "Redirects", unverified: "Unverified", "needs-login": "Login", dupes: "Duplicates"};
 const STORE = "bm-preview-v2";  // TRASH and OLD_TRASH come from tree.ts
 
 // $, el, icon and kbd come from src/web/ts/ui.ts (imported above), shared with the typed view modules.
@@ -304,8 +306,8 @@ function buildToolbar() {
   const n = k => k === "all" ? DATA.keep.length : k === "dupes" ? DATA.dupes.length : k === "prot" ? DATA.keep.filter(i => i.p).length : DATA.keep.filter(i => i.s === k).length;
   const extra = {all: `${DATA.total.toLocaleString()} before cleanup.`, dead: `${DATA.keep.filter(i => i.s === "dead" && i.dk === "host").length} whole site gone, ${DATA.keep.filter(i => i.s === "dead" && i.dk !== "host").length} page gone.`};
   for (const [k, l, ic] of FILTERS) {
-    const b = el("button", "btn btn-sm"); b.type = "button"; b.dataset.f = k; b.append(icon(ic, "me-1"), l, el("span", "chip-n", n(k).toLocaleString()));  // refreshed live by paintChipCounts
-    b.dataset.tip = [HELP[k], extra[k]].filter(Boolean).join(" ");
+    const b = el("button", "nav-link"); b.type = "button"; b.setAttribute("role", "tab"); b.dataset.f = k; b.setAttribute("aria-label", l); b.append(icon(ic), FILTER_SHORT[k] || l, el("span", "chip-n", n(k).toLocaleString()));  // refreshed live by paintChipCounts
+    b.dataset.tip = [l + ".", HELP[k], extra[k]].filter(Boolean).join(" ");
     b.onclick = () => setFilter(k);
     $("#chips").append(b);
   }
@@ -355,7 +357,13 @@ function paintChipCounts() {
   }
 }
 function paintChips() {
-  for (const b of $("#chips").children) b.classList.toggle("btn-primary", b.dataset.f === filter);
+  for (const b of $("#chips").children) {
+    const on = b.dataset.f === filter; b.classList.toggle("active", on); b.setAttribute("aria-selected", String(on));
+    if (on) {  // keep the chosen one in view when the row scrolls sideways (never scrolls the page itself)
+      const row = b.parentElement!, l = b.offsetLeft - row.offsetLeft, r = l + b.offsetWidth;
+      if (l < row.scrollLeft) row.scrollLeft = l; else if (r > row.scrollLeft + row.clientWidth) row.scrollLeft = r - row.clientWidth;
+    }
+  }
   for (const c of document.querySelectorAll(".stat")) c.classList.toggle("active", c.dataset.f === filter);
 }
 function clearFilters() { $("#q").value = ""; SEARCH.sync(); setDates(null, null); setFilter("all"); }
@@ -395,8 +403,9 @@ let qt; $("#q").oninput = () => { clearTimeout(qt); qt = setTimeout(() => { sel 
 const on = (id, fn) => { $(id).onclick = e => { e.preventDefault(); closeDropdowns(); fn(); list.focus(); }; };
 // While a filter, search or the duplicates view forces folders open, these act on that view's own closed set.
 const forcedView = () => filtering() || readOnly();
-on("#expandAll", () => { if (forcedView()) { viewClosed.clear(); build(); return; } walkFolders(st().root, f => setOpen(f, true)); saveOpen(); build(); });
-on("#collapseAll", () => { if (forcedView()) { for (const r of rows) if (r.kind === "folder" && !r.trash) viewClosed.add(r.key); sel = 0; build(); return; } st().open.clear(); saveOpen(); sel = 0; build(); });
+// Expand / collapse every folder: the toggle in the Folders card header, the command palette and the "-" key.
+function expandAllFolders() { if (forcedView()) { viewClosed.clear(); build(); return; } walkFolders(st().root, f => setOpen(f, true)); saveOpen(); build(); }
+function collapseAllFolders() { if (forcedView()) { for (const r of rows) if (r.kind === "folder" && !r.trash) viewClosed.add(r.key); sel = 0; build(); return; } st().open.clear(); saveOpen(); sel = 0; build(); }
 // Open a folder and everything inside it, in the saved tree or the forced view.
 function expandInside(r) {
   if (forcedView()) { for (const k of [...viewClosed]) if (k === r.key || k.startsWith(r.key + "/")) viewClosed.delete(k); build(true); return; }
@@ -1222,7 +1231,13 @@ function build(keepView = false) {
     const keys = el("button", "btn btn-ghost-secondary btn-icon btn-sm"); keys.type = "button"; keys.setAttribute("aria-label", "Keyboard shortcuts"); keys.append(icon("ti-keyboard"));
     keys.dataset.tip = (readOnly() ? "" : "Drag to move. ") + "→ open · ← close · Space select · . menu. Click for every shortcut.";
     keys.onclick = () => openShortcuts();
-    const parts = [keys];
+    // One toggle: collapses while any folder is open, expands when every one is closed.
+    const anyOpen = rows.some(r => r.kind === "folder" && !r.trash && r.open);
+    const fold = el("button", "btn btn-ghost-secondary btn-icon btn-sm"); fold.type = "button"; fold.id = "foldAll";
+    fold.setAttribute("aria-label", anyOpen ? "Collapse all folders" : "Expand all folders"); fold.setAttribute("aria-pressed", String(!anyOpen));
+    fold.append(icon(anyOpen ? "ti-chevrons-up" : "ti-chevrons-down")); fold.dataset.tip = anyOpen ? "Collapse all folders (-)" : "Expand all folders";
+    fold.onclick = () => { if (anyOpen) collapseAllFolders(); else expandAllFolders(); list.focus(); };
+    const parts = [fold, keys];
     if (readOnly()) { const b = el("span", "badge bg-yellow-lt"); b.append(icon("ti-lock", "me-1"), "Read-only"); b.dataset.tip = "These copies were merged into the bookmarks you kept. Open, copy or look them up here; to move bookmarks, use All bookmarks."; parts.unshift(b); }
     hint.replaceChildren(...parts);
   }
@@ -1720,8 +1735,8 @@ function commands() {
     ["empty", "Empty trash…", "ti-trash-x", "", () => !!bin && bin.c.length > 0 && !ro, emptyTrash, "Organise", true],
     ["expand", r && r.kind === "folder" && r.open ? "Collapse folder" : "Expand folder", "ti-folder-open", "→ ←", () => r && r.kind === "folder", () => toggle(r, !r.open), "View"],
     ["expand-in", "Expand everything inside", "ti-chevrons-down", "*", () => r && r.kind === "folder", () => expandInside(r), "View"],
-    ["expand-all", "Expand all folders", "ti-chevrons-down", "", () => true, () => $("#expandAll").click(), "View"],
-    ["collapse-all", "Collapse all folders", "ti-chevrons-up", "-", () => true, () => $("#collapseAll").click(), "View"],
+    ["expand-all", "Expand all folders", "ti-chevrons-down", "", () => true, () => { expandAllFolders(); list.focus(); }, "View"],
+    ["collapse-all", "Collapse all folders", "ti-chevrons-up", "-", () => true, () => { collapseAllFolders(); list.focus(); }, "View"],
     ["search", "Search", "ti-search", "/", () => true, () => SEARCH.focus(), "View"],
     ["clear", "Clear all filters", "ti-filter-off", "", () => true, clearFilters, "View"],
     ...FILTERS.map(([k, l, ic]) => ["filter-" + k, "Show: " + l, ic, "", () => true, () => setFilter(k), "Filter"]),
@@ -2250,7 +2265,7 @@ const KEY_ACTIONS = {
   mark: () => { toggleMark(rows[sel].node); anchor = sel; draw(); show(); },
   enter: () => { const r = rows[sel]; if (r.kind === "folder") toggle(r, !r.open); else openTab(r.item.u); },
   expandAll: () => { const r = rows[sel]; if (r.kind === "folder") expandInside(r); },
-  collapseAll: () => $("#collapseAll").click(),
+  collapseAll: () => collapseAllFolders(),
   openHere: () => openLinks("browser"), openWindow: () => openLinks("window"), openIncognito: () => openLinks("incognito"),
   copy: () => copyLinks(), describe: () => editDescription(), live: () => live(),
   refresh: () => { if (!readOnly()) refresh(); }, putBack: () => putBack(),
