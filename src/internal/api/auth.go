@@ -25,6 +25,8 @@ type Principal struct {
 	Via  string `json:"via"` // token, session, or local (the configured token in local mode)
 	csrf string
 	sess string // the session's stored hash, for a session
+	// tokenName is the API token's name: "extension:<browser>" for a paired extension.
+	tokenName string
 }
 
 // who works out the caller: an API token (a person's, or in local mode the configured one, which acts as the owner),
@@ -44,7 +46,7 @@ func (s *Server) who(r *http.Request) (Principal, bool) {
 			return Principal{}, false
 		}
 		_ = s.Data.TouchToken(r.Context(), t.ID, s.Now())
-		return Principal{User: u.Name, Role: u.Role, Via: "token"}, true
+		return Principal{User: u.Name, Role: u.Role, Via: "token", tokenName: t.Name}, true
 	}
 	if c, err := r.Cookie(SessionCookie); err == nil && c.Value != "" {
 		x, err := s.Data.SessionByHash(r.Context(), auth.HashSecret(c.Value), s.Now())

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/simtabi/browser-foreman/src/internal/browsers"
@@ -18,6 +19,69 @@ type Service struct {
 	Reader   Reader
 	Closer   Closer
 	Now      func() time.Time
+
+	mu     sync.Mutex
+	pushed map[string]pushedState // by browser name: what its extension sent last
+}
+
+type pushedState struct {
+	b  Browser
+	at time.Time
+}
+
+// PushFresh is how long an extension's report stands in for reading the browser.
+const PushFresh = 2 * time.Minute
+
+// Push records what a browser's extension sent: it is used instead of reading that browser while it is fresh, and
+// brings in browsers automation cannot read (Firefox).
+func (s *Service) Push(b Browser) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pushed == nil {
+		s.pushed = map[string]pushedState{}
+	}
+	b.Via, b.Running = "extension", true
+	s.pushed[b.Browser] = pushedState{b, s.Now()}
+}
+
+// fresh names the browsers whose extension reported within PushFresh.
+func (s *Service) fresh() map[string]bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]bool{}
+	for name, x := range s.pushed {
+		if s.Now().Sub(x.at) <= PushFresh {
+			out[name] = true
+		}
+	}
+	return out
+}
+
+// merge puts fresh extension reports in place of (or beside) what automation read, for the tracked browsers.
+func (s *Service) merge(st State, p store.Prefs) State {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	want := map[string]bool{}
+	for _, n := range p.Tracked {
+		want[n] = true
+	}
+	now := s.Now()
+	for name, x := range s.pushed {
+		if now.Sub(x.at) > PushFresh || (p.Tracked != nil && !want[name]) {
+			continue
+		}
+		replaced := false
+		for i := range st.Browsers {
+			if st.Browsers[i].Browser == name {
+				st.Browsers[i], replaced = x.b, true
+			}
+		}
+		if !replaced {
+			st.Browsers = append(st.Browsers, x.b)
+		}
+	}
+	st.Summary = Summarise(st.Browsers)
+	return st
 }
 
 // tracked lists the browsers whose tabs are read: the scriptable installed ones, narrowed by the preferences.
@@ -41,7 +105,14 @@ func (s *Service) Live(ctx context.Context) (State, store.Prefs, error) {
 	if err != nil {
 		return State{}, p, err
 	}
-	return Redact(ReadAll(ctx, s.Reader, s.tracked(p), s.Now()), p.IncludeIncognito), p, nil
+	var read []browsers.Browser
+	fresh := s.fresh()
+	for _, b := range s.tracked(p) {
+		if !fresh[b.Name] { // its extension already said what it has open
+			read = append(read, b)
+		}
+	}
+	return Redact(s.merge(ReadAll(ctx, s.Reader, read, s.Now()), p), p.IncludeIncognito), p, nil
 }
 
 // Saved is what Take did.

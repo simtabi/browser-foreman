@@ -43,21 +43,32 @@ func (i *ID) UnmarshalJSON(b []byte) error {
 
 // Tab is one open tab. ID is the browser's own id for it (Chromium browsers), "" when it has none.
 type Tab struct {
-	URL   string `json:"url"`
-	Title string `json:"title"`
-	ID    ID     `json:"id,omitempty"`
+	URL    string `json:"url"`
+	Title  string `json:"title"`
+	ID     ID     `json:"id,omitempty"`
+	Pinned bool   `json:"pinned,omitempty"`
+	Group  ID     `json:"group,omitempty"` // the tab group it is in (extensions only)
+}
+
+// Group is a tab group (Chromium; read through the extension).
+type Group struct {
+	ID        ID     `json:"id"`
+	Title     string `json:"title"`
+	Color     string `json:"color,omitempty"`
+	Collapsed bool   `json:"collapsed,omitempty"`
 }
 
 // Window is one browser window: Mode is "normal" or "incognito". A private window that was redacted has TabCount and
 // no Tabs.
 type Window struct {
-	Index    int    `json:"index"`
-	ID       ID     `json:"id,omitempty"`
-	Mode     string `json:"mode"`
-	Active   int    `json:"active,omitempty"`
-	Tabs     []Tab  `json:"tabs,omitempty"`
-	TabCount int    `json:"tab_count,omitempty"`
-	Redacted bool   `json:"redacted,omitempty"`
+	Index    int     `json:"index"`
+	ID       ID      `json:"id,omitempty"`
+	Mode     string  `json:"mode"`
+	Active   int     `json:"active,omitempty"`
+	Tabs     []Tab   `json:"tabs,omitempty"`
+	Groups   []Group `json:"groups,omitempty"`
+	TabCount int     `json:"tab_count,omitempty"`
+	Redacted bool    `json:"redacted,omitempty"`
 }
 
 // Browser is what one browser answered: its windows when it is running, or why it could not be read.
@@ -67,6 +78,8 @@ type Browser struct {
 	Windows []Window `json:"windows,omitempty"`
 	Error   string   `json:"error,omitempty"` // "needs-permission", or what went wrong
 	Hint    string   `json:"hint,omitempty"`
+	// Via says how it was read: "extension" when its extension sent it, else through automation.
+	Via string `json:"via,omitempty"`
 }
 
 // Summary counts windows and tabs, normal and private apart.
@@ -139,7 +152,7 @@ func Redact(s State, keep bool) State {
 		for j := range out.Browsers[i].Windows {
 			w := &out.Browsers[i].Windows[j]
 			if w.Mode == "incognito" && !w.Redacted {
-				w.TabCount, w.Tabs, w.Redacted = len(w.Tabs), nil, true
+				w.TabCount, w.Tabs, w.Groups, w.Redacted = len(w.Tabs), nil, nil, true
 			}
 		}
 	}

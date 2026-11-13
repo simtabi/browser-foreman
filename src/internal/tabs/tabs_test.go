@@ -209,3 +209,25 @@ func TestParseReadTakesRealAnswers(t *testing.T) {
 		t.Fatal("a broken answer was accepted")
 	}
 }
+
+func TestExtensionReportsStandInForReading(t *testing.T) {
+	s, r, _, _ := service(t)
+	ctx := context.Background()
+	s.Push(Browser{Browser: "Google Chrome", Windows: []Window{{Index: 1, Mode: "normal", Tabs: []Tab{{URL: "https://from.extension/", Group: "g1"}},
+		Groups: []Group{{ID: "g1", Title: "Work"}}}}})
+	s.Push(Browser{Browser: "Firefox", Windows: []Window{{Index: 1, Mode: "incognito", Tabs: []Tab{{URL: "https://private.firefox/"}}}}})
+	r.asked = nil
+	live, _, _ := s.Live(ctx)
+	for _, n := range r.asked {
+		if n == "Google Chrome" {
+			t.Fatal("Chrome was read through automation although its extension had just reported")
+		}
+	}
+	got := mustJSON(live)
+	if !strings.Contains(got, "from.extension") || !strings.Contains(got, `"via":"extension"`) || strings.Contains(got, "private.firefox") {
+		t.Fatalf("%s", got)
+	}
+	if live.Summary.IncognitoTabs != 1 {
+		t.Fatalf("Firefox's private window, sent by its extension, is counted and redacted: %+v", live.Summary)
+	}
+}

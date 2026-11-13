@@ -44,6 +44,7 @@ type Server struct {
 	Checker  *linkcheck.Checker
 	Browsers *browsers.Service
 	Tabs     *tabs.Service
+	ext      extState
 	icons    iconCache
 	// Deliveries is the webhook delivery log (the dispatcher's Log writes to it); nil: none kept.
 	Deliveries *webhooks.Log
@@ -119,6 +120,15 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/tabs/snapshots/{id}", s.require(store.RoleViewer, s.getSnapshot))
 	m.HandleFunc("POST /api/v1/tabs/snapshots/{id}/restore", s.require(store.RoleOwner, s.restoreSnapshot))
 	m.HandleFunc("POST /api/v1/tabs/close", s.require(store.RoleOwner, s.closeTabs))
+	m.HandleFunc("POST /api/v1/extension/pairings", s.require(store.RoleOwner, s.createPairing))
+	m.HandleFunc("POST /api/v1/extension/pair", s.pair)
+	m.HandleFunc("GET /api/v1/extension/status", s.require(store.RoleViewer, s.extensionStatus))
+	m.HandleFunc("POST /api/v1/extension/tabs", s.requireExtension(s.pushTabs))
+	m.HandleFunc("POST /api/v1/extension/bookmarks", s.requireExtension(s.readBookmarks))
+	m.HandleFunc("GET /api/v1/extension/commands", s.requireExtension(s.nextCommands))
+	m.HandleFunc("POST /api/v1/extension/commands/{id}/done", s.requireExtension(s.commandDone))
+	m.HandleFunc("POST /api/v1/extension/commands", s.require(store.RoleOwner, s.queueCommand))
+	m.HandleFunc("GET /api/v1/extension/commands/{id}", s.require(store.RoleViewer, s.getCommand))
 	m.HandleFunc("GET /{$}", s.page)
 	m.Handle("GET /assets/", s.assets())
 	return s.guard(m)
@@ -137,18 +147,30 @@ func (s *Server) guard(next http.Handler) http.Handler {
 			writeErr(w, http.StatusForbidden, "this server answers on localhost only")
 			return
 		}
-		if o := r.Header.Get("Origin"); o != "" && o != "http://"+r.Host && o != "https://"+r.Host {
+		// A browser extension may call in: it still needs a paired token (or a one-time code to pair).
+		ext := extensionOrigin(r.Header.Get("Origin"))
+		if o := r.Header.Get("Origin"); o != "" && !ext && o != "http://"+r.Host && o != "https://"+r.Host {
 			writeErr(w, http.StatusForbidden, "requests from other sites are refused")
 			return
 		}
 		// Browsers mark where a request comes from. A page on another site loading an image or script from here (which
 		// sends no Origin) is refused too, so it cannot even learn what answers; following a link here still works.
-		if r.Header.Get("Sec-Fetch-Site") == "cross-site" && r.Header.Get("Sec-Fetch-Mode") != "navigate" {
+		if !ext && r.Header.Get("Sec-Fetch-Site") == "cross-site" && r.Header.Get("Sec-Fetch-Mode") != "navigate" {
 			writeErr(w, http.StatusForbidden, "requests from other sites are refused")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// extensionOrigin reports whether a request comes from a browser extension (Chromium, Firefox or Safari).
+func extensionOrigin(o string) bool {
+	for _, p := range []string{"chrome-extension://", "moz-extension://", "safari-web-extension://"} {
+		if strings.HasPrefix(o, p) && len(o) > len(p) {
+			return true
+		}
+	}
+	return false
 }
 
 func localHost(hostport string) bool {

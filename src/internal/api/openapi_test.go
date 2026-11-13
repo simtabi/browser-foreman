@@ -17,12 +17,15 @@ func routes(t *testing.T) map[string]string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	re := regexp.MustCompile(`m\.HandleFunc\("([A-Z]+) (/api/[^"]+)", (s\.require\(store\.Role([A-Za-z]+))?`)
+	re := regexp.MustCompile(`m\.HandleFunc\("([A-Z]+) (/api/[^"]+)", (s\.require\(store\.Role([A-Za-z]+)|s\.(requireExtension))?`)
 	out := map[string]string{}
 	for _, m := range re.FindAllStringSubmatch(string(b), -1) {
 		role := "none"
 		if m[4] != "" {
 			role = strings.ToLower(m[4])
+		}
+		if m[5] != "" {
+			role = "extension"
 		}
 		out[m[1]+" "+m[2]] = role
 	}

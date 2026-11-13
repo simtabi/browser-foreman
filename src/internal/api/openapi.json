@@ -1283,6 +1283,136 @@
           }
         }
       }
+    },
+    "/api/v1/extension/pairings": {
+      "post": {
+        "summary": "Make a one-time pairing code for an extension, good for ten minutes",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/extension/pair": {
+      "post": {
+        "summary": "Trade a pairing code for the extension's own token (shown once); wrong codes are rate-limited",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "none",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {code, browser}",
+        "security": []
+      }
+    },
+    "/api/v1/extension/status": {
+      "get": {
+        "summary": "The paired extensions (their tokens, never the secrets)",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/extension/tabs": {
+      "post": {
+        "summary": "The extension's open windows, tabs and tab groups; used instead of reading that browser for two minutes",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "extension",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {windows, groups}"
+      }
+    },
+    "/api/v1/extension/bookmarks": {
+      "post": {
+        "summary": "The browser's whole bookmark tree, into a workspace (\"<browser>-live\" unless named) as one import entry; needs an editor's token",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "extension",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {nodes, workspace?}"
+      }
+    },
+    "/api/v1/extension/commands": {
+      "get": {
+        "summary": "Long poll (?wait= up to 25 s) for commands queued for this extension's browser",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "extension",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      },
+      "post": {
+        "summary": "Ask a browser's extension to open links, as tabs or as one named tab group",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {browser, kind: open|open-group, urls, title?, color?, incognito?}"
+      }
+    },
+    "/api/v1/extension/commands/{id}/done": {
+      "post": {
+        "summary": "Report what became of a command",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "extension",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {ok, error?}"
+      }
+    },
+    "/api/v1/extension/commands/{id}": {
+      "get": {
+        "summary": "A command and what became of it",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
     }
   }
 }
