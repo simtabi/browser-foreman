@@ -5,7 +5,9 @@ package webui
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"io/fs"
 )
 
@@ -40,5 +42,20 @@ func Page(fsys fs.FS, bootJSON []byte, nonce string) ([]byte, error) {
 	s.Write(bootJSON)
 	s.WriteString(";</script>\n<script src=\"assets/js/v1.js\"></script>\n")
 	s.WriteString(`<script nonce="` + nonce + "\">\nconst DATA = window.BF_PAGE;\nwindow.BF_DATA = DATA;\n</script>")
-	return bytes.Replace(b, []byte(dataMarker), s.Bytes(), 1), nil
+	return fingerprint(fsys, bytes.Replace(b, []byte(dataMarker), s.Bytes(), 1)), nil
+}
+
+// fingerprint adds each script's and stylesheet's content hash to its address in the page (assets/js/app.js becomes
+// assets/js/app.js?v=1a2b3c4d), so after an upgrade a browser can never run a script it kept from before.
+func fingerprint(fsys fs.FS, page []byte) []byte {
+	for _, name := range []string{"assets/js/theme.js", "assets/js/v1.js", "assets/js/app.js", "assets/css/tabler.min.css", "assets/css/tabler-icons.min.css"} {
+		b, err := fs.ReadFile(fsys, name)
+		if err != nil {
+			continue
+		}
+		sum := sha256.Sum256(b)
+		v := name + "?v=" + hex.EncodeToString(sum[:4])
+		page = bytes.ReplaceAll(page, []byte(`"`+name+`"`), []byte(`"`+v+`"`))
+	}
+	return page
 }

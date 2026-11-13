@@ -67,8 +67,8 @@ function install(W: V1): void {
           const d = el("div", "d-flex align-items-center gap-2"), t = el("span", null, e.summary);
           d.append(t); if (e.seq === head) d.append(el("span", "badge bg-primary-lt", "now")); return d;
         } },
-        { label: "Kind", sort: by(e => e.op), cell: e => { const [label, cls] = OPS[e.op] ?? [e.op, "bg-secondary-lt"]; return el("span", `badge ${cls}`, label); } },
-        { label: "When", sort: by(e => Date.parse(e.at)), cell: e => el("span", "text-secondary", fmtDate(Date.parse(e.at) / 1000)) },
+        { label: "Kind", cls: "d-none d-md-table-cell", sort: by(e => e.op), cell: e => { const [label, cls] = OPS[e.op] ?? [e.op, "bg-secondary-lt"]; return el("span", `badge ${cls}`, label); } },
+        { label: "When", cls: "d-none d-sm-table-cell", sort: by(e => Date.parse(e.at)), cell: e => el("span", "text-secondary", fmtDate(Date.parse(e.at) / 1000)) },
       ],
       primary: e => e.seq < head && !W.locked ? { label: "Go back here", icon: "ti-arrow-back-up", fn: async () => {
         if (!(await askConfirm({ title: `Go back to change ${e.seq}?`, ok: "Go back", danger: false,
@@ -109,9 +109,9 @@ function install(W: V1): void {
           const t = el("span"); t.append(w.name);
           return nameCell(t, w.id + (w.notes ? ` · ${w.notes.split("\n")[0]}` : ""), avatar(w.name));
         } },
-        { label: "Bookmarks", cls: "text-end", sort: by(w => w.bookmarks ?? 0), cell: w => (w.bookmarks ?? 0).toLocaleString() },
-        { label: "Changes", cls: "text-end", sort: by(w => w.head), cell: w => w.head.toLocaleString() },
-        { label: "Status", cell: w => {
+        { label: "Bookmarks", cls: "text-end", sort: by(w => w.bookmarks ?? 0), cell: w => w.bookmarks == null ? el("span", "placeholder col-6") : w.bookmarks.toLocaleString() },
+        { label: "Changes", cls: "text-end d-none d-md-table-cell", sort: by(w => w.head), cell: w => w.head.toLocaleString() },
+        { label: "Status", cls: "d-none d-sm-table-cell", cell: w => {
           const d = el("div", "d-flex gap-1 flex-wrap");
           if (w.deleted) d.append(badge(`deleted ${fmtDate(Date.parse(w.deleted) / 1000)}`, "bg-red-lt", "ti-trash"));
           if (w.id === W.id && !w.deleted) d.append(badge("open", "bg-primary-lt", "ti-eye"));
@@ -357,9 +357,9 @@ function install(W: V1): void {
           if (r.bookmarked) { const b = el("span", "badge bg-green-lt ms-2"); b.append(icon("ti-bookmark", "me-1"), "bookmarked"); t.append(b); }
           return nameCell(t, r.url);
         } },
-        { label: "Browser", sort: by(r => r.browser), cell: r => el("span", "text-secondary", r.browser + (r.profile && r.profile !== "Default" ? ` · ${r.profile}` : "")) },
-        { label: "Visits", cls: "text-end", sort: by(r => r.visits), cell: r => r.visits.toLocaleString() },
-        { label: "Last visit", sort: by(r => Date.parse(r.last)), cell: r => el("span", "text-secondary", fmtDate(Date.parse(r.last) / 1000)) },
+        { label: "Browser", cls: "d-none d-md-table-cell", sort: by(r => r.browser), cell: r => el("span", "text-secondary", r.browser + (r.profile && r.profile !== "Default" ? ` · ${r.profile}` : "")) },
+        { label: "Visits", cls: "text-end d-none d-md-table-cell", sort: by(r => r.visits), cell: r => r.visits.toLocaleString() },
+        { label: "Last visit", cls: "d-none d-sm-table-cell", sort: by(r => Date.parse(r.last)), cell: r => el("span", "text-secondary", fmtDate(Date.parse(r.last) / 1000)) },
       ],
     });
     table.element.classList.add("border-0", "rounded-0", "shadow-none");

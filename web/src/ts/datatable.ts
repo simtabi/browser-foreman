@@ -74,7 +74,7 @@ export class DataTable<T> {
       wrap.append(ic, q); bar.append(wrap);
     }
     for (const t of o.tools ?? []) bar.append(t);
-    const scroll = el("div", "table-responsive"), table = el("table", "table card-table table-vcenter text-nowrap datatable");
+    const scroll = el("div", "table-responsive"), table = el("table", "table card-table table-vcenter datatable");
     this.head = el("thead"); this.body = el("tbody");
     table.append(this.head, this.body); scroll.append(table);
     this.foot = el("div", "datatable-foot");
@@ -164,7 +164,11 @@ export class DataTable<T> {
       if (this.o.primary || this.o.actions) {
         const td = el("td"), wrap = el("div", "btn-list flex-nowrap justify-content-end");
         const p = this.o.primary?.(r);
-        if (p) { const b = el("button", `btn btn-sm ${p.cls ?? ""}`.trim()); b.type = "button"; if (p.icon) b.append(icon(p.icon, "me-1")); b.append(p.label); b.onclick = () => void p.fn(); wrap.append(b); }
+        if (p) { // on a phone, just its icon (named by aria-label and a tooltip)
+          const b = el("button", `btn btn-sm ${p.cls ?? ""}`.trim()); b.type = "button"; b.setAttribute("aria-label", p.label); b.dataset.tip = p.label;
+          if (p.icon) b.append(icon(p.icon, "me-sm-1"));
+          b.append(el("span", p.icon ? "d-none d-sm-inline" : null, p.label)); b.onclick = () => void p.fn(); wrap.append(b);
+        }
         const items = this.o.actions?.(r) ?? [];
         if (items.some(Boolean)) {
           const dd = el("div", "dropdown"), b = el("button", "btn btn-sm btn-icon btn-ghost-secondary"); b.type = "button"; b.dataset.dd = "";
@@ -198,7 +202,7 @@ export function avatar(name: string, cls = "avatar-sm"): HTMLElement {
 
 /** Name and a muted line under it: the usual first cell of a Tabler table. */
 export function nameCell(title: string | Node, sub: string, lead?: HTMLElement): HTMLElement {
-  const d = el("div", "d-flex py-1 align-items-center"), t = el("div", "flex-fill min-w-0");
+  const d = el("div", "d-flex py-1 align-items-center dt-name"), t = el("div", "flex-fill min-w-0");
   const top = el("div", "font-weight-medium text-truncate"); top.append(title);
   t.append(top, el("div", "text-secondary small text-truncate", sub));
   if (lead) { lead.classList.add("me-2"); d.append(lead); }

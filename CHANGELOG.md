@@ -114,6 +114,9 @@ ships.
 
 ### Changed
 
+- The web interface fits a 375px phone: no sideways scrolling, secondary table columns hidden on small screens, and
+  long names cut with an ellipsis. Scripts and stylesheets carry a content hash (`?v=`), so a new build is never
+  served from the browser's cache, and every History entry migrated from the Python version has a readable label.
 - Releases: a pushed `vX.Y.Z` tag, or `gh workflow run release.yml -f tag=vX.Y.Z`, now builds and publishes the
   binaries on the GitHub release, and nowhere else. `release.yml` calls simtabi/.github's shared `go-release.yml`
   (no `confirm=release-go` dispatch any more), and the new `src/.goreleaser.yaml` publishes the same assets the old

@@ -11,6 +11,11 @@
 <link rel="stylesheet" href="assets/css/tabler.min.css">
 <link rel="stylesheet" href="assets/css/tabler-icons.min.css">
 <style>
+/* Closed side panels wait just past the right edge; nothing off-screen may widen the page (a phone would zoom out). */
+html, body { overflow-x: clip; }
+/* On a phone the view switcher scrolls within itself rather than widening the page. */
+@media (max-width: 575.98px) { .hdr-views { max-width: calc(100vw - 2rem); min-width: 0; } .hdr-views .app-nav-tabs { overflow-x: auto; scrollbar-width: none; max-width: calc(100vw - 2rem); }
+  .hdr-views .app-nav-tab { padding: .35rem .55rem; } }
 /* A dialog's dock holds its list's pager between the scrolling body and the buttons: always in view. */
 .modal-dock { flex: none; border-top: 1px solid var(--tblr-border-color); background: var(--tblr-bg-surface); }
 .modal-dock:not(:has(.card-footer)) { display: none; }
@@ -20,7 +25,8 @@
 .pane-scroll .datatable-foot, .modal-body :not(.datatable-foot) > [data-brofo-pager], .pane-scroll :not(.datatable-foot) > [data-brofo-pager] { position: sticky; bottom: 0; z-index: 3; background: var(--tblr-bg-surface); box-shadow: 0 -1px 0 var(--tblr-border-color); }
 .modal-body .datatable-head, .pane-scroll .datatable-head { position: sticky; top: 0; z-index: 3; background: var(--tblr-bg-surface); }
 .modal-footer:empty { display: none; }
-.datatable th.text-end .table-sort { text-align: end; } .datatable td .empty { padding-inline: 0; }
+.datatable th.text-end .table-sort { text-align: end; } .datatable th, .datatable td:not(.text-wrap) { white-space: nowrap; } .datatable td:first-child { white-space: normal; } .dt-name { max-width: min(28rem, 52vw); }
+@media (max-width: 575.98px) { .dt-name { max-width: 30vw; } .dt-name .avatar { display: none; } .datatable .table-sort { padding-inline: .5rem; } .datatable td, .datatable th { padding-inline: .5rem; } } .datatable td .empty { padding-inline: 0; }
 .bf-save-banner{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:3000;width:min(560px,calc(100vw - 32px))}
 /* Layout: the app fills the window; the tree and the detail pane scroll on their own. */
 html, body { height: 100%; }
