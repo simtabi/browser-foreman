@@ -812,8 +812,22 @@ const TABS = (() => {
     if (!isLive) chip("ti-alert-triangle", "Not open now", nMissing.toLocaleString(), nMissing ? "warn" : "");
     body.append(strip);
     const bar = selBar(); if (bar) body.append(bar);
-    const sections = [["Windows", norm, false], ["Incognito", inc, true]];
+    // Searching: only the windows with a matching tab, and one clear message when none has any.
+    const hits = x => !q || tabsIn(x).some(i => match(i.t));
+    const sections = [["Windows", norm.filter(hits), false], ["Incognito", inc.filter(hits), true]];
     if (V.incFirst) sections.reverse();
+    if (q && wins.length) {
+      const n = wins.reduce((k, x) => k + tabsIn(x).filter(i => match(i.t)).length, 0);
+      if (n) chip("ti-search", "Matching", `${n.toLocaleString()} tab${n === 1 ? "" : "s"}`);
+      else {
+        const e = el("div", "empty py-5"), clear = el("button", "btn btn-primary"); clear.type = "button";
+        clear.append(icon("ti-filter-off", "me-1"), "Clear the search"); clear.onclick = () => { const box = $("#hq"); box.value = ""; box.dispatchEvent(new Event("input", {bubbles: true})); box.focus(); };
+        const ic = el("div", "empty-icon"); ic.append(icon("ti-search-off"));
+        const act = el("div", "empty-action"); act.append(clear);
+        e.append(ic, el("p", "empty-title", `No tab matches “${q.length > 40 ? q.slice(0, 40) + "…" : q}”`), el("p", "empty-subtitle text-secondary", "The search looks in each tab's title and address."), act);
+        body.append(e);
+      }
+    }
     for (const [title, xs, isInc] of sections) {
       if (!xs.length) continue;
       const sec = el("section", "tabs-sec" + (isInc ? " inc" : ""));
@@ -1359,7 +1373,17 @@ const ROW_DEPS = {readOnly: () => readOnly(), titleOf, descOf, ratingOf, tagsOf,
 function draw() {
   hideTip();
   list.replaceChildren();
-  if (!rows.length) { const e = el("div", "empty py-5"); e.append(el("p", "empty-title", "Nothing matches"), el("p", "empty-subtitle text-secondary", "Clear the filters or the search to see everything.")); list.append(e); return; }
+  // Nothing found: say what was searched for and offer the way back (the Trash row alone, at 0, is not a result).
+  if (!rows.length || (filtering() && rows.every(r => r.trash))) {
+    const q = $("#q").value.trim(), e = el("div", "empty py-5");
+    const clear = el("button", "btn btn-primary"); clear.type = "button"; clear.append(icon("ti-filter-off", "me-1"), q ? "Clear the search and filters" : "Clear the filters");
+    clear.onclick = () => { clearFilters(); list.focus(); };
+    e.append(el("div", "empty-icon"), el("p", "empty-title", q ? `Nothing matches “${q.length > 40 ? q.slice(0, 40) + "…" : q}”` : "Nothing matches these filters"),
+      el("p", "empty-subtitle text-secondary", "Try fewer words, another filter, or a wider date range."), el("div", "empty-action"));
+    e.querySelector(".empty-icon")!.append(icon("ti-search-off"));
+    e.querySelector(".empty-action")!.append(clear);
+    list.append(e); return;
+  }
   // The grid layout is CSS alone (#list.grid): the rows are the same either way, so switching is instant.
   rows.forEach((r, idx) => {
     // The row's element is built by src/web/ts/views/tree-rows.ts; selection, clicks, menus and drag are wired here.

@@ -141,7 +141,12 @@ export class TimelineView {
     feed.replaceChildren();
     if (this.d.scope().isNone && this.on.has("tabs") && this.on.size === 1) { feed.append(this.d.noneChosen()); return; }
     const ev = this.events();
-    if (!ev.length) { feed.append(el("div", "pane-note", "Nothing in this range. Choose a longer range, or turn on more kinds of events.")); return; }
+    if (!ev.length) {
+      const q = (this.part<HTMLInputElement>("query")?.value ?? "").trim();
+      feed.append(el("div", "pane-note", q ? `Nothing in this range matches “${q.length > 40 ? q.slice(0, 40) + "…" : q}”. Try other words, a longer range, or more kinds of events.`
+        : "Nothing in this range. Choose a longer range, or turn on more kinds of events."));
+      return;
+    }
     const pager = new Pager({ size: this.d.pageSize(), noun: "events", onChange: p => {
       if (p.pageSize !== this.d.pageSize()) this.d.setPageSize(p.pageSize);
       this.page = p.page; this.paint(); feed.scrollIntoView({ block: "start" });

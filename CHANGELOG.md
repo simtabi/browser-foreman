@@ -149,6 +149,12 @@ ships.
 
 ### Fixed
 
+- A search that finds nothing says so, with what was searched for: Bookmarks shows *Nothing matches “…”* with a
+  button to clear the search and filters (the empty Trash row is not a result); Open tabs shows *No tab matches “…”*
+  instead of every window saying no tab here matches, and counts the matching tabs when there are some; the Timeline
+  names the search rather than blaming the date range.
+- In dark mode, the Local, Skipped and Unchecked colours of link health show (they were dark on dark): Local is cyan,
+  Skipped grey, and Unchecked a hollow ring.
 - On a phone, Open tabs no longer puts every saved snapshot (hundreds of rows) before the open windows: the snapshots
   side scrolls within itself. Timeline events keep their text on full lines, with their link underneath when there is
   no room beside them; their Opened and Closed lists use the app's chevron.

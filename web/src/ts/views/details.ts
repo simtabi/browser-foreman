@@ -12,7 +12,8 @@ export interface DetailItem { id: BookmarkId; u: string; s: string; o: string; a
 
 export const STATUS_ORDER = ["ok", "moved", "moved-elsewhere", "needs-login", "unverified", "dead", "local", "skipped", "unchecked", "n/a"] as const;
 export const STATUS_BG: Record<string, string> = { ok: "bg-success", moved: "bg-warning", "moved-elsewhere": "bg-purple", "needs-login": "bg-info",
-  unverified: "bg-secondary", dead: "bg-danger", local: "bg-dark-lt", skipped: "bg-dark-lt", unchecked: "bg-secondary-lt", "n/a": "bg-dark-lt" };
+  unverified: "bg-secondary", dead: "bg-danger", local: "bg-cyan", skipped: "bg-status-muted", unchecked: "bg-status-hollow", "n/a": "bg-status-muted" };
+// Every colour reads on light and dark surfaces alike (a "-lt" tint vanishes on dark); unchecked is a hollow ring.
 /** Short labels where space is tight (the folder summary); the full name stays in the tooltip. */
 export const STATUS_SHORT: Record<string, string> = { ok: "Working", moved: "Moved", "moved-elsewhere": "Other site", "needs-login": "Needs login",
   unverified: "Unverified", dead: "Dead", local: "Local", skipped: "Skipped", unchecked: "Unchecked", "n/a": "Not a link" };
