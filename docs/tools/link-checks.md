@@ -18,6 +18,33 @@ the web interface and reach webhooks.
 The check reads the first 64 KiB of an HTML page, so a page that answers `200` but says "not found", or a parked
 domain, counts as dead, and a bot-check page counts as unverified rather than working.
 
+## Dead, then confirmed
+
+One failed visit is only a suspicion, because sites have bad hours. The first check that finds a link dead records
+`dead_since`, and the link shows as *page gone?* with "not confirmed yet". It becomes `confirmed` only when a check
+at least 24 hours later finds it dead again, and it stays confirmed while it stays dead. Any other result clears both
+fields. Results saved before this existed count from their `checked` time, so a link that has been dead for a while
+is confirmed on its next check.
+
+## What else a check records
+
+| Field | What it holds |
+|---|---|
+| `frame` | `refused` when the page forbids being shown inside another page (`X-Frame-Options: DENY` or `SAMEORIGIN`, or a CSP `frame-ancestors` that does not allow every origin). *Load the live page here* then keeps the snapshot and says why, instead of showing a blank frame. |
+| `meta` | what the page says about itself, from its `<head>`: OpenGraph `title`, `description`, `image` and `site`, and the `canonical` address. Addresses are made absolute and only `http`/`https` ones are kept. Details shows the description and the canonical address, and the image stands in when there is no snapshot. |
+| `archive` | the Internet Archive's closest copy of a confirmed-dead link (below). |
+
+A check that reads nothing about the page, such as a dead one, keeps the `meta` and `frame` that an earlier check
+found.
+
+## Internet Archive copies
+
+Off by default. Turn on *Archive copies* on the Timeline's *Link re-checks* card, or set the `wayback` preference. Once
+a run finishes, each link that became confirmed-dead in it is looked up at `archive.org/wayback/available`, one at a
+time and at most 200 per run. Only a copy on `web.archive.org` is kept, and it is saved only onto a link that is still
+dead. The link's panel then offers *Open the archived copy*. Turning it on sends those addresses to archive.org;
+nothing is sent while it is off.
+
 ## Being polite, and safe
 
 - **A few at a time per site.** At most two requests at once per site (one for sites known to rate-limit, such as

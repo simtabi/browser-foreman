@@ -53,6 +53,9 @@ func OpenSQLite(dir string) (*SQLiteStore, error) {
 	}
 	// Columns added after the first release: an older database gains them here (the error for one already there is
 	// the expected answer and ignored).
+	for _, c := range linkColumns {
+		_, _ = db.Exec(`ALTER TABLE links ADD COLUMN ` + c)
+	}
 	_, _ = db.Exec(`ALTER TABLE workspace_meta ADD COLUMN deleted TEXT NOT NULL DEFAULT ''`)
 	_, _ = db.Exec(`ALTER TABLE workspace_meta ADD COLUMN color TEXT NOT NULL DEFAULT ''`)
 	_, _ = db.Exec(`ALTER TABLE workspace_meta ADD COLUMN icon TEXT NOT NULL DEFAULT ''`)

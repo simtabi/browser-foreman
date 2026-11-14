@@ -186,7 +186,7 @@ export const noteEditor = () => ({
 
 interface Run { run_id: string; started: string; finished?: string; total: number; checked: number; newly_broken: number; fixed: number; state: string }
 export const rechecks = () => ({
-  status: null as null | { running: string | null; runs: Run[]; recheck_days: number }, report: null as null | { newly_broken: { url: string; before: string; note: string }[]; fixed: { url: string }[] },
+  status: null as null | { running: string | null; runs: Run[]; recheck_days: number; wayback?: boolean }, report: null as null | { newly_broken: { url: string; before: string; note: string }[]; fixed: { url: string }[] },
   timer: 0,
   async init() { await this.load(); },
   async load() {
@@ -206,6 +206,12 @@ export const rechecks = () => ({
     try { await api.path("rechecks", "run").post(); toast("Link re-check started.", "info"); await this.load(); } catch (e) { toast(String((e as Error).message ?? e), "danger"); }
   },
   async stop() { await api.path("rechecks", "cancel").post(); await this.load(); },
+  async setWayback(on: boolean) {
+    if (on && !(await confirm({ title: "Look up dead links in the Internet Archive?", ok: "Turn on", danger: false,
+      body: "Once a link is confirmed dead, its address is sent to archive.org to find the closest saved copy, which then shows with the link. Only confirmed-dead links are sent, at most 200 per run. Nothing is sent while this is off." }))) { await this.load(); return; }
+    await api.path("tabs", "settings").post({ wayback: on }); await this.load();
+    toast(on ? "Dead links will be looked up in the Internet Archive" : "Internet Archive lookups off", "success");
+  },
   async setDays(days: number) { await api.path("tabs", "settings").post({ recheck_days: Number(days) }); await this.load(); toast(Number(days) ? `Links re-checked every ${days} days` : "Scheduled re-checks off", "success"); },
 });
 

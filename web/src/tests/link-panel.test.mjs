@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const load = async f => { const o = await build({ entryPoints: [join(here, "..", "ts", f)], bundle: true, format: "esm", write: false, platform: "neutral" });
   return import("data:text/javascript;base64," + Buffer.from(o.outputFiles[0].text).toString("base64")); };
-const L = await load("views/link-panel.ts");
+const L = await load("views/link-panel.ts"), Rows = await load("views/tree-rows.ts");
 
 const c = { readOnly: false, inTrash: false, help: { dead: "The page did not answer. More text.", unverified: "Could not tell." },
   statusName: { unverified: "Not verified", "needs-login": "Needs a login" }, statusIcon: { unverified: "ti-question-mark" } };
@@ -17,7 +17,7 @@ const check = (name, fn) => { fn(); checks++; console.log("ok", name); };
 const acts = a => a?.actions.map(x => x[2]);
 
 check("dead: names whether the site or the page is gone, adds the check's note, offers re-check and trash", () => {
-  const a = L.linkAlert(link({ s: "dead", dk: "host", n: "DNS failed" }), c);
+  const a = L.linkAlert(link({ s: "dead", dk: "host", dc: true, n: "DNS failed" }), c);
   assert.equal(a.title, "Dead: the whole site is gone");
   assert.equal(a.body, "The page did not answer. Check result: DNS failed.");
   assert.deepEqual(acts(a), ["recheck", "trash"]);
@@ -31,7 +31,8 @@ check("moved: another site is purple and warns; same site is a warning", () => {
 });
 check("an applied update can be reverted; a dead link outranks a pending move", () => {
   assert.deepEqual(acts(L.linkAlert(link({ applied: true, prev: "https://old.test/" }), c)), ["revert"]);
-  assert.equal(L.linkAlert(link({ s: "dead", nu: "https://b.test/" }), c).tone, "danger");
+  assert.equal(L.linkAlert(link({ s: "dead", dc: true, nu: "https://b.test/" }), c).tone, "danger");
+  assert.match(L.linkAlert(link({ s: "dead", nu: "https://b.test/" }), c).title, /^Dead: /);
 });
 check("not checked: the status's own name and help; only unverified offers Try again", () => {
   const u = L.linkAlert(link({ s: "unverified" }), c);
@@ -58,5 +59,31 @@ check("live loading refuses this tool and local addresses", () => {
   assert.equal(L.liveLoad("http://foreman.test/x", self), "local");
   assert.equal(L.liveLoad("file:///etc/hosts", self), "web");
 });
-assert.equal(checks, 8);
+check("dead but unconfirmed: a warning that says when a check confirms it, and trash is not the red button", () => {
+  const a = L.linkAlert(link({ s: "dead", dsn: "2026-11-14T09:00:00Z" }), c);
+  assert.equal(a.tone, "warning");
+  assert.equal(a.title, "Dead: the page is gone, the site is still up (not confirmed yet)");
+  assert.match(a.body, /Found dead once so far: .* only when a check after .+ finds it dead again\./);
+  assert.ok(a.body.includes(L.confirmsAfter("2026-11-14T09:00:00Z")));
+  assert.equal(a.actions.find(x => x[2] === "trash")[3], "");
+  assert.equal(L.linkAlert(link({ s: "dead", dc: true }), c).tone, "danger");
+  assert.equal(L.confirmsAfter(""), "");
+  assert.equal(L.confirmsAfter("not a date"), "");
+});
+check("an archived copy is offered first, also read-only, and named where the snapshot would be", () => {
+  const ar = "https://web.archive.org/web/2020/https://a.test/";
+  assert.deepEqual(acts(L.linkAlert(link({ s: "dead", dc: true, ar }), c)), ["archive", "recheck", "trash"]);
+  assert.deepEqual(acts(L.linkAlert(link({ s: "dead", ar }), { ...c, readOnly: true })), ["archive"]);
+  assert.match(L.snapshotMessage(link({ s: "dead", ar })), /Internet Archive has a copy/);
+});
+check("live loading stops at a site that forbids framing", () => {
+  assert.equal(L.liveLoad("https://a.test/", () => false, "refused"), "refused");
+  assert.equal(L.liveLoad("https://a.test/", () => false, ""), "ok");
+  assert.equal(L.liveLoad("http://localhost/", () => false, "refused"), "local");
+});
+check("a row's dead label carries a ? until confirmed", () => {
+  assert.equal(Rows.deadLabel({ dk: "host" }), "site gone?");
+  assert.equal(Rows.deadLabel({ dk: "page", dc: true }), "page gone");
+});
+assert.equal(checks, 12);
 console.log(`${checks} link-panel checks passed`);

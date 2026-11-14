@@ -169,7 +169,9 @@ func (c *Checker) check(ctx context.Context, raw string) Result {
 	}
 	res := classify(raw, resp.StatusCode, final)
 	if res.Status == StatusOK || res.Status == StatusMoved {
+		res.Frame = frameRule(resp.Header)
 		if ct := resp.Header.Get("Content-Type"); strings.Contains(ct, "html") {
+			res.Meta = pageMeta(body, final)
 			title, text := pageText(body)
 			switch v, why := Verdict(title, text, final); v {
 			case "soft-404":

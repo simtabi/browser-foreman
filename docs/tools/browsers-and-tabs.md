@@ -86,6 +86,7 @@ are the `tabs_own` and `active_workspace` preferences.
 | `incognito_purge_hours` | `0` | after each save, remove the pages of private windows older than this (counts stay); `0` never |
 | `keep_days` | 14 | 1–3650 |
 | `recheck_days` | 7 | re-check links whose last check is older than this; 0 is off |
+| `wayback` | false | look up each confirmed-dead link's copy in the Internet Archive (sends those addresses to archive.org); see [Link checks](link-checks.md#internet-archive-copies) |
 
 Scheduled re-checks only visit links that were checked before: a link never checked waits for a check you start, so
 the first run of the server never starts thousands of requests on its own.

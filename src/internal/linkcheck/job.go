@@ -15,7 +15,8 @@ const (
 )
 
 // Job is one run over many URLs: checked a few at a time, interleaved by site, pausable and cancellable. Each result
-// goes to the onResult callback as it arrives (the server stores it there), and stays readable from the job.
+// goes to the onResult callback as it arrives (the server stores it there); what the callback returns (the result as
+// stored, with what earlier checks knew folded in) stays readable from the job.
 type Job struct {
 	ID      string
 	Total   int
@@ -44,7 +45,7 @@ type View struct {
 
 // Start checks urls (duplicates dropped) with `workers` checks at once overall; the limiter still keeps each site to
 // its own budget.
-func (c *Checker) Start(id string, urls []string, workers int, onResult func(Result)) *Job {
+func (c *Checker) Start(id string, urls []string, workers int, onResult func(Result) Result) *Job {
 	seen := map[string]bool{}
 	todo := []string{}
 	for _, u := range urls {
@@ -84,13 +85,13 @@ func (c *Checker) Start(id string, urls []string, workers int, onResult func(Res
 				if ctx.Err() != nil {
 					return // cancelled mid-check: an interrupted result says nothing
 				}
+				if onResult != nil {
+					r = onResult(r)
+				}
 				j.mu.Lock()
 				j.results[u] = r
 				j.checked++
 				j.mu.Unlock()
-				if onResult != nil {
-					onResult(r)
-				}
 			}
 		}()
 	}

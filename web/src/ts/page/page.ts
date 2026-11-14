@@ -19,6 +19,7 @@ import { BrowserScope } from "../scope";
 import { tabHistory } from "../components";
 import { $, badge, el, fmtDate, fmtDay, icon, kbd } from "../ui";
 import { looseLabel, pendingUpdate, rowElement } from "../views/tree-rows";
+import { LINK_FIELDS } from "../v1";
 import { redactedNote, tabRowElement, windowCard as windowCardOf } from "../views/tab-cards";
 import { DetailsPanel, STATUS_BG, STATUS_NAME, STATUS_SHORT, alertBox as alertBoxOf, countFolders, datagrid, folderSummary as folderSummaryOf, sectionCard } from "../views/details";
 import { SingleRead, ago as agoOf, autosaveText, liveRowSub, planOpen, scopedSummary as scopedSummaryOf, snapshotRow, sortTabs as sortTabsBy, when as whenOf, sortWindows, tabCount, tabsIn, windowsOf } from "../tabs";
@@ -355,7 +356,7 @@ const filtering = () => filter !== "all" || $("#q").value.trim() || view.from ||
 function buildToolbar() {
   // Each chip carries its count (these were the stat cards above the bar; one control now, not two).
   const n = k => k === "all" ? DATA.keep.length : k === "dupes" ? DATA.dupes.length : k === "prot" ? DATA.keep.filter(i => i.p).length : DATA.keep.filter(i => i.s === k).length;
-  const extra = {all: `${DATA.total.toLocaleString()} before cleanup.`, dead: `${DATA.keep.filter(i => i.s === "dead" && i.dk === "host").length} whole site gone, ${DATA.keep.filter(i => i.s === "dead" && i.dk !== "host").length} page gone.`};
+  const extra = {all: `${DATA.total.toLocaleString()} before cleanup.`, dead: `${DATA.keep.filter(i => i.s === "dead" && i.dk === "host").length} whole site gone, ${DATA.keep.filter(i => i.s === "dead" && i.dk !== "host").length} page gone, ${DATA.keep.filter(i => i.s === "dead" && !i.dc).length} not confirmed yet.`};
   for (const [k, l, ic] of FILTERS) {
     const b = el("button", "nav-link"); b.type = "button"; b.setAttribute("role", "tab"); b.dataset.f = k; b.setAttribute("aria-label", l); b.append(icon(ic), FILTER_SHORT[k] || l, el("span", "chip-n", n(k).toLocaleString()));  // refreshed live by paintChipCounts
     b.dataset.tip = [l + ".", HELP[k], extra[k]].filter(Boolean).join(" ");
@@ -438,7 +439,7 @@ function summary() {
     ["all", "Bookmarks", DATA.keep.length, `${DATA.total.toLocaleString()} before cleanup`, "ti-bookmarks", "primary"],
     ["moved", "Moved", n("moved"), "new address ready to apply", "ti-arrow-forward-up", "warning"],
     ["moved-elsewhere", "Redirect elsewhere", n("moved-elsewhere"), "check each one first", "ti-arrows-split", "purple"],
-    ["dead", "Dead links", n("dead"), `${DATA.keep.filter(i => i.s === "dead" && i.dk === "host").length} whole site gone, ${DATA.keep.filter(i => i.s === "dead" && i.dk !== "host").length} page gone`, "ti-alert-triangle", "danger"],
+    ["dead", "Dead links", n("dead"), `${DATA.keep.filter(i => i.s === "dead" && i.dk === "host").length} whole site gone, ${DATA.keep.filter(i => i.s === "dead" && i.dk !== "host").length} page gone, ${DATA.keep.filter(i => i.s === "dead" && !i.dc).length} not confirmed yet`, "ti-alert-triangle", "danger"],
     ["unverified", "Could not verify", n("unverified"), "site blocked the check or timed out", "ti-help-circle", "secondary"],
     ["dupes", "Duplicates removed", DATA.dupes.length, "merged, nothing lost", "ti-copy", "info"],
   ];
@@ -1745,9 +1746,9 @@ function trackJob(job, total) {
       if (r.s === "unverified" && i.s !== "unverified" && i.s !== "unchecked") { kept0++; if (r.h) { i.h = r.h; thumbVer.set(r.h, now); } continue; }
       if (i.s !== r.s) changed++;
       i.s = r.s; i.n = r.n; if (r.h) { i.h = r.h; thumbVer.set(r.h, now); }
-      if ("dk" in r) i.dk = r.dk; else delete i.dk;
-      if ("nu" in r) i.nu = r.nu; else delete i.nu;
-      kept[id] = {s: i.s, n: i.n, h: i.h, dk: i.dk, nu: i.nu};
+      // Every check field: a newer result clears what an older one set (n is set above).
+      for (const k of LINK_FIELDS) if (k !== "n") { if (k in r) i[k] = r[k]; else delete i[k]; }
+      kept[id] = {s: i.s, h: i.h, ...Object.fromEntries(LINK_FIELDS.map(k => [k, i[k]]))};
     }
     store.set("refreshed", kept);
     jobRunning = false; panel.hidden = true; $("#job").hidden = true; summary(); build();
@@ -2247,7 +2248,7 @@ function statusAlert(i, id) {
   const spec = linkAlert(i, {readOnly: readOnly(), inTrash: inTrash(id), help: HELP, statusName: STATUS_NAME, statusIcon: STATUS_ICON});
   if (!spec) return null;
   const run = {recheck: refresh, retry: refresh, putBack, trash: trashNodes, update: () => applyUpdates([id]), openNew: () => openTab(i.nu),
-    revert: () => revertUpdate(id), open: () => openTab(i.u)};
+    revert: () => revertUpdate(id), open: () => openTab(i.u), archive: () => openTab(i.ar)};
   return alertBox(spec.tone, spec.icon, spec.title, spec.body, spec.actions.map(([l, ic, k, cls]) => cls === undefined ? [l, ic, run[k]] : [l, ic, run[k], cls]));
 }
 const DETAILS = new DetailsPanel({
@@ -2383,19 +2384,29 @@ function showLink(i, id) {
     ["Was in", nice(i.o)], ["Why it is here", i.p ? "Kept exactly where you had it" : i.w],
     ["Original title", st().titles[id] != null ? i.t : ""],
     ["Page's own description", noteOf(id) && i.ds ? i.ds : ""],
+    ["The page says", i.og?.description && i.og.description !== descOf(id) ? i.og.description : ""],
+    ["Its own address", i.og?.canonical && i.og.canonical !== i.u ? (() => { const c = el("a", "text-truncate min-w-0", shortUrl(i.og.canonical, 110)); c.href = i.og.canonical; c.target = "_blank"; c.rel = "noopener noreferrer"; c.dataset.tip = "The address the page names as its own (canonical)"; return c; })() : ""],
+    ["Archived copy", i.ar ? (() => { const c = el("a", "text-truncate min-w-0", "Internet Archive"); c.href = i.ar; c.target = "_blank"; c.rel = "noopener noreferrer"; c.dataset.tip = i.ar; return c; })() : ""],
+    ["Live preview", i.fr === "refused" ? "Not possible: the site forbids being shown inside another page" : ""],
     ["In the Trash", !readOnly() && inTrash(id) ? "from " + (nice((st().trashFrom[id] || {}).path || "") || "top level") : ""],
     ["Duplicate of", i.k ? "the copy kept in " + nice(i.kg || i.k) : ""],
   ]); g.classList.remove("mt-3"); return g; })()));
   if (i.h) {
     shot.hidden = false; shot.src = `thumbs/${i.h}.jpg` + (thumbVer.has(i.h) ? `?v=${thumbVer.get(i.h)}` : "");
     shot.onerror = () => { shot.hidden = true; message(NO_SNAPSHOT); };
+  } else if (i.og?.image && i.s !== "dead") {
+    // No snapshot yet: the picture the page itself offers for previews (og:image) stands in.
+    shot.hidden = false; shot.src = i.og.image; shot.referrerPolicy = "no-referrer";
+    shot.onerror = () => { shot.hidden = true; message(snapshotMessage(i)); };
   } else message(snapshotMessage(i));
 }
 function live() {
   const r = rows[sel]; if (!r || r.kind !== "link") return;
   // Never this tool's own address or a local one (views/link-panel.ts liveLoad).
-  const may = liveLoad(r.item.u, isSelf); if (may === "web") return;
+  const may = liveLoad(r.item.u, isSelf, r.item.fr); if (may === "web") return;
   if (may === "local") return toast("Local addresses are not loaded here. Open them in a tab instead.", "warning", "Not loaded");
+  // The site forbids being shown inside another page: the frame would stay blank, so the snapshot stays.
+  if (may === "refused") return toast("This site does not allow being shown inside another page, so the snapshot stays. Open it in a tab instead.", "info", "Not loaded");
   shot.hidden = true; $("#msg").hidden = true; frame.hidden = false; frame.src = r.item.u;
 }
 

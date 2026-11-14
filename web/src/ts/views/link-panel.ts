@@ -12,10 +12,18 @@ export interface LinkItem extends Bookmark {
   prev?: string;         // the address before an applied update
   sx?: string;           // why it may be a soft 404
   h?: string;            // snapshot hash
+  ar?: string;           // the Internet Archive's copy of a dead link
+  fr?: string;           // "refused": the site forbids being shown in a frame
+}
+
+/** When a dead link's suspicion becomes certain: a day after it was first found dead (linkcheck.ConfirmAfter). */
+export function confirmsAfter(dsn?: string): string {
+  const t = dsn ? Date.parse(dsn) : NaN;
+  return Number.isNaN(t) ? "" : new Date(t + 24 * 3600 * 1000).toLocaleString();
 }
 
 /** What an alert's button does; the page maps each to its action. */
-export type LinkAction = "recheck" | "putBack" | "trash" | "update" | "openNew" | "revert" | "retry" | "open";
+export type LinkAction = "recheck" | "putBack" | "trash" | "update" | "openNew" | "revert" | "retry" | "open" | "archive";
 export interface AlertSpec { tone: string; icon: string; title: string; body: string; actions: [string, string, LinkAction, string?][] }
 
 export interface AlertContext {
@@ -29,12 +37,19 @@ const QUIET = ["unverified", "needs-login", "local", "skipped", "unchecked", "n/
  *  applied update, a status that was not checked, a possible "not found" page. */
 export function linkAlert(i: LinkItem, c: AlertContext): AlertSpec | null {
   const note = i.n && i.s !== "ok" ? ` Check result: ${i.n}.` : "";
-  if (i.s === "dead") return {
-    tone: "danger", icon: "ti-alert-triangle",
-    title: i.dk === "host" ? "Dead: the whole site is gone" : "Dead: the page is gone, the site is still up",
-    body: (c.help.dead ?? "").split(". ")[0] + "." + note,
-    actions: c.readOnly ? [] : [["Re-check", "ti-refresh", "recheck"], c.inTrash ? ["Put back", "ti-arrow-back-up", "putBack"] : ["Move to Trash", "ti-trash", "trash", "btn-danger"]],
-  };
+  if (i.s === "dead") {
+    const when = confirmsAfter(i.dsn);
+    const unsure = i.dc ? "" : " Found dead once so far: sites have bad hours, so it counts as confirmed only when a check " +
+      (when ? `after ${when}` : "a day later") + " finds it dead again.";
+    const actions: [string, string, LinkAction, string?][] = c.readOnly ? [] : [["Re-check", "ti-refresh", "recheck"],
+      c.inTrash ? ["Put back", "ti-arrow-back-up", "putBack"] : ["Move to Trash", "ti-trash", "trash", i.dc ? "btn-danger" : ""]];
+    if (i.ar) actions.unshift(["Open the archived copy", "ti-archive", "archive"]);
+    return {
+      tone: i.dc ? "danger" : "warning", icon: "ti-alert-triangle",
+      title: (i.dk === "host" ? "Dead: the whole site is gone" : "Dead: the page is gone, the site is still up") + (i.dc ? "" : " (not confirmed yet)"),
+      body: (c.help.dead ?? "").split(". ")[0] + "." + unsure + note, actions,
+    };
+  }
   if (pendingUpdate(i)) {
     const other = i.nk === "other";
     return {
@@ -66,7 +81,7 @@ export function linkBadges(i: LinkItem, hasNote: boolean): [string, string, stri
 
 /** What shows where the page's snapshot would be, when there is none. */
 export function snapshotMessage(i: LinkItem): string {
-  if (i.s === "dead") return "Dead link, so there is no snapshot. Refresh (R) re-checks it.";
+  if (i.s === "dead") return "Dead link, so there is no snapshot. Refresh (R) re-checks it." + (i.ar ? " The Internet Archive has a copy (Open the archived copy)." : "");
   if (!/^https?:/i.test(i.u)) return "Not a web page, so there is no snapshot.";
   if (i.s === "unchecked") return "Not checked yet. Live (L) loads it here.";
   if (["local", "skipped"].includes(i.s)) return "Not visited on purpose (local, sign-out or action link). Live (L) loads it here.";
@@ -75,9 +90,11 @@ export function snapshotMessage(i: LinkItem): string {
 export const NO_SNAPSHOT = "No snapshot yet. Refresh (R) takes one; Live (L) loads the page here.";
 
 /** May this address load live in the frame? Never this tool's own address or a local one: the frame's sandbox would
- *  then grant it this page's powers. "web" = not a web page (nothing happens); "local" = refused with a message. */
-export function liveLoad(u: string, isSelf: (u: string) => boolean): "ok" | "web" | "local" {
+ *  then grant it this page's powers. "web" = not a web page (nothing happens); "local" = refused with a message;
+ *  "refused" = the site forbids framing (the last check saw it), so the frame would stay blank. */
+export function liveLoad(u: string, isSelf: (u: string) => boolean, frame?: string): "ok" | "web" | "local" | "refused" {
   if (!/^https?:/i.test(u)) return "web";
   if (isSelf(u) || /^https?:\/\/(localhost|127\.|\[::1\])/i.test(u)) return "local";
+  if (frame === "refused") return "refused";
   return "ok";
 }

@@ -9,25 +9,38 @@ export interface V1Node { id: string; kind: "folder" | "bookmark"; title: string
 export interface V1Trashed { node: V1Node; from: string; index: number; at: number; reason?: string }
 export interface V1Tree { root: V1Node; trash?: V1Trashed[] }
 /** The last link check of an address (store.LinkResult). */
-export interface V1Link { url: string; status: string; code?: number; final?: string; note?: string; kind?: string; checked: string }
+export interface V1Link { url: string; status: string; code?: number; final?: string; note?: string; kind?: string; checked: string;
+  dead_since?: string; confirmed?: boolean; frame?: string; archive?: string;
+  meta?: { title?: string; description?: string; image?: string; canonical?: string; site?: string } }
 
 /** s: the link check's status ("unchecked" until one runs), n its note, dk "page" or "host" for a dead link, nu the
  *  address a moved link now answers at; g: the folder it is in; o: the folder it came from. */
 /** The pictures the server has: each site's icon file by host, each page's snapshot key by address. */
 export interface Media { icons: Record<string, string>; thumbs: Record<string, string> }
 
+/** For a dead link: dsn when checks first found it dead, dc once a later check confirmed it. fr "refused": the site
+ *  forbids being shown in a frame. ar: the Internet Archive's copy. og: what the page says about itself. */
 export interface PageItem { id: BookmarkId; u: string; t: string; a?: number; s: string; g: string; o: string; n?: string; dk?: string; nu?: string;
+  dsn?: string; dc?: boolean; fr?: string; ar?: string; og?: V1Link["meta"];
   /** fv: the site's icon file (favicons/<fv>); h: the page's snapshot (thumbs/<h>.jpg). */
   fv?: string; h?: string;
   /** For a merged copy (data.dupes): the folder of the bookmark kept for it. */
   k?: string; kg?: string }
 
 /** The page's fields for one check result. */
-export function linkFields(l: V1Link): Pick<PageItem, "s" | "n" | "dk" | "nu"> {
-  const f: Pick<PageItem, "s" | "n" | "dk" | "nu"> = { s: l.status };
+export type LinkFields = Pick<PageItem, "s" | "n" | "dk" | "nu" | "dsn" | "dc" | "fr" | "ar" | "og">;
+/** Every field linkFields can set, so a newer result can clear one an older result set. */
+export const LINK_FIELDS = ["n", "dk", "nu", "dsn", "dc", "fr", "ar", "og"] as const;
+export function linkFields(l: V1Link): LinkFields {
+  const f: LinkFields = { s: l.status };
   if (l.note) f.n = l.note;
   if (l.kind) f.dk = l.kind;
   if (l.status === "moved" && l.final) f.nu = l.final;
+  if (l.dead_since) f.dsn = l.dead_since;
+  if (l.confirmed) f.dc = true;
+  if (l.frame) f.fr = l.frame;
+  if (l.archive) f.ar = l.archive;
+  if (l.meta && Object.keys(l.meta).length) f.og = l.meta;
   return f;
 }
 export interface From { path: string; index: number }

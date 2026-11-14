@@ -169,7 +169,7 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 	_, _ = rand.Read(b)
 	id := "lc_" + hex.EncodeToString(b)
 	var mu sync.Mutex
-	var batch []store.LinkResult
+	var batch, archive []store.LinkResult
 	changed, dead := 0, 0
 	stat := &runStat{Workspace: wsID}
 	flush := func() {
@@ -181,7 +181,7 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 			_ = s.Data.SaveLinks(context.Background(), todo)
 		}
 	}
-	job := s.Checker.Start(id, urls, 12, func(res linkcheck.Result) {
+	job := s.Checker.Start(id, urls, 12, func(res linkcheck.Result) linkcheck.Result {
 		before, known := prev[res.URL]
 		mu.Lock()
 		if known && res.Status == linkcheck.StatusDead && before.Status != linkcheck.StatusDead {
@@ -194,9 +194,13 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		// A check that could not reach the site says nothing new about it: keep what an earlier check found, so a
 		// network hiccup never turns a working or dead link into "could not verify".
 		if res.Status == linkcheck.StatusUnverified && known && before.Status != linkcheck.StatusUnverified {
-			return
+			return res
 		}
+		res = linkcheck.Settle(before, known, res)
 		mu.Lock()
+		if res.Confirmed && res.Archive == "" {
+			archive = append(archive, res)
+		}
 		batch = append(batch, res)
 		full := len(batch) >= 50
 		if res.Status == linkcheck.StatusDead {
@@ -212,6 +216,7 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		if full {
 			flush()
 		}
+		return res
 	})
 	s.checks.jobs[id], s.checks.live = job, id
 	s.checks.stats[id] = stat
@@ -226,7 +231,11 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		s.checks.mu.Unlock()
 		mu.Lock()
 		_, _ = s.Bus.Publish("linkcheck.finished", map[string]any{"id": id, "workspace": wsID, "state": v.State, "checked": v.Checked, "total": v.Total, "changed": changed, "dead": dead})
+		found := archive
 		mu.Unlock()
+		if v.State == linkcheck.Done {
+			s.lookUpArchives(found) // after the run is reported finished: the archive is slow and optional
+		}
 	}()
 	return job, nil
 }
@@ -249,4 +258,46 @@ func (s *Server) listChecks(w http.ResponseWriter, _ *http.Request) {
 		live = s.checks.live
 	}
 	writeJSON(w, 200, map[string]any{"running": live, "runs": out})
+}
+
+// maxArchiveLookups caps the Internet Archive questions one run asks, so a first run over a large, long-neglected
+// library does not send thousands of addresses at once; the rest are asked on later runs.
+const maxArchiveLookups = 200
+
+// lookUpArchives asks the Internet Archive for a copy of each confirmed-dead link, one at a time, when the owner turned
+// that on (Prefs.Wayback): it sends the addresses to archive.org. Found copies are saved with the link.
+func (s *Server) lookUpArchives(rs []store.LinkResult) {
+	ctx := context.Background()
+	p, err := store.LoadPrefs(ctx, s.Data)
+	if err != nil || !p.Wayback || len(rs) == 0 {
+		return
+	}
+	end := s.WaybackAPI
+	if end == "" {
+		end = linkcheck.WaybackAPI
+	}
+	copies := map[string]string{}
+	var urls []string
+	for _, r := range rs[:min(len(rs), maxArchiveLookups)] {
+		if a := s.Checker.Wayback(ctx, end, r.URL); a != "" {
+			copies[r.URL] = a
+			urls = append(urls, r.URL)
+		}
+	}
+	if len(urls) == 0 {
+		return
+	}
+	// Lookups take a while: save each copy onto the link as it is now, and only if it is still dead.
+	now, err := s.Data.Links(ctx, urls)
+	if err != nil {
+		return
+	}
+	var found []store.LinkResult
+	for u, r := range now {
+		if r.Status == linkcheck.StatusDead {
+			r.Archive = copies[u]
+			found = append(found, r)
+		}
+	}
+	_ = s.Data.SaveLinks(ctx, found)
 }

@@ -10,6 +10,14 @@ ships.
 
 ### Added
 
+- Link checks now confirm a dead link before calling it confirmed: the first failed check marks it *page gone?* (not
+  confirmed yet), and a check at least 24 hours later that finds it dead again confirms it.
+- Link checks record whether a page forbids being shown in a frame. *Load the live page here* then keeps the snapshot
+  and says why, instead of showing a blank frame.
+- Link checks read what each page says about itself (OpenGraph title, description, image and canonical address).
+  Details shows the description and the canonical address, and the image stands in where there is no snapshot.
+- *Archive copies* (off by default): each confirmed-dead link is looked up in the Internet Archive, and its panel
+  offers *Open the archived copy*.
 - One-click connecting for the browser extension: press Connect in its popup, and Browser Foreman asks (wherever you
   are in it) whether to connect that browser, showing the same four letters as the popup. The pairing code still
   works. Only an extension can ask; a request waits five minutes, five at most at once.

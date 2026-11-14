@@ -31,6 +31,9 @@ type Prefs struct {
 	KeepDays int `json:"keep_days"`
 	// RecheckDays re-checks every bookmarked link this often; 0 is off.
 	RecheckDays int `json:"recheck_days"`
+	// Wayback asks the Internet Archive for a copy of each link once it is confirmed dead. Off by default: it sends
+	// those addresses to archive.org.
+	Wayback bool `json:"wayback"`
 	// Page snapshots: the browser window they are taken in (a taller one shows more of the page), how long a page
 	// may run before the picture is taken, and the folder they are kept in ("": the data folder's media/).
 	SnapshotWidth       int    `json:"snapshot_width"`

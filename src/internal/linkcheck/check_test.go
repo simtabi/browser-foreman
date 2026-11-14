@@ -166,7 +166,7 @@ func TestJobPauseResumeCancel(t *testing.T) {
 		urls = append(urls, fmt.Sprintf("%s/p%d", s.URL, i))
 	}
 	var got atomic.Int32
-	j := c.Start("j1", append(urls, urls[0]), 2, func(Result) { got.Add(1) })
+	j := c.Start("j1", append(urls, urls[0]), 2, func(r Result) Result { got.Add(1); return r })
 	if j.Total != 20 {
 		t.Fatalf("duplicates kept: %d", j.Total)
 	}

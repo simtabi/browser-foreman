@@ -43,8 +43,10 @@ type Server struct {
 	Now      func() time.Time
 	UI       fs.FS // the web interface's files; nil: the ones embedded in the binary
 	Checker  *linkcheck.Checker
-	Browsers *browsers.Service
-	Tabs     *tabs.Service
+	// WaybackAPI is where archive lookups go ("": linkcheck.WaybackAPI); tests point it at a fake.
+	WaybackAPI string
+	Browsers   *browsers.Service
+	Tabs       *tabs.Service
 	// Media keeps site icons and page snapshots; Snapper takes snapshots (nil: the installed Chrome, found when asked).
 	Media   media.Store
 	Snapper *media.Snapper

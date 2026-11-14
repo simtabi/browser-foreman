@@ -89,4 +89,11 @@ assert.equal(page.state.ratings[1], undefined);
 const rated = structuredClone(page.state); rated.ratings[1] = 5; delete rated.tags[2];
 const back = V.fromPage(rated, {}, page, newId).root.children[0].children;
 assert.deepEqual([back[0].rating, back[1].children[0].rating, back[1].children[0].tags], [5, 4, undefined]);
-console.log("v1: 22 checks passed");
+// A check result's newer fields reach the page, and only when they say something.
+assert.deepEqual(V.linkFields({ url: "u", status: "dead", kind: "page", checked: "x", dead_since: "2026-11-14T09:00:00Z", confirmed: true,
+  frame: "refused", archive: "https://web.archive.org/web/2020/u", meta: { title: "T", image: "https://a.test/i.png" } }),
+  { s: "dead", dk: "page", dsn: "2026-11-14T09:00:00Z", dc: true, fr: "refused", ar: "https://web.archive.org/web/2020/u", og: { title: "T", image: "https://a.test/i.png" } });
+assert.deepEqual(V.linkFields({ url: "u", status: "ok", checked: "x", meta: {} }), { s: "ok" });
+for (const k of Object.keys(V.linkFields({ url: "u", status: "moved", final: "f", note: "n", kind: "k", checked: "x", dead_since: "d", confirmed: true, frame: "refused", archive: "a", meta: { title: "t" } })))
+  assert.ok(k === "s" || V.LINK_FIELDS.includes(k), `${k} is set by linkFields but not cleared by a newer result`);
+console.log("v1: 25 checks passed");

@@ -148,3 +148,66 @@ func TestOneCheckAtATimeAndControls(t *testing.T) {
 	}
 	close(gate)
 }
+
+func TestADeadLinkIsConfirmedADayLaterAndGetsItsArchiveCopy(t *testing.T) {
+	var asked atomic.Int32
+	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/wayback":
+			asked.Add(1)
+			w.Write([]byte(`{"archived_snapshots":{"closest":{"available":true,"status":"200","url":"http://web.archive.org/web/2020/x"}}}`))
+		case "/b":
+			http.Error(w, "gone", 404)
+		default:
+			w.Header().Set("Content-Type", "text/html")
+			w.Header().Set("X-Frame-Options", "DENY")
+			w.Write([]byte(`<html><head><title>A</title><meta property="og:description" content="About A"></head><body>Plenty of words here.</body></html>`))
+		}
+	}))
+	defer site.Close()
+	s := newServer(t, "tok")
+	s.WaybackAPI = site.URL + "/wayback"
+	linkWorkspace(t, s, site.URL)
+	h := s.Handler()
+	now := time.Now()
+	s.Checker.Now = func() time.Time { return now }
+	if w := send(h, "PUT", "/api/v1/preferences", `{"wayback":true}`); w.Code != 200 {
+		t.Fatalf("prefs %d %s", w.Code, w.Body)
+	}
+	stored := func() map[string]store.LinkResult {
+		var out struct{ Links map[string]store.LinkResult }
+		_ = json.Unmarshal(send(h, "GET", "/api/v1/workspaces/links/links", "").Body.Bytes(), &out)
+		return out.Links
+	}
+	res := waitCheck(t, h, start(t, h, `{"workspace":"links"}`))
+	if b := res[site.URL+"/b"]; b.Status != "dead" || b.Confirmed || b.DeadSince.IsZero() {
+		t.Fatalf("first sighting, as the run reports it: %+v", b)
+	}
+	a := stored()[site.URL+"/a"]
+	if a.Frame != "refused" || a.Meta == nil || a.Meta.Description != "About A" {
+		t.Fatalf("framing and description not kept: %+v", a)
+	}
+	if asked.Load() != 0 {
+		t.Fatal("the archive was asked about a link not yet confirmed dead")
+	}
+	now = now.Add(25 * time.Hour)
+	res = waitCheck(t, h, start(t, h, `{"workspace":"links"}`))
+	if b := res[site.URL+"/b"]; !b.Confirmed {
+		t.Fatalf("a day later: %+v", b)
+	}
+	for range 100 {
+		if stored()[site.URL+"/b"].Archive != "" {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if b := stored()[site.URL+"/b"]; !b.Confirmed || b.Archive != "https://web.archive.org/web/2020/x" || asked.Load() != 1 {
+		t.Fatalf("stored %+v, archive asked %d times", b, asked.Load())
+	}
+	// Off again: the next confirmed-dead link is not sent anywhere.
+	send(h, "PUT", "/api/v1/preferences", `{"wayback":false}`)
+	s.lookUpArchives([]store.LinkResult{{URL: site.URL + "/other", Status: "dead", Confirmed: true}})
+	if asked.Load() != 1 {
+		t.Fatal("the archive was asked with the lookup turned off")
+	}
+}

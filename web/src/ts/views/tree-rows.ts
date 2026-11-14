@@ -10,7 +10,14 @@ import { badge, el, fmtDate, fmtDay, icon, plural } from "../ui";
 import { starsText } from "../labels";
 
 /** A bookmark as the page's data carries it (only the fields rows show). */
-export interface Bookmark { id: BookmarkId; u: string; s: string; dk?: string; a?: number; m?: number; nu?: string; applied?: boolean; p?: number }
+export interface Bookmark { id: BookmarkId; u: string; s: string; dk?: string; a?: number; m?: number; nu?: string; applied?: boolean; p?: number;
+  /** A dead link a later check confirmed (dc), and when checks first found it dead (dsn). */
+  dc?: boolean; dsn?: string }
+
+/** A dead link's short label: what is gone, with a "?" until a second check a day later confirms it. */
+export function deadLabel(i: Pick<Bookmark, "dk" | "dc">): string {
+  return (i.dk === "host" ? "site gone" : "page gone") + (i.dc ? "" : "?");
+}
 export type BookmarkRow = TreeRow & { item?: Bookmark };
 
 export interface RowDeps {
@@ -68,8 +75,8 @@ export function rowElement(r: BookmarkRow, idx: number, st: RowState, d: RowDeps
   const top = el("div", "bm-top"), title = el("div", "bm-title", t); title.dataset.tip = t; top.append(title);
   const aside = el("div", "bm-aside");
   if (i.s !== "ok" && d.label[i.s]) {
-    const b = badge(i.s === "dead" ? (i.dk === "host" ? "site gone" : "page gone") : d.label[i.s]!.split(" —")[0]!, "bg-transparent st-" + i.s, d.statusIcon[i.s]);
-    b.dataset.tip = d.help[i.s] ?? ""; aside.append(b);
+    const b = badge(i.s === "dead" ? deadLabel(i) : d.label[i.s]!.split(" —")[0]!, "bg-transparent st-" + i.s, d.statusIcon[i.s]);
+    b.dataset.tip = i.s === "dead" && !i.dc ? "Found dead once; not confirmed until a check a day later finds it dead again" : d.help[i.s] ?? ""; aside.append(b);
   }
   if (pendingUpdate(i)) aside.append(badge("update ready", "bg-yellow-lt", "ti-arrow-forward-up"));
   if (i.m) aside.append(badge("matched", "bg-green-lt", "ti-arrow-merge"));
