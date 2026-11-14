@@ -49,11 +49,13 @@ func RunCommand(ctx context.Context, argv []string) error {
 // ErrNotPublic: snapshots are only taken of pages on the public internet.
 var ErrNotPublic = errors.New("not a public web page: only http(s) addresses on the internet are snapped")
 
-// Snap takes one page's snapshot and keeps it as a small JPEG.
-func (s Snapper) Snap(ctx context.Context, raw string) error {
-	u, err := url.Parse(raw)
+// visit checks that raw is a page on the public internet and prepares Chrome for it: a profile made for this page
+// alone (dir; the caller removes it), and the arguments that keep Chrome to the address just checked. timeout covers
+// the whole visit.
+func (s Snapper) visit(ctx context.Context, raw string) (u *url.URL, dir string, args []string, timeout time.Duration, err error) {
+	u, err = url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
-		return ErrNotPublic
+		return nil, "", nil, 0, ErrNotPublic
 	}
 	resolve := s.Resolve
 	if resolve == nil {
@@ -63,26 +65,21 @@ func (s Snapper) Snap(ctx context.Context, raw string) error {
 	}
 	ips, err := resolve(ctx, u.Hostname())
 	if err != nil || len(ips) == 0 {
-		return fmt.Errorf("%s does not resolve", u.Hostname())
+		return nil, "", nil, 0, fmt.Errorf("%s does not resolve", u.Hostname())
 	}
 	for _, ip := range ips {
 		if linkcheck.IsPrivate(ip) {
-			return ErrNotPublic
+			return nil, "", nil, 0, ErrNotPublic
 		}
 	}
 	if s.Chrome == "" {
-		return errors.New("no Chrome or Chromium browser was found to take snapshots with")
+		return nil, "", nil, 0, errors.New("no Chrome or Chromium browser was found to take snapshots with")
 	}
-	if s.Store.Dir == "" {
-		return errors.New("no folder is set for snapshots")
-	}
-	dir, err := os.MkdirTemp("", "brofo-snap-")
+	dir, err = os.MkdirTemp("", "brofo-snap-")
 	if err != nil {
-		return err
+		return nil, "", nil, 0, err
 	}
-	defer os.RemoveAll(dir)
-	shot := filepath.Join(dir, "shot.png")
-	timeout := s.Timeout
+	timeout = s.Timeout
 	if timeout == 0 {
 		timeout = 30 * time.Second
 	}
@@ -96,15 +93,29 @@ func (s Snapper) Snap(ctx context.Context, raw string) error {
 	if timeout < wait+20*time.Second {
 		timeout = wait + 20*time.Second
 	}
-	cctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	argv := []string{s.Chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars", "--mute-audio", "--no-first-run",
+	args = []string{"--headless=new", "--disable-gpu", "--hide-scrollbars", "--mute-audio", "--no-first-run",
 		"--no-default-browser-check", "--disable-extensions", "--disable-sync", "--incognito",
 		"--user-data-dir=" + filepath.Join(dir, "profile"), fmt.Sprintf("--window-size=%d,%d", w, h), fmt.Sprintf("--virtual-time-budget=%d", wait.Milliseconds()),
 		// Chrome would resolve the host again, and a hostile name server could then answer with a private address
 		// (DNS rebinding): pin the host to the public address just checked.
-		"--host-resolver-rules=" + pinRule(u.Hostname(), ips[0]),
-		"--screenshot=" + shot, u.String()}
+		"--host-resolver-rules=" + pinRule(u.Hostname(), ips[0])}
+	return u, dir, args, timeout, nil
+}
+
+// Snap takes one page's snapshot and keeps it as a small JPEG.
+func (s Snapper) Snap(ctx context.Context, raw string) error {
+	u, dir, args, timeout, err := s.visit(ctx, raw)
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	if s.Store.Dir == "" {
+		return errors.New("no folder is set for snapshots")
+	}
+	shot := filepath.Join(dir, "shot.png")
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	argv := append(append([]string{s.Chrome}, args...), "--screenshot="+shot, u.String())
 	run := s.Run
 	if run == nil {
 		run = RunCommand
