@@ -149,6 +149,11 @@ ships.
 
 ### Fixed
 
+- On a phone, Open tabs no longer puts every saved snapshot (hundreds of rows) before the open windows: the snapshots
+  side scrolls within itself. Timeline events keep their text on full lines, with their link underneath when there is
+  no room beside them; their Opened and Closed lists use the app's chevron.
+- The top bar's search shows its whole placeholder (*Search open tabs…*, *Search timeline…*); the view tabs' counts
+  give way below 1600 pixels, as they show inside each view too.
 - Security: a paired extension's token carried its owner's whole role, so it could change settings, manage tokens or
   edit any workspace. It now works only for the extension's own routes, the workspace list and reading one workspace;
   it reads bookmarks only into its own workspaces or one already read from its browser; and no other token can be

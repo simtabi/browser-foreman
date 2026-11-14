@@ -4,7 +4,7 @@
 //
 //   new ViewSearch(headerInput)
 //     .view("bookmarks", bookmarkInput, "Search bookmarks…")
-//     .view("tabs", tabsInput, "Filter open tabs…")
+//     .view("tabs", tabsInput, "Search open tabs…")
 //     .show("tabs");
 
 interface Target { input: HTMLInputElement; placeholder: string }

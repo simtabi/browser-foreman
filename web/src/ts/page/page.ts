@@ -573,8 +573,8 @@ on("#aboutBtn", () => openAbout("about"));
 // ---------- views: Bookmarks and Open tabs ----------
 let view_ = "bookmarks";
 // The header search types into the view you are in (each view keeps its own query and its own hidden input).
-const SEARCH = new ViewSearch($("#hq")).view("bookmarks", $("#q"), "Search bookmarks…").view("tabs", $("#tabsQ"), "Filter open tabs…")
-  .view("timeline", Dom.one("timeline", "query"), "Search the timeline…").show("bookmarks");
+const SEARCH = new ViewSearch($("#hq")).view("bookmarks", $("#q"), "Search bookmarks…").view("tabs", $("#tabsQ"), "Search open tabs…")
+  .view("timeline", Dom.one("timeline", "query"), "Search timeline…").show("bookmarks");
 function setAppView(v, {restoring = false} = {}) {
   view_ = v; closeDropdowns(); hideTip();
   if (!restoring) PLACE.update({view: v}, {push: true});

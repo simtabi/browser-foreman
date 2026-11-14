@@ -91,7 +91,9 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 @container (max-width: 240px) { .hdr-search #paletteBtn { display: none; } }
 /* Room for the search as the window narrows: the workspace name and the view counts give way first. */
 .hdr-views { flex: none; }
-@media (max-width: 1400px) { #hdrWs #wsMenu > .btn .text-truncate { max-width: 8rem; } .hdr-views .app-nav-count { display: none; } }
+@media (max-width: 1400px) { #hdrWs #wsMenu > .btn .text-truncate { max-width: 8rem; } }
+/* The views' counts show inside each view too: below 1600px the search needs their room more. */
+@media (max-width: 1599.98px) { .hdr-views .app-nav-count { display: none; } }
 .hdr-search { flex-wrap: nowrap; }
 .hdr-search #hq { min-width: 5rem; }  /* the labels beside it go first (the container queries above) */
 .hdr-search .input-group-text { background: var(--tblr-bg-surface); color: var(--tblr-secondary); }
@@ -156,11 +158,21 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   background: var(--tblr-bg-surface); border: 1px solid var(--tblr-border-color); color: var(--tblr-secondary); font-size: .95rem; }
 .tl-tabs .tl-ev-dot { color: var(--tblr-primary); } .tl-edits .tl-ev-dot { color: var(--tblr-orange, #f76707); } .tl-added .tl-ev-dot { color: var(--tblr-green); }
 .tl-ev-body { flex: 1; padding-left: .25rem; }
+/* Each event's link: beside the event when there is room, under it when there is not (a narrow column would squeeze
+   the event to a word a line). The timeline's own width decides, not the window's. */
+.tl-ev { flex-wrap: wrap; } .tl-ev-body { flex: 1 1 14rem; } .tl-ev-go { flex: none; }
+.tl-ev-head > b { overflow-wrap: anywhere; }
 .tl-ev-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; font-size: .875rem; }
 .tl-ev-head .text-secondary { font-size: .78rem; }
 .tl-ev-diff { display: flex; gap: .75rem; font-size: .8rem; margin-top: .15rem; font-variant-numeric: tabular-nums; }
 .tl-plus { color: var(--tblr-green); } .tl-minus { color: var(--tblr-red); }
-.tl-ev-det { margin-top: .25rem; font-size: .8rem; } .tl-ev-det summary { cursor: pointer; color: var(--tblr-secondary); }
+.tl-ev-det { margin-top: .25rem; font-size: .8rem; }
+/* The app's chevron, turning when open (not the browser's own triangle). */
+.tl-ev-det summary { cursor: pointer; color: var(--tblr-secondary); list-style: none; display: inline-flex; align-items: center; gap: .35rem; border-radius: var(--tblr-border-radius); padding: .05rem .25rem; margin-left: -.25rem; }
+.tl-ev-det summary::-webkit-details-marker { display: none; }
+.tl-ev-det summary::before { content: ""; width: .4rem; height: .4rem; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; }
+.tl-ev-det[open] > summary::before { transform: rotate(45deg); }
+.tl-ev-det summary:hover { color: var(--tblr-body-color); background: var(--tblr-bg-surface-secondary); }
 .tl-ev-list { display: flex; flex-direction: column; gap: .15rem; margin: .3rem 0 .2rem .75rem; }
 .tl-ev-li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 14rem); gap: .75rem; } .tl-ev-li.inc { color: var(--inc); }
 .tl-ev-go { flex: none; }
@@ -261,7 +273,11 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .tab-row.missing .tab-title { color: var(--tblr-warning); }
 .tab-title { font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tab-url { font-size: .72rem; color: var(--tblr-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (max-width: 900px) { .tabs-view { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .tabs-view { grid-template-columns: 1fr; }
+  /* Stacked, the snapshots side (its settings and every saved snapshot) scrolls within itself, so the open windows
+     come next instead of after hundreds of rows; the panes in Bookmarks do the same. */
+  .tabs-view > .tabs-side { max-height: 70vh; overflow-y: auto; overscroll-behavior: contain; }
+  .tabs-view > .tabs-side > .pane-scroll { overflow: visible; } }
 .app-foot { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .35rem 1.25rem;
   padding: .4rem 1rem; border-top: 1px solid var(--tblr-border-color); background: var(--tblr-bg-surface); font-size: .75rem; color: var(--tblr-secondary); }
 .foot-left, .foot-links { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem 1rem; min-width: 0; }
@@ -960,7 +976,7 @@ body { overflow-wrap: break-word; }
     <div id="tlRange" data-brofo-timeline="range"></div>
     <div class="tl-kinds" id="tlKinds" data-brofo-timeline="kinds"></div>
     <div class="input-icon ms-auto tl-search d-none"><span class="input-icon-addon"><i class="ti ti-search"></i></span>
-      <input type="search" class="form-control form-control-sm" id="tlQ" data-brofo-timeline="query" placeholder="Search the timeline…" aria-label="Search the timeline"></div>
+      <input type="search" class="form-control form-control-sm" id="tlQ" data-brofo-timeline="query" placeholder="Search timeline…" aria-label="Search timeline"></div>
   </div>
   <div class="tl-charts">
     <div class="card"><div class="card-header py-2"><h3 class="card-title">Open tabs over time</h3><div class="card-actions text-secondary small" id="tlTabsNote" data-brofo-timeline="tabs-note"></div></div><div class="card-body p-2" id="tlTabsChart" data-brofo-timeline="tabs-chart"></div></div>
