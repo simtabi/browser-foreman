@@ -265,7 +265,7 @@
 
   // ---------- MCP: where Claude can reach Browser Foreman, and whether it may change things ----------
   let MC;
-  const TARGET_NAMES = {folder: ["Claude Code in this folder", "~/Artisan/bookmarks-cleanup/.mcp.json; sessions started here offer it once"],
+  const TARGET_NAMES = {folder: ["Claude Code in this folder", ".mcp.json in the folder this server runs from; sessions started there offer it once"],
     code: ["Claude Code, every folder", "user-wide, through the claude command"],
     desktop: ["Claude desktop chats", "claude_desktop_config.json; restart the app after a change"]};
   async function mcpAccess() {

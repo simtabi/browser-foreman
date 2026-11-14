@@ -5,7 +5,7 @@ Pick one with `storage.driver`; move between them with `browser-foreman storage 
 
 | Driver | Keeps | Good for |
 |---|---|---|
-| `sqlite` (default) | one file, `browser-foreman.sqlite3`, in WAL mode | everyday use; fast with large histories |
+| `sqlite` (default) | one file, `browser-foreman.sqlite3`, in WAL mode; each distinct tree is kept once, gzipped | everyday use; fast with large histories |
 | `json` | plain files under `json/` | reading, diffing, syncing or backing up with ordinary tools |
 
 Both live in `storage.path` (default `~/.local/state/browser-foreman`), private to you: folders `0700`, files `0600`.

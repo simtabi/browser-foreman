@@ -149,6 +149,8 @@ ships.
 
 ### Fixed
 
+- The MCP dialog no longer names the old Python folder (`~/Artisan/bookmarks-cleanup`) as where Claude Code finds the
+  server; it names the folder the server runs from.
 - The search placeholder is no longer cut when the header search is narrow: the magnifier gives way first.
 - Badges ("active", "now") and table sort headings keep their whole word instead of being squeezed.
 - On a phone, tab titles take two lines, names in the Workspaces and Extensions dialogs wrap, and the About dialog's tabs wrap instead of running off the edge; on a desktop a cut tab title or name shows in full on hover.
@@ -218,6 +220,8 @@ ships.
 
 ### Changed
 
+- The SQLite store keeps each tree snapshot gzipped, about a tenth of the size: a 5,400-bookmark history of 30 trees
+  takes 14 MB rather than about 45 MB. Stores written before still read; their old rows stay as they are.
 - Each tab snapshot lists its pool, so Open tabs, the Timeline, counts, deletes and purges skip other workspaces'
   snapshots without opening them; snapshots saved before this get their pool once, when the data is first opened.
 - Moving or trashing a big selection no longer slows down with its size (one pass per folder, not one per item).

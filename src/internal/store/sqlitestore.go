@@ -1,11 +1,14 @@
 package store
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -170,7 +173,11 @@ func (s *SQLiteStore) Commit(ctx context.Context, id string, base int, c Change,
 	if base != head {
 		return Entry{}, fmt.Errorf("%w (made on %d, now %d)", ErrConflict, base, head)
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO snapshots (hash, body) VALUES (?, ?)`, hash, body); err != nil {
+	packed, err := packSnapshot(body)
+	if err != nil {
+		return Entry{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO snapshots (hash, body) VALUES (?, ?)`, hash, packed); err != nil {
 		return Entry{}, err
 	}
 	e := Entry{Seq: head + 1, At: at.UTC(), Op: c.Op, Summary: c.Summary, Base: base, Snap: hash, Undid: c.Undid, Redone: c.Redone}
@@ -225,8 +232,38 @@ func (s *SQLiteStore) State(ctx context.Context, id string, seq int) (Tree, Entr
 		return Tree{}, Entry{}, err
 	}
 	e.At, _ = time.Parse(ts, at)
+	if body, err = unpackSnapshot(body); err != nil {
+		return Tree{}, e, err
+	}
 	var t Tree
 	return t, e, json.Unmarshal(body, &t)
+}
+
+// packSnapshot gzips a tree's JSON for the snapshots table: a 5,400-bookmark tree is 1.5 MB as JSON and about a tenth
+// of that compressed, and every history entry keeps one. The hash stays the SHA-256 of the JSON, not of these bytes.
+func packSnapshot(body []byte) ([]byte, error) {
+	var b bytes.Buffer
+	z := gzip.NewWriter(&b)
+	if _, err := z.Write(body); err != nil {
+		return nil, err
+	}
+	if err := z.Close(); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+// unpackSnapshot reads a body written by packSnapshot, or a plain JSON one written before snapshots were compressed.
+func unpackSnapshot(body []byte) ([]byte, error) {
+	if len(body) < 2 || body[0] != 0x1f || body[1] != 0x8b {
+		return body, nil
+	}
+	z, err := gzip.NewReader(bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer z.Close()
+	return io.ReadAll(z)
 }
 
 func (s *SQLiteStore) SaveTabs(ctx context.Context, t TabSnapshot) error {
