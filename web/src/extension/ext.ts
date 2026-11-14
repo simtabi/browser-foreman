@@ -6,7 +6,7 @@ export interface ExtGroup { id: number; windowId: number; title?: string; color:
 export interface ExtBookmark { id: string; parentId?: string; title: string; url?: string; dateAdded?: number; index?: number; type?: string; children?: ExtBookmark[] }
 
 export interface ExtApi {
-  runtime: { getURL(p: string): string; onInstalled: Hook<() => void>; onStartup: Hook<() => void>; onMessage: Hook<(msg: any, sender: unknown, reply: (r: unknown) => void) => boolean | void> ; sendMessage(msg: unknown): Promise<any> };
+  runtime: { getURL(p: string): string; reload(): void; getManifest(): { version: string }; onInstalled: Hook<() => void>; onStartup: Hook<() => void>; onMessage: Hook<(msg: any, sender: unknown, reply: (r: unknown) => void) => boolean | void> ; sendMessage(msg: unknown): Promise<any> };
   windows: { getAll(q: { populate: boolean; windowTypes?: string[] }): Promise<ExtWindow[]>; create(o: { url?: string[]; incognito?: boolean; focused?: boolean }): Promise<ExtWindow>; onRemoved: Hook<() => void>; onCreated: Hook<() => void> };
   tabs: { create(o: { url: string; windowId?: number; active?: boolean }): Promise<ExtTab>; group?(o: { tabIds: number[]; createProperties?: { windowId?: number } }): Promise<number>;
     onUpdated: Hook<(id: number, change: { url?: string; title?: string; status?: string }) => void>; onRemoved: Hook<() => void>; onCreated: Hook<() => void>; onMoved: Hook<() => void>; onAttached: Hook<() => void> };

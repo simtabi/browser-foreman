@@ -89,6 +89,11 @@ func (s *Server) require(role string, next http.HandlerFunc) http.HandlerFunc {
 			writeErr(w, http.StatusForbidden, "this needs the "+role+" role")
 			return
 		}
+		// An extension's token carries its owner's role, but only for what an extension does.
+		if strings.HasPrefix(p.tokenName, extPrefix) && !extensionTokenMay(r) {
+			writeErr(w, http.StatusForbidden, "an extension's token works only for the extension's own routes")
+			return
+		}
 		next(w, r.WithContext(contextWith(r, p)))
 	}
 }
@@ -218,6 +223,10 @@ func (s *Server) createToken(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if !decode(w, r, &in) {
+		return
+	}
+	if strings.HasPrefix(strings.TrimSpace(in.Name), extPrefix) {
+		writeErr(w, 400, `token names starting "extension:" are kept for paired extensions`)
 		return
 	}
 	if strings.TrimSpace(in.Name) == "" || len(in.Name) > 100 {

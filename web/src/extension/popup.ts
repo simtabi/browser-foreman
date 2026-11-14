@@ -25,6 +25,31 @@ async function show(): Promise<void> {
   }
 }
 
+// One-click pairing: ask, show the match code, and wait (up to five minutes) for the owner's answer.
+let waitTimer: ReturnType<typeof setInterval> | undefined;
+async function waitForAnswer(): Promise<void> {
+  clearInterval(waitTimer);
+  const tick = async () => {
+    try {
+      const a = await ask({ kind: "answer" });
+      if (a.state === "pending") { $("waiting").hidden = false; $("match").textContent = a.match; ($("ask") as HTMLButtonElement).disabled = true; return; }
+      clearInterval(waitTimer); $("waiting").hidden = true; ($("ask") as HTMLButtonElement).disabled = false;
+      if (a.state === "approved") { say("askMsg", "Connected."); await show(); }
+      else if (a.state === "denied") say("askMsg", "Browser Foreman said no.", true);
+      else if (a.state === "expired") say("askMsg", "No answer in five minutes; connect again.", true);
+    } catch (e) { clearInterval(waitTimer); ($("ask") as HTMLButtonElement).disabled = false; say("askMsg", (e as Error).message, true); }
+  };
+  await tick(); waitTimer = setInterval(() => void tick(), 2000);
+}
+$("ask").onclick = async () => {
+  try {
+    ($("ask") as HTMLButtonElement).disabled = true; say("askMsg", "Asking…");
+    const server = checkServer(($("server") as HTMLInputElement).value);
+    await ask({ kind: "ask", server });
+    say("askMsg", "");
+    await waitForAnswer();
+  } catch (e) { ($("ask") as HTMLButtonElement).disabled = false; say("askMsg", (e as Error).message, true); }
+};
 $("pair").onclick = async () => {
   try {
     const server = checkServer(($("server") as HTMLInputElement).value);
@@ -54,4 +79,4 @@ $("apply").onclick = async () => {
   catch (e) { say("planMsg", (e as Error).message, true); }
 };
 $("unpair").onclick = async () => { await ask({ kind: "unpair" }); await show(); };
-void show();
+void show().then(waitForAnswer);  // reopening the popup while a request waits shows its code again

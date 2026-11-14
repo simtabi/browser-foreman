@@ -19,17 +19,28 @@
   .msg { margin-top: 6px; font-size: 12px; }
   .msg.bad { color: var(--bad); }
   [hidden] { display: none !important; }
+  .match { margin: 10px 0 4px; font: 600 22px/1.2 ui-monospace, SFMono-Regular, monospace; letter-spacing: .3em; text-align: center; padding: 8px; border: 1px dashed var(--line); border-radius: 8px; }
+  details { margin-top: 10px; } summary { cursor: pointer; }
 </style>
 </head>
 <body>
 <header><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#066fd1"/><path d="M22 14h20a4 4 0 0 1 4 4v32l-14-9-14 9V18a4 4 0 0 1 4-4z" fill="#fff"/></svg>Browser Foreman</header>
 
 <section id="unpaired">
-  <div class="muted">Connect this browser to Browser Foreman on this computer. Make a code with <code>browser-foreman pair</code> (or in Settings in the web interface), then enter it here.</div>
+  <div class="muted">Connect this browser to Browser Foreman on this computer.</div>
   <label for="server">Server</label><input id="server" value="http://127.0.0.1:8765" autocomplete="off">
-  <label for="code">Pairing code</label><input id="code" placeholder="ABCD-EFGH" autocomplete="off">
-  <button class="primary" id="pair">Connect</button>
-  <div class="msg" id="pairMsg" role="status"></div>
+  <button class="primary" id="ask">Connect</button>
+  <div id="waiting" hidden>
+    <div class="match" id="match" aria-label="Match code"></div>
+    <div class="muted">Approve it in Browser Foreman, where the same four letters show. Approve only if they match.</div>
+  </div>
+  <div class="msg" id="askMsg" role="status"></div>
+  <details><summary class="muted">Use a pairing code instead</summary>
+    <div class="muted">Make one with <code>browser-foreman pair</code>, or in Browser Foreman: Browsers › Browser extensions.</div>
+    <label for="code">Pairing code</label><input id="code" placeholder="ABCD-EFGH" autocomplete="off">
+    <button id="pair">Connect with the code</button>
+    <div class="msg" id="pairMsg" role="status"></div>
+  </details>
 </section>
 
 <section id="paired" hidden>

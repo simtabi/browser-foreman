@@ -10,6 +10,12 @@ ships.
 
 ### Added
 
+- One-click connecting for the browser extension: press Connect in its popup, and Browser Foreman asks (wherever you
+  are in it) whether to connect that browser, showing the same four letters as the popup. The pairing code still
+  works. Only an extension can ask; a request waits five minutes, five at most at once.
+- Browser extensions › **Set it up** opens a browser's extensions page and shows the built extension in Finder; the
+  card turns to Connected by itself. Each extension reports its version; one older than the build here says so, and
+  **Update** has it reload itself from the new build.
 - Loading feedback (`ts/busy.ts`): slow actions (expanding or collapsing everything, filters, Group by and Sort, the
   date range, list and grid, switching workspace) show a spinner with what is happening and a thin progress bar, only
   when they take longer than a blink; the tree, the details, the Timeline and every list dialog (Workspaces, History,
@@ -143,6 +149,15 @@ ships.
 
 ### Fixed
 
+- Security: a paired extension's token carried its owner's whole role, so it could change settings, manage tokens or
+  edit any workspace. It now works only for the extension's own routes, the workspace list and reading one workspace;
+  it reads bookmarks only into its own workspaces or one already read from its browser; and no other token can be
+  named like an extension's (a viewer could have pushed tabs as a browser).
+- Commands queued for a browser whose extension never collects them are forgotten after an hour, at most 100 waiting.
+- Open tabs: a window's buttons (Open all, Reopen missing) keep their labels whole on a phone, moving under the
+  window's title instead of shrinking.
+- Dialogs never scroll sideways: a table wider than its dialog scrolls within itself. The Browser extensions cards keep
+  their status on readable lines at any width.
 - The Timeline compares a workspace's tab snapshots with that workspace's own earlier snapshot; the one before the
   range could come from another workspace's pool, so its first step showed every page as opened.
 - *Last opened* credits every bookmark of a page: two bookmarks of the same page (http and https, a trailing slash)

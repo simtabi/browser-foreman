@@ -6,6 +6,7 @@ import { browserName, Client, groupColor, tabReport, webOnly, type Command } fro
 import { plan, run, type WsNode } from "./apply";
 
 interface Settings { server?: string; token?: string; browser?: string }
+const VERSION = (): string => ext.runtime.getManifest().version;
 
 const settings = async (): Promise<Settings> => ext.storage.local.get(["server", "token", "browser"]) as Promise<Settings>;
 const thisBrowser = (): string => {
@@ -27,7 +28,7 @@ async function report(): Promise<void> {
   const c = await client(); if (!c) return;
   const windows = await ext.windows.getAll({ populate: true, windowTypes: ["normal"] });
   const groups = ext.tabGroups ? await ext.tabGroups.query({}) : [];
-  try { await c.sendTabs(tabReport(windows, groups)); await ext.storage.local.set({ lastReport: Date.now(), lastError: "" }); }
+  try { await c.sendTabs({ ...tabReport(windows, groups), version: VERSION() }); await ext.storage.local.set({ lastReport: Date.now(), lastError: "" }); }
   catch (e) { await ext.storage.local.set({ lastError: String((e as Error).message) }); await unpairedIf(e); }
 }
 const soon = (): void => { clearTimeout(timer); timer = setTimeout(() => void report(), 3000); };
@@ -58,6 +59,7 @@ async function poll(): Promise<void> {
       let got;
       try { got = await c.commands(25); } catch (e) { await unpairedIf(e); return; }
       for (const cmd of got.commands) {
+        if (cmd.kind === "reload") { await c.done(cmd.id, true).catch(() => {}); ext.runtime.reload(); return; } // read the folder again
         try { await openLinks(cmd); await c.done(cmd.id, true); }
         catch (e) { await c.done(cmd.id, false, String((e as Error).message)).catch(() => {}); }
       }
@@ -88,6 +90,23 @@ async function handle(msg: any): Promise<unknown> {
       await ext.storage.local.set({ server: new URL(msg.server).origin, token, browser });
       void report(); void poll();
       return { paired: true, browser };
+    }
+    case "ask": { // one-click pairing: ask, then wait for the owner's answer in Browser Foreman
+      const server = new URL(msg.server).origin, browser = thisBrowser();
+      const req = await Client.request(server, browser, VERSION(), (u, i) => fetch(u, i));
+      await ext.storage.local.set({ asking: { server, ...req } });
+      return { match: req.match };
+    }
+    case "answer": {
+      const { asking } = await ext.storage.local.get(["asking"]);
+      if (!asking) return { state: "none" };
+      const a = await Client.answer(asking.server, asking, (u, i) => fetch(u, i));
+      if (a.state === "approved" && a.token) {
+        await ext.storage.local.set({ server: asking.server, token: a.token, browser: thisBrowser() });
+        await ext.storage.local.remove(["asking"]);
+        void report(); void poll();
+      } else if (a.state !== "pending") await ext.storage.local.remove(["asking"]);
+      return { state: a.state, match: asking.match };
     }
     case "unpair": await ext.storage.local.remove(["token"]); return { paired: false };
     case "report": await report(); return { ok: true };

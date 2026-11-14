@@ -61,7 +61,7 @@ export function windowCard(x: WinRecord, o: { folded: boolean; checkbox: HTMLEle
   const ico = el("span", "tab-win-icon" + (x.inc ? " has-badge" : "")); ico.append(icon(x.inc ? "ti-spy" : "browser:" + x.browser));
   if (x.inc) ico.append(icon("browser:" + x.browser, "tab-win-badge"));
   h.append(fold, o.checkbox, ico, ttl);
-  const wa = el("div", "btn-list flex-nowrap");
+  const wa = el("div", "btn-list flex-nowrap tab-win-acts");
   if (o.missing.length) { const b = el("button", "btn btn-sm btn-warning"); b.append(icon("ti-restore", "me-1"), `Reopen ${o.missing.length} missing`); b.onclick = cb.reopenMissing; wa.append(b); }
   const more = el("button", "btn btn-sm btn-icon"); more.append(icon("ti-dots")); more.dataset.tip = "More"; more.onclick = e => cb.menu(e, more);
   if (!x.w.redacted) { const ob = el("button", "btn btn-sm"); ob.append(icon("ti-external-link", "me-1"), "Open all", icon("ti-chevron-down", "ms-1")); ob.onclick = () => cb.openAll(ob); wa.append(ob); }

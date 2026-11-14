@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/simtabi/browser-foreman/src/internal/auth"
 	"github.com/simtabi/browser-foreman/src/internal/importer"
 	"github.com/simtabi/browser-foreman/src/internal/store"
 	"github.com/simtabi/browser-foreman/src/internal/tabs"
@@ -25,11 +25,13 @@ import (
 const (
 	extPrefix   = "extension:"
 	pairTTL     = 10 * time.Minute
+	commandTTL  = time.Hour                          // a command not collected, or done, is forgotten after this
+	maxQueued   = 100                                // queued for one browser at once
 	codeLetters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // no 0/O or 1/I: read off a screen and typed
 )
 
 type pairing struct {
-	user    string
+	who     Principal // whoever made the code: the token is theirs
 	expires time.Time
 }
 
@@ -37,7 +39,9 @@ type pairing struct {
 type extState struct {
 	mu       sync.Mutex
 	pairings map[string]pairing
-	commands map[string][]*command // by browser
+	requests map[string]*pairRequest // one-click pairing, by id
+	seen     map[string]seenExt      // what each browser's extension last said about itself
+	commands map[string][]*command   // by browser
 	byID     map[string]*command
 	wake     chan struct{}
 }
@@ -46,7 +50,7 @@ type extState struct {
 type command struct {
 	ID        string    `json:"id"`
 	Browser   string    `json:"browser"`
-	Kind      string    `json:"kind"` // open, open-group
+	Kind      string    `json:"kind"` // open, open-group, reload
 	URLs      []string  `json:"urls"`
 	Title     string    `json:"title,omitempty"`
 	Color     string    `json:"color,omitempty"`
@@ -59,7 +63,17 @@ type command struct {
 func (e *extState) init() {
 	if e.pairings == nil {
 		e.pairings, e.commands, e.byID, e.wake = map[string]pairing{}, map[string][]*command{}, map[string]*command{}, make(chan struct{})
+		e.requests, e.seen = map[string]*pairRequest{}, map[string]seenExt{}
 	}
+}
+
+// randIndex is a uniform random index below n, from the system's secure source.
+func randIndex(n int) int {
+	x, err := rand.Int(rand.Reader, big.NewInt(int64(n)))
+	if err != nil {
+		panic(err) // the system's random source failed: nothing secure can be made
+	}
+	return int(x.Int64())
 }
 
 func newCode() string {
@@ -78,13 +92,6 @@ func newCode() string {
 // createPairing makes a one-time code, good for ten minutes.
 func (s *Server) createPairing(w http.ResponseWriter, r *http.Request) {
 	p := principal(r)
-	user := p.User
-	if p.Via == "local" {
-		if err := s.localAccount(r.Context()); err != nil {
-			writeErr(w, 500, err.Error())
-			return
-		}
-	}
 	code := newCode()
 	s.ext.mu.Lock()
 	s.ext.init()
@@ -94,7 +101,7 @@ func (s *Server) createPairing(w http.ResponseWriter, r *http.Request) {
 			delete(s.ext.pairings, c)
 		}
 	}
-	s.ext.pairings[code] = pairing{user: user, expires: now.Add(pairTTL)}
+	s.ext.pairings[code] = pairing{who: p, expires: now.Add(pairTTL)}
 	s.ext.mu.Unlock()
 	writeJSON(w, 201, map[string]any{"code": code, "expires": now.Add(pairTTL)})
 }
@@ -144,18 +151,13 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Limit.Succeed(key)
-	secret, err := auth.NewSecret("brofo_")
+	secret, id, err := s.mintExtensionToken(r.Context(), p.who, in.Browser)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	t := store.Token{ID: "tk_" + newID()[3:], User: p.user, Name: extPrefix + in.Browser, Hash: auth.HashSecret(secret), Created: now.UTC()}
-	if err := s.Data.CreateToken(r.Context(), t); err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	_, _ = s.Bus.Publish("extension.paired", map[string]any{"browser": in.Browser, "token": t.ID})
-	writeJSON(w, 201, map[string]any{"token": secret, "id": t.ID, "browser": in.Browser})
+	_, _ = s.Bus.Publish("extension.paired", map[string]any{"browser": in.Browser, "token": id})
+	writeJSON(w, 201, map[string]any{"token": secret, "id": id, "browser": in.Browser})
 }
 
 // requireExtension lets through only an extension's own token, and hands the handler its browser.
@@ -192,9 +194,16 @@ func (s *Server) pushTabs(w http.ResponseWriter, r *http.Request, browser string
 			Color     string  `json:"color"`
 			Collapsed bool    `json:"collapsed"`
 		} `json:"groups"`
+		Version string `json:"version"` // the extension's own version, so the page can say when it is out of date
 	}
 	if !decode(w, r, &in) {
 		return
+	}
+	if len(in.Version) <= 30 {
+		s.ext.mu.Lock()
+		s.ext.init()
+		s.ext.seen[browser] = seenExt{Version: in.Version, At: s.Now().UTC()}
+		s.ext.mu.Unlock()
 	}
 	if len(in.Windows) > 200 {
 		writeErr(w, 400, "at most 200 windows")
@@ -231,7 +240,7 @@ func (s *Server) pushTabs(w http.ResponseWriter, r *http.Request, browser string
 	w.WriteHeader(http.StatusNoContent)
 }
 
-var errUnknownKind = errors.New(`kind must be "open" or "open-group"`)
+var errUnknownKind = errors.New(`kind must be "open", "open-group" or "reload"`)
 
 // queueCommand asks a browser's extension to open links (as tabs, or as one named tab group). Owner only.
 func (s *Server) queueCommand(w http.ResponseWriter, r *http.Request) {
@@ -239,21 +248,41 @@ func (s *Server) queueCommand(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	if in.Kind != "open" && in.Kind != "open-group" {
+	switch in.Kind {
+	case "open", "open-group":
+		if err := checkWebLinks(in.URLs); err != nil {
+			writeErr(w, 400, err.Error())
+			return
+		}
+	case "reload": // the extension reloads itself: an unpacked one reads its folder again, so a new build takes effect
+		in.URLs = nil
+	default:
 		writeErr(w, 400, errUnknownKind.Error())
-		return
-	}
-	if err := checkWebLinks(in.URLs); err != nil {
-		writeErr(w, 400, err.Error())
 		return
 	}
 	if len(in.Title) > 100 {
 		writeErr(w, 400, "title: at most 100 characters")
 		return
 	}
+	if in.Browser = strings.TrimSpace(in.Browser); in.Browser == "" || len(in.Browser) > 60 {
+		writeErr(w, 400, "browser: 1 to 60 characters")
+		return
+	}
 	in.ID, in.State, in.Error, in.Created = "cmd_"+newID()[3:], "queued", "", s.Now().UTC()
 	s.ext.mu.Lock()
 	s.ext.init()
+	s.ext.prune(s.Now()) // commands nobody collects would otherwise pile up for the life of the server
+	queued := 0
+	for _, c := range s.ext.commands[in.Browser] {
+		if c.State == "queued" {
+			queued++
+		}
+	}
+	if queued >= maxQueued {
+		s.ext.mu.Unlock()
+		writeErr(w, 429, fmt.Sprintf("%d commands already wait for %s; is its extension connected?", maxQueued, in.Browser))
+		return
+	}
 	s.ext.commands[in.Browser] = append(s.ext.commands[in.Browser], &in)
 	s.ext.byID[in.ID] = &in
 	close(s.ext.wake) // wake every waiting extension
@@ -388,6 +417,13 @@ func (s *Server) readBookmarks(w http.ResponseWriter, r *http.Request, browser s
 	}
 	if err := store.ValidID(id); err != nil {
 		writeErr(w, 400, err.Error())
+		return
+	}
+	if ok, err := s.extensionWritable(r.Context(), browser, id); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	} else if !ok {
+		writeErr(w, 403, "an extension reads only into its own workspaces, or one already read from this browser")
 		return
 	}
 	x, err := s.Data.Workspace(r.Context(), id)

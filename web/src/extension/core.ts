@@ -55,6 +55,25 @@ export class Client {
     return j.token as string;
   }
 
+  /** One-click pairing, step one: ask to connect. The owner approves in Browser Foreman, comparing `match`. */
+  static async request(server: string, browser: string, version: string, fetch: Fetch): Promise<PairRequest> {
+    const r = await fetch(`${checkServer(server)}/api/v1/extension/requests`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ browser, version }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error ?? `the server answered ${r.status}`);
+    return { id: j.id, poll: j.poll, match: j.match, expires: j.expires };
+  }
+
+  /** Step two, repeated: has the owner answered? Approved, the answer carries the token (once). */
+  static async answer(server: string, req: PairRequest, fetch: Fetch): Promise<{ state: string; token?: string }> {
+    const r = await fetch(`${checkServer(server)}/api/v1/extension/requests/${encodeURIComponent(req.id)}/poll`, { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ poll: req.poll }) });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 404) return { state: "expired" };
+    if (!r.ok) throw new Error(j.error ?? `the server answered ${r.status}`);
+    return j;
+  }
+
   private async call(method: string, path: string, body?: unknown): Promise<any> {
     const r = await this.fetch(`${this.server}/api/v1/${path}`, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.token}` },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -64,7 +83,7 @@ export class Client {
     return j;
   }
 
-  sendTabs(report: TabReport): Promise<unknown> { return this.call("POST", "extension/tabs", report); }
+  sendTabs(report: TabReport & { version?: string }): Promise<unknown> { return this.call("POST", "extension/tabs", report); }
   sendBookmarks(nodes: unknown[], workspace?: string): Promise<{ entry: { seq: number; summary: string } }> {
     return this.call("POST", "extension/bookmarks", workspace ? { nodes, workspace } : { nodes });
   }
@@ -74,7 +93,9 @@ export class Client {
   workspace(id: string): Promise<{ tree: any; workspace: { head: number } }> { return this.call("GET", `workspaces/${encodeURIComponent(id)}`); }
 }
 
-export interface Command { id: string; kind: "open" | "open-group"; urls: string[]; title?: string; color?: string; incognito?: boolean }
+export interface PairRequest { id: string; poll: string; match: string; expires: string }
+
+export interface Command { id: string; kind: "open" | "open-group" | "reload"; urls: string[]; title?: string; color?: string; incognito?: boolean }
 
 /** Tab group colours the browsers accept; anything else becomes grey. */
 export const GROUP_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];

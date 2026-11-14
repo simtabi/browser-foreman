@@ -1972,6 +1972,107 @@
           }
         ]
       }
+    },
+    "/api/v1/extension/requests": {
+      "post": {
+        "summary": "Ask to connect in one click (an extension's own origin only); answers an id, a poll secret and a four-letter match code",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "none",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {browser, version}. At most five requests wait at once; each lasts five minutes.",
+        "security": []
+      },
+      "get": {
+        "summary": "The requests waiting for approval, each with its match code",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/extension/requests/{id}/poll": {
+      "post": {
+        "summary": "Whether a request was answered; approved, the extension's token, handed over once",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "none",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {poll}",
+        "security": []
+      }
+    },
+    "/api/v1/extension/requests/{id}/approve": {
+      "post": {
+        "summary": "Approve a request: makes the extension's token",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/extension/requests/{id}/deny": {
+      "post": {
+        "summary": "Deny a request",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/extension/guide": {
+      "get": {
+        "summary": "For each installed browser: which extension build it takes, whether it is built, its extensions page; and each extension's last reported version",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
+    "/api/v1/extension/setup": {
+      "post": {
+        "summary": "Open a browser's extensions page and show the built extension's folder in Finder",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {browser}. The page is the fixed one for that browser."
+      }
     }
   }
 }

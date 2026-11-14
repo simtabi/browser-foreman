@@ -89,6 +89,9 @@ export class DataTable<T> {
     }
     this.element.append(scroll, this.foot);
     this.scroll = scroll;
+    // Wider than its frame: scroll within itself (see .dt-scrolls); fitting: let the header stick to the dialog.
+    const fit = () => scroll.classList.toggle("dt-scrolls", table.scrollWidth > scroll.clientWidth + 1);
+    const ro = new ResizeObserver(fit); ro.observe(scroll); ro.observe(table);
   }
 
   /** Show placeholder rows and `message` until rows() is called (a list being fetched). */

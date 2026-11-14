@@ -48,9 +48,11 @@ type Server struct {
 	// Media keeps site icons and page snapshots; Snapper takes snapshots (nil: the installed Chrome, found when asked).
 	Media   media.Store
 	Snapper *media.Snapper
-	snaps   snapRunner
-	ext     extState
-	icons   iconCache
+	// ExtensionRoot is where the built extensions are (web/dist/extension); "" finds them beside the binary.
+	ExtensionRoot string
+	snaps         snapRunner
+	ext           extState
+	icons         iconCache
 	// Deliveries is the webhook delivery log (the dispatcher's Log writes to it); nil: none kept.
 	Deliveries *webhooks.Log
 	checks     checkRunner
@@ -154,6 +156,13 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/tabs/close", s.require(store.RoleOwner, s.closeTabs))
 	m.HandleFunc("POST /api/v1/extension/pairings", s.require(store.RoleOwner, s.createPairing))
 	m.HandleFunc("POST /api/v1/extension/pair", s.pair)
+	m.HandleFunc("POST /api/v1/extension/requests", s.requestPairing)
+	m.HandleFunc("POST /api/v1/extension/requests/{id}/poll", s.pollPairing)
+	m.HandleFunc("GET /api/v1/extension/requests", s.require(store.RoleOwner, s.listPairingRequests))
+	m.HandleFunc("POST /api/v1/extension/requests/{id}/approve", s.require(store.RoleOwner, s.answerPairing(true)))
+	m.HandleFunc("POST /api/v1/extension/requests/{id}/deny", s.require(store.RoleOwner, s.answerPairing(false)))
+	m.HandleFunc("GET /api/v1/extension/guide", s.require(store.RoleOwner, s.extensionGuide))
+	m.HandleFunc("POST /api/v1/extension/setup", s.require(store.RoleOwner, s.openExtensionSetup))
 	m.HandleFunc("GET /api/v1/extension/status", s.require(store.RoleViewer, s.extensionStatus))
 	m.HandleFunc("POST /api/v1/extension/tabs", s.requireExtension(s.pushTabs))
 	m.HandleFunc("POST /api/v1/extension/bookmarks", s.requireExtension(s.readBookmarks))
