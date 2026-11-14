@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/simtabi/browser-foreman/src/internal/linkcheck"
 	"github.com/simtabi/browser-foreman/src/internal/store"
 )
 
@@ -210,4 +211,93 @@ func TestADeadLinkIsConfirmedADayLaterAndGetsItsArchiveCopy(t *testing.T) {
 	if asked.Load() != 1 {
 		t.Fatal("the archive was asked with the lookup turned off")
 	}
+}
+
+func TestFailingGitHubLinksAreSettledThroughTheAPI(t *testing.T) {
+	s := newServer(t, "tok")
+	ctx := context.Background()
+	t0 := time.Now().Add(-48 * time.Hour)
+	s.Checker.Now = func() time.Time { return t0.Add(48 * time.Hour) }
+	var asked []string
+	s.GitHub = func(_ context.Context, path string) linkcheck.GitHubAnswer {
+		asked = append(asked, path)
+		switch path {
+		case "repos/alive/private-looking":
+			return linkcheck.GitHubAnswer{Code: 200, Body: []byte(`{"full_name":"alive/private-looking"}`)}
+		case "repos/alive/old":
+			return linkcheck.GitHubAnswer{Code: 200, Body: []byte(`{"full_name":"alive/new"}`)}
+		case "repos/spent/x":
+			return linkcheck.GitHubAnswer{Code: 403, Limited: true}
+		case "users/alive":
+			return linkcheck.GitHubAnswer{Code: 200}
+		}
+		return linkcheck.GitHubAnswer{Code: 404}
+	}
+	dead := func(u string) store.LinkResult {
+		return store.LinkResult{URL: u, Status: "dead", Kind: "page", Checked: t0, DeadSince: t0}
+	}
+	_ = s.Data.SaveLinks(ctx, []store.LinkResult{dead("https://github.com/alive/private-looking"), dead("https://github.com/alive/old"),
+		dead("https://github.com/alive/gone"), dead("https://github.com/spent/x"), dead("https://github.com/never/asked")})
+	s.askGitHub([]string{"https://example.com/not-github", "https://github.com/alive/private-looking", "https://github.com/alive/old",
+		"https://github.com/alive/gone", "https://github.com/spent/x", "https://github.com/never/asked"})
+	got, _ := s.Data.Links(ctx, nil)
+	if r := got["https://github.com/alive/private-looking"]; r.Status != "ok" || !r.DeadSince.IsZero() {
+		t.Errorf("cleared: %+v", r)
+	}
+	if r := got["https://github.com/alive/old"]; r.Status != "moved" || r.Final != "https://github.com/alive/new" {
+		t.Errorf("renamed: %+v", r)
+	}
+	if r := got["https://github.com/alive/gone"]; r.Status != "dead" || !r.Confirmed || !strings.Contains(r.Note, "owner still exists") {
+		t.Errorf("still dead, a day later, confirmed: %+v", r)
+	}
+	if r := got["https://github.com/never/asked"]; r.Note != "" || strings.Contains(strings.Join(asked, ","), "never") {
+		t.Errorf("asked after the budget was spent: %+v %v", r, asked)
+	}
+	// The archive is not asked about a link GitHub cleared.
+	var archived []string
+	s.WaybackAPI = "http://127.0.0.1:1/unused"
+	_ = s.Data.SavePrefsDoc(ctx, []byte(`{"wayback":true,"open_with":["System default"]}`))
+	s.Checker.Client.Transport = roundTrip(func(r *http.Request) (*http.Response, error) {
+		archived = append(archived, r.URL.Query().Get("url"))
+		return nil, context.Canceled
+	})
+	s.lookUpArchives([]store.LinkResult{{URL: "https://github.com/alive/private-looking", Status: "dead", Confirmed: true},
+		{URL: "https://github.com/alive/gone", Status: "dead", Confirmed: true}})
+	if strings.Join(archived, ",") != "https://github.com/alive/gone" {
+		t.Fatalf("archive asked about %v", archived)
+	}
+}
+
+type roundTrip func(*http.Request) (*http.Response, error)
+
+func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// A run asks GitHub's API about the GitHub links it found failing, once it finishes.
+func TestARunAsksGitHubAboutItsFailingGitHubLinks(t *testing.T) {
+	s := newServer(t, "tok")
+	h := s.Handler()
+	ctx := context.Background()
+	_, _ = s.Data.CreateWorkspace(ctx, "links", "Links", time.Now())
+	tr := store.Tree{Root: &store.Node{ID: "root", Kind: store.KindFolder, Children: []*store.Node{
+		{ID: "a", Kind: store.KindBookmark, Title: "Repo", URL: "https://github.com/alive/repo"}}}}
+	_, _ = s.Data.Commit(ctx, "links", 0, store.Change{Op: "import", Summary: "x", Tree: tr}, time.Now())
+	// Every web request answers 404, as github.com does for a private repository to anyone not signed in.
+	s.Checker.Client.Transport = roundTrip(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 404, Body: http.NoBody, Header: http.Header{}, Request: r}, nil
+	})
+	s.GitHub = func(_ context.Context, path string) linkcheck.GitHubAnswer {
+		if path == "repos/alive/repo" {
+			return linkcheck.GitHubAnswer{Code: 200, Body: []byte(`{"full_name":"alive/repo"}`)}
+		}
+		return linkcheck.GitHubAnswer{Code: 404}
+	}
+	waitCheck(t, h, start(t, h, `{"workspace":"links"}`))
+	for range 100 {
+		if got, _ := s.Data.Links(ctx, nil); got["https://github.com/alive/repo"].Status == "ok" {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	got, _ := s.Data.Links(ctx, nil)
+	t.Fatalf("%+v", got["https://github.com/alive/repo"])
 }

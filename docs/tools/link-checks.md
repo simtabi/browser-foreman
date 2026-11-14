@@ -37,6 +37,27 @@ is confirmed on its next check.
 A check that reads nothing about the page, such as a dead one, keeps the `meta` and `frame` that an earlier check
 found.
 
+## GitHub links
+
+A web request is a poor judge of GitHub. Anonymous visitors are rate-limited after a few thousand requests, and a
+private repository answers 404 just like a deleted one. So when a run finishes, each `github.com` or
+`gist.github.com` link it found dead or unverified is asked about again through GitHub's API, with the `gh` command
+signed in as you. Browser Foreman never sees a token. The API tells apart:
+
+| What | Result |
+|---|---|
+| a repository that exists (archived ones say so) | `ok` |
+| a repository renamed since | `moved`, with the new address |
+| a repository gone, but its owner is still there | `dead`: "deleted or private" |
+| a repository and its owner both gone | `dead` |
+| a file or branch gone from a repository that exists | `dead` |
+| an account, an organisation or a gist | `ok` or `dead` |
+
+What it finds is folded in like any check, so a dead result is confirmed only a day after the first one. Each run asks
+about at most 500 links and stops as soon as GitHub says the budget is spent; the rest keep what the run found. Links
+whose path holds `.` or `..` segments, or names GitHub would never use, are not sent. Without `gh` installed and
+signed in, this step is skipped.
+
 ## Internet Archive copies
 
 Off by default. Turn on *Archive copies* on the Timeline's *Link re-checks* card, or set the `wayback` preference. Once

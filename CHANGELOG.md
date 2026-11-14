@@ -10,6 +10,9 @@ ships.
 
 ### Added
 
+- Failing GitHub links are checked again through GitHub's API, with `gh` signed in as you, after each link-check run.
+  A deleted repository is told apart from a private, renamed or archived one, and a file or branch gone from a
+  repository that still exists is caught. It is the Python tool's GitHub check, ported.
 - *Sort into folders…* (workspace menu, command palette, `browser-foreman sort`, `POST /api/v1/workspaces/{id}/sort`)
   files bookmarks by your own rules in `sort-rules.json`. Protected folders stay as they are and pull matching links
   in; dead links, local addresses and sign-out pages go to review folders; loose links are filed by site and keyword

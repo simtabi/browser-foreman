@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 
@@ -170,6 +171,7 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 	id := "lc_" + hex.EncodeToString(b)
 	var mu sync.Mutex
 	var batch, archive []store.LinkResult
+	var failing []string
 	changed, dead := 0, 0
 	stat := &runStat{Workspace: wsID}
 	flush := func() {
@@ -201,6 +203,9 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		if res.Confirmed && res.Archive == "" {
 			archive = append(archive, res)
 		}
+		if res.Status == linkcheck.StatusDead || res.Status == linkcheck.StatusUnverified {
+			failing = append(failing, res.URL)
+		}
 		batch = append(batch, res)
 		full := len(batch) >= 50
 		if res.Status == linkcheck.StatusDead {
@@ -231,10 +236,11 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		s.checks.mu.Unlock()
 		mu.Lock()
 		_, _ = s.Bus.Publish("linkcheck.finished", map[string]any{"id": id, "workspace": wsID, "state": v.State, "checked": v.Checked, "total": v.Total, "changed": changed, "dead": dead})
-		found := archive
+		found, fails := archive, failing
 		mu.Unlock()
-		if v.State == linkcheck.Done {
-			s.lookUpArchives(found) // after the run is reported finished: the archive is slow and optional
+		if v.State == linkcheck.Done { // after the run is reported finished: both are slow and optional
+			s.askGitHub(fails)
+			s.lookUpArchives(found)
 		}
 	}()
 	return job, nil
@@ -276,6 +282,19 @@ func (s *Server) lookUpArchives(rs []store.LinkResult) {
 	if end == "" {
 		end = linkcheck.WaybackAPI
 	}
+	// Only links still confirmed dead now: GitHub's API may have cleared some since the run.
+	asked := make([]string, len(rs))
+	for i, r := range rs {
+		asked[i] = r.URL
+	}
+	now0, err := s.Data.Links(ctx, asked)
+	if err != nil {
+		return
+	}
+	rs = slices.DeleteFunc(slices.Clone(rs), func(r store.LinkResult) bool {
+		c := now0[r.URL]
+		return c.Status != linkcheck.StatusDead || !c.Confirmed || c.Archive != ""
+	})
 	copies := map[string]string{}
 	var urls []string
 	for _, r := range rs[:min(len(rs), maxArchiveLookups)] {
@@ -300,4 +319,38 @@ func (s *Server) lookUpArchives(rs []store.LinkResult) {
 		}
 	}
 	_ = s.Data.SaveLinks(ctx, found)
+}
+
+// maxGitHubLookups caps the GitHub questions one run asks (each takes a few API calls).
+const maxGitHubLookups = 500
+
+// askGitHub settles failing github.com and gist.github.com links through GitHub's API (linkcheck.GitHub), which
+// tells a deleted repository from a private or renamed one. It stops when the API budget is spent; what it learns is
+// folded into each link as any check is (linkcheck.Settle).
+func (s *Server) askGitHub(urls []string) {
+	if s.GitHub == nil || len(urls) == 0 {
+		return
+	}
+	ctx := context.Background()
+	asked := 0
+	for _, u := range urls {
+		if asked == maxGitHubLookups {
+			return
+		}
+		r, ok, limited := linkcheck.GitHub(ctx, s.GitHub, u)
+		if !ok {
+			continue
+		}
+		asked++
+		if limited {
+			return // the budget is spent: the rest keep what the run found
+		}
+		r.URL, r.Checked = u, s.Checker.Now().UTC()
+		prev, err := s.Data.Links(ctx, []string{u})
+		if err != nil {
+			return
+		}
+		before, known := prev[u]
+		_ = s.Data.SaveLinks(ctx, []store.LinkResult{linkcheck.Settle(before, known, r)})
+	}
 }

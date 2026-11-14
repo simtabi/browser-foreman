@@ -81,6 +81,7 @@ func serveCmd() *cobra.Command {
 			srv := &api.Server{Cfg: c, Bus: bus, Hooks: hooks, Data: data, Now: time.Now, Deliveries: deliveries,
 				Limit:    auth.NewLimiter(5, 15*time.Minute, 15*time.Minute),
 				Checker:  linkcheck.New(15 * time.Second),
+				GitHub:   linkcheck.GhCLI(),
 				Browsers: bs,
 				Media:    media.Store{Dir: filepath.Join(c.Storage.Path, "media")},
 				Dispatch: &webhooks.Dispatcher{
