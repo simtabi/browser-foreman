@@ -1031,6 +1031,9 @@ html.booting body { overflow: hidden; }
       <label class="form-check form-switch m-0" data-tip="Find a saved copy of each confirmed-dead link on archive.org (sends those addresses there). Off by default.">
         <input class="form-check-input" type="checkbox" :checked="!!status?.wayback" @change="setWayback($event.target.checked)">
         <span class="form-check-label small">Archive copies</span></label>
+      <label class="form-check form-switch m-0" data-tip="After each run, open the links a plain check could not settle (bot checks, 403s, timeouts) in headless Chrome, with a fresh profile and no sign-ins, and judge what it shows. Needs a Chromium browser.">
+        <input class="form-check-input" type="checkbox" :checked="status?.render_checks !== false" @change="setRender($event.target.checked)">
+        <span class="form-check-label small">Confirm in Chrome</span></label>
       <button type="button" class="btn btn-sm" x-show="!current" @click="runNow()"><i class="ti ti-player-play me-1"></i>Run now</button>
       <button type="button" class="btn btn-sm btn-danger" x-show="current" x-cloak @click="stop()"><i class="ti ti-player-stop me-1"></i>Stop</button>
     </div>

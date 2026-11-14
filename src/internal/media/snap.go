@@ -27,6 +27,7 @@ type Snapper struct {
 	Store   Store
 	Chrome  string // the browser's executable
 	Run     Runner
+	Dump    Dumper // for Render; nil runs Chrome
 	Resolve func(ctx context.Context, host string) ([]net.IP, error)
 	Timeout time.Duration
 	// Width and Height are the window the page is drawn in (0: 1280 by 800); Wait is how long the page may run
@@ -193,4 +194,54 @@ func pinRule(host string, ip net.IP) string {
 		a = "[" + a + "]"
 	}
 	return "MAP " + host + " " + a
+}
+
+// Dumper runs Chrome and returns what it printed; tests replace it.
+type Dumper func(ctx context.Context, argv []string) ([]byte, error)
+
+// maxDOM caps what Render reads of a page as Chrome built it.
+const maxDOM = 2 << 20
+
+// DumpCommand is the Dumper that starts the process.
+func DumpCommand(ctx context.Context, argv []string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	var out bytes.Buffer
+	cmd.Stdout = &limited{&out, maxDOM}
+	if err := cmd.Run(); err != nil && out.Len() == 0 {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
+type limited struct {
+	b *bytes.Buffer
+	n int
+}
+
+func (l *limited) Write(p []byte) (int, error) {
+	if room := l.n - l.b.Len(); room > 0 {
+		l.b.Write(p[:min(len(p), room)])
+	}
+	return len(p), nil
+}
+
+// Render opens raw in headless Chrome, as Snap does (a throwaway profile, the address pinned), lets it run, and
+// returns the page as Chrome built it: what a person would see, where a plain request met a bot check.
+func (s Snapper) Render(ctx context.Context, raw string) ([]byte, error) {
+	u, dir, args, timeout, err := s.visit(ctx, raw)
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	dump := s.Dump
+	if dump == nil {
+		dump = DumpCommand
+	}
+	out, err := dump(cctx, append(append([]string{s.Chrome}, args...), "--dump-dom", u.String()))
+	if err != nil {
+		return nil, fmt.Errorf("Chrome could not open it: %w", err)
+	}
+	return out, nil
 }

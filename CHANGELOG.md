@@ -10,6 +10,9 @@ ships.
 
 ### Added
 
+- Links a plain check could not settle (bot checks, `403`s, timeouts) are opened in headless Chrome after each run and
+  judged from what Chrome shows: working only for a real page with content and no error title, dead for a "not
+  found" page. It is the Python tool's render evidence, ported, and can be turned off (*Confirm in Chrome*).
 - A loading screen covers the whole page from its first paint until everything is ready (bookmarks drawn, menus and
   filters filled, fonts and styles loaded), so the page is never seen half built. Settings › Startup › *Loading
   screen* turns it off. It lifts by itself after 15 seconds if the page cannot finish.

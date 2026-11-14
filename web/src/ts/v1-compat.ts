@@ -13,13 +13,13 @@ export function snapshotSettings(p: any): Record<string, unknown> {
 /** v1 preferences ⇄ the page's older setting names. */
 export function legacySettings(p: any): Record<string, unknown> {
   return { autosave: p.autosave, interval: p.interval_seconds, include_incognito: p.include_incognito, keep_days: p.keep_days,
-    save_mode: p.save_mode, watch_seconds: p.watch_seconds, recheck_days: p.recheck_days, wayback: !!p.wayback, tracked_browsers: p.tracked ?? null,
+    save_mode: p.save_mode, watch_seconds: p.watch_seconds, recheck_days: p.recheck_days, wayback: !!p.wayback, render_checks: p.render_checks !== false, tracked_browsers: p.tracked ?? null,
     open_with: p.open_with, incognito_purge_hours: p.incognito_purge_hours ?? 0, onboarded_browsers: true };
 }
 export function v1Settings(s: Record<string, any>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const map: Record<string, string> = { autosave: "autosave", interval: "interval_seconds", include_incognito: "include_incognito",
-    keep_days: "keep_days", save_mode: "save_mode", watch_seconds: "watch_seconds", recheck_days: "recheck_days", wayback: "wayback",
+    keep_days: "keep_days", save_mode: "save_mode", watch_seconds: "watch_seconds", recheck_days: "recheck_days", wayback: "wayback", render_checks: "render_checks",
     tracked_browsers: "tracked", open_with: "open_with", incognito_purge_hours: "incognito_purge_hours" };
   for (const [k, v] of Object.entries(s)) if (k in map) out[map[k]!] = k === "open_with" && typeof v === "string" ? [v] : v;
   return out;
@@ -64,7 +64,7 @@ export async function legacy(method: string, path: string, query: string, body: 
       }
       case "rechecks": {
         const [c, p] = await Promise.all([call("GET", "linkchecks"), call("GET", "preferences")]);
-        return ok({ running: c.running, recheck_days: p.recheck_days, wayback: !!p.wayback, runs: (c.runs ?? []).map((r: any) => ({
+        return ok({ running: c.running, recheck_days: p.recheck_days, wayback: !!p.wayback, render_checks: p.render_checks !== false, runs: (c.runs ?? []).map((r: any) => ({
           run_id: r.id, started: r.started, finished: r.done ? r.ended : undefined, total: r.total, checked: r.checked,
           newly_broken: r.newly_broken, fixed: r.fixed, state: r.done ? (r.state === "cancelled" ? "cancelled" : "done") : "running" })) });
       }

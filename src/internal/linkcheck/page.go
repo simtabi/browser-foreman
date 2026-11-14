@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -145,4 +146,30 @@ func Settle(before store.LinkResult, known bool, r Result) Result {
 		}
 	}
 	return r
+}
+
+// forbiddenTitle is a title that announces an error page, which Verdict lets through as "ok" when nothing else
+// gives it away ("403 Forbidden" from nginx, say).
+var forbiddenTitle = regexp.MustCompile(`(?i)\b(40[0-9]|50[0-9]|52[0-9]|forbidden|error|denied|blocked|unavailable)\b`)
+
+// minRendered is how much visible text a rendered page must hold to count as a working one.
+const minRendered = 200
+
+// FromRender judges a page from what headless Chrome built of it (media.Snapper.Render): for links a plain request
+// could not settle (a bot check, a 403, a timeout). Strict on purpose, since there is no status code: it is "ok" only
+// for an ordinary page with real content and no error title, "dead" for a page that says it is not found or parked,
+// and "unverified" otherwise. ok is false when the render says nothing new.
+func FromRender(dom []byte, raw string) (r Result, ok bool) {
+	title, text := pageText(dom)
+	switch v, why := Verdict(title, text, raw); v {
+	case "soft-404":
+		return Result{Status: StatusDead, Kind: "page", Note: why + " (in Chrome)"}, true
+	case "parked", "suspended":
+		return Result{Status: StatusDead, Kind: "host", Note: why + " (in Chrome)"}, true
+	case "ok":
+		if len(text) >= minRendered && !forbiddenTitle.MatchString(title) {
+			return Result{Status: StatusOK, Note: "loaded normally in Chrome", Meta: pageMeta(dom, raw)}, true
+		}
+	}
+	return Result{}, false
 }

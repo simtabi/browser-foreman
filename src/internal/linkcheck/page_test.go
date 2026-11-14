@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -148,6 +149,31 @@ func TestWayback(t *testing.T) {
 		answer = body
 		if got := c.Wayback(context.Background(), end, "https://gone.example/page?a=1"); got != want {
 			t.Errorf("%s: %q, want %q", body, got, want)
+		}
+	}
+}
+
+func TestFromRenderIsStrict(t *testing.T) {
+	words := strings.Repeat("A real article with plenty of words in it. ", 10)
+	page := func(title, body string) []byte {
+		return []byte("<html><head><title>" + title + "</title></head><body><p>" + body + "</p></body></html>")
+	}
+	cases := []struct {
+		name, title, body string
+		ok                bool
+		status            string
+	}{
+		{"an ordinary page", "Docs", words, true, StatusOK},
+		{"a not-found page", "Page not found", "Sorry", true, StatusDead},
+		{"a parked domain", "example.com is for sale", "Buy this domain", true, StatusDead},
+		{"a bot check", "Just a moment...", "Checking your browser", false, ""},
+		{"a bare error page", "403 Forbidden", words, false, ""},
+		{"almost empty", "Docs", "Hello", false, ""},
+	}
+	for _, c := range cases {
+		r, ok := FromRender(page(c.title, c.body), "https://site.example/p")
+		if ok != c.ok || ok && r.Status != c.status {
+			t.Errorf("%s: %v %+v", c.name, ok, r)
 		}
 	}
 }

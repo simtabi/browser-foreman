@@ -34,6 +34,9 @@ type Prefs struct {
 	// Wayback asks the Internet Archive for a copy of each link once it is confirmed dead. Off by default: it sends
 	// those addresses to archive.org.
 	Wayback bool `json:"wayback"`
+	// RenderChecks opens links a plain request could not settle (bot checks, 403s, timeouts) in headless Chrome after
+	// each run, and judges what Chrome shows. On by default; it needs a Chromium browser installed.
+	RenderChecks bool `json:"render_checks"`
 	// Page snapshots: the browser window they are taken in (a taller one shows more of the page), how long a page
 	// may run before the picture is taken, and the folder they are kept in ("": the data folder's media/).
 	SnapshotWidth       int    `json:"snapshot_width"`
@@ -49,7 +52,8 @@ type Prefs struct {
 // Defaults are what a new store reads.
 func Defaults() Prefs {
 	return Prefs{OpenWith: []string{"System default"}, Autosave: true, SaveMode: "change", IntervalSeconds: 300,
-		WatchSeconds: 15, KeepDays: 14, RecheckDays: 7, SnapshotWidth: 1280, SnapshotHeight: 800, SnapshotWaitSeconds: 8}
+		WatchSeconds: 15, KeepDays: 14, RecheckDays: 7, SnapshotWidth: 1280, SnapshotHeight: 800, SnapshotWaitSeconds: 8,
+		RenderChecks: true}
 }
 
 // Validate refuses values that would make the server misbehave (a 1-second poll, a negative age).

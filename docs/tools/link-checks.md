@@ -37,6 +37,23 @@ is confirmed on its next check.
 A check that reads nothing about the page, such as a dead one, keeps the `meta` and `frame` that an earlier check
 found.
 
+## Confirming blocked pages in Chrome
+
+Some sites answer a script with `403` or a bot check while a person's browser gets the page. So once a run finishes,
+each link still `unverified` is opened in headless Chrome, as the owner's browser would open it: a fresh profile with
+no sign-ins or cookies, the address pinned to the public one just checked, and no local addresses. The link is then
+judged by what Chrome built:
+
+- `ok` ("loaded normally in Chrome") only for an ordinary page with real content (200 characters of text or more) and
+  no error title such as "403 Forbidden";
+- `dead` for a page that says it is not found, or a parked or switched-off site (first seen dead, so confirmed only a
+  day later, like any check);
+- anything else, such as a bot check Chrome cannot pass either, stays `unverified`.
+
+At most 300 links are opened per run, two at a time. It needs a Chromium browser (the one page snapshots use) and is on
+by default; turn it off with *Confirm in Chrome* on the Timeline's *Link re-checks* card, or the `render_checks`
+preference.
+
 ## GitHub links
 
 A web request is a poor judge of GitHub. Anonymous visitors are rate-limited after a few thousand requests, and a

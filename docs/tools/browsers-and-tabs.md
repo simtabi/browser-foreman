@@ -87,6 +87,7 @@ are the `tabs_own` and `active_workspace` preferences.
 | `keep_days` | 14 | 1–3650 |
 | `recheck_days` | 7 | re-check links whose last check is older than this; 0 is off |
 | `wayback` | false | look up each confirmed-dead link's copy in the Internet Archive (sends those addresses to archive.org); see [Link checks](link-checks.md#internet-archive-copies) |
+| `render_checks` | true | open links a plain check could not settle in headless Chrome after each run, and judge what it shows; see [Link checks](link-checks.md#confirming-blocked-pages-in-chrome) |
 
 Scheduled re-checks only visit links that were checked before: a link never checked waits for a check you start, so
 the first run of the server never starts thousands of requests on its own.

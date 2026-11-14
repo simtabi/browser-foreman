@@ -238,8 +238,9 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		_, _ = s.Bus.Publish("linkcheck.finished", map[string]any{"id": id, "workspace": wsID, "state": v.State, "checked": v.Checked, "total": v.Total, "changed": changed, "dead": dead})
 		found, fails := archive, failing
 		mu.Unlock()
-		if v.State == linkcheck.Done { // after the run is reported finished: both are slow and optional
+		if v.State == linkcheck.Done { // after the run is reported finished: these are slow and optional
 			s.askGitHub(fails)
+			s.renderBlocked(fails)
 			s.lookUpArchives(found)
 		}
 	}()
@@ -353,4 +354,64 @@ func (s *Server) askGitHub(urls []string) {
 		before, known := prev[u]
 		_ = s.Data.SaveLinks(ctx, []store.LinkResult{linkcheck.Settle(before, known, r)})
 	}
+}
+
+// maxRenders caps the pages one run opens in Chrome (each takes some seconds), and renderAtOnce how many at a time.
+const (
+	maxRenders   = 300
+	renderAtOnce = 2
+)
+
+// renderBlocked opens the run's links that are still unverified (after GitHub's API had its say) in headless Chrome,
+// as the owner would, and settles them from what Chrome shows (linkcheck.FromRender): a bot check that a browser
+// passes, a 403 to scripts only. Prefs.RenderChecks turns it off; without a Chromium browser it does nothing.
+func (s *Server) renderBlocked(urls []string) {
+	ctx := context.Background()
+	p, err := store.LoadPrefs(ctx, s.Data)
+	if err != nil || !p.RenderChecks || len(urls) == 0 {
+		return
+	}
+	sn := s.snapper()
+	if sn.Chrome == "" {
+		return
+	}
+	now, err := s.Data.Links(ctx, urls)
+	if err != nil {
+		return
+	}
+	var todo []string
+	for _, u := range urls {
+		if now[u].Status == linkcheck.StatusUnverified && len(todo) < maxRenders {
+			todo = append(todo, u)
+		}
+	}
+	queue := make(chan string)
+	var wg sync.WaitGroup
+	for range renderAtOnce {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for u := range queue {
+				dom, err := sn.Render(ctx, u)
+				if err != nil {
+					continue
+				}
+				r, ok := linkcheck.FromRender(dom, u)
+				if !ok {
+					continue
+				}
+				r.URL, r.Checked = u, s.Checker.Now().UTC()
+				prev, err := s.Data.Links(ctx, []string{u})
+				if err != nil || prev[u].Status != linkcheck.StatusUnverified {
+					continue // settled meanwhile
+				}
+				_ = s.Data.SaveLinks(ctx, []store.LinkResult{linkcheck.Settle(prev[u], true, r)})
+			}
+		}()
+	}
+	for _, u := range todo {
+		queue <- u
+	}
+	close(queue)
+	wg.Wait()
 }

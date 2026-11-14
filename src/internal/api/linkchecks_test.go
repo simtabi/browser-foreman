@@ -3,14 +3,17 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/simtabi/browser-foreman/src/internal/linkcheck"
+	"github.com/simtabi/browser-foreman/src/internal/media"
 	"github.com/simtabi/browser-foreman/src/internal/store"
 )
 
@@ -315,4 +318,76 @@ func TestGitHubThatCannotAnswerChangesNothing(t *testing.T) {
 	if got["https://github.com/a/b"].Note != "timed out" || got["https://github.com/c/d"].Status != "dead" || asked != 1 {
 		t.Fatalf("%+v, asked %d", got, asked)
 	}
+}
+
+// Links a plain request could not settle are opened in Chrome and judged from what it shows.
+func TestBlockedLinksAreSettledInChrome(t *testing.T) {
+	s := newServer(t, "tok")
+	ctx := context.Background()
+	words := strings.Repeat("Plenty of real words on this page. ", 10)
+	var opened []string
+	s.Snapper = &media.Snapper{Chrome: "/x/chrome",
+		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("93.184.216.34")}, nil },
+		Dump: func(_ context.Context, argv []string) ([]byte, error) {
+			u := argv[len(argv)-1]
+			opened = append(opened, u)
+			if strings.Contains(u, "gone") {
+				return []byte("<html><title>Page not found</title></html>"), nil
+			}
+			return []byte("<html><head><title>Docs</title></head><body>" + words + "</body></html>"), nil
+		}}
+	now := time.Now()
+	_ = s.Data.SaveLinks(ctx, []store.LinkResult{
+		{URL: "https://blocked.example/", Status: "unverified", Code: 403, Note: "HTTP 403", Checked: now},
+		{URL: "https://blocked.example/gone", Status: "unverified", Code: 403, Note: "HTTP 403", Checked: now},
+		{URL: "https://dead.example/", Status: "dead", Checked: now}})
+	s.renderBlocked([]string{"https://blocked.example/", "https://blocked.example/gone", "https://dead.example/"})
+	got, _ := s.Data.Links(ctx, nil)
+	if r := got["https://blocked.example/"]; r.Status != "ok" || r.Note != "loaded normally in Chrome" {
+		t.Errorf("%+v", r)
+	}
+	if r := got["https://blocked.example/gone"]; r.Status != "dead" || r.Confirmed || r.DeadSince.IsZero() {
+		t.Errorf("found dead once in Chrome: dead, not yet confirmed %+v", r)
+	}
+	if slices.Contains(opened, "https://dead.example/") {
+		t.Error("a link already settled was opened")
+	}
+	// Turned off: nothing is opened.
+	opened = nil
+	_ = s.Data.SavePrefsDoc(ctx, []byte(`{"render_checks":false,"open_with":["System default"]}`))
+	_ = s.Data.SaveLinks(ctx, []store.LinkResult{{URL: "https://blocked.example/again", Status: "unverified", Checked: now}})
+	s.renderBlocked([]string{"https://blocked.example/again"})
+	if len(opened) != 0 {
+		t.Fatalf("opened with render checks off: %v", opened)
+	}
+}
+
+// A run opens in Chrome the links it could not settle, once it finishes.
+func TestARunSettlesBlockedLinksInChrome(t *testing.T) {
+	s := newServer(t, "tok")
+	h := s.Handler()
+	ctx := context.Background()
+	_, _ = s.Data.CreateWorkspace(ctx, "links", "Links", time.Now())
+	tr := store.Tree{Root: &store.Node{ID: "root", Kind: store.KindFolder, Children: []*store.Node{
+		{ID: "a", Kind: store.KindBookmark, Title: "Shop", URL: "https://shop.example/item"}}}}
+	_, _ = s.Data.Commit(ctx, "links", 0, store.Change{Op: "import", Summary: "x", Tree: tr}, time.Now())
+	// Scripts get 403, as bot protection answers them; Chrome sees the real page.
+	s.Checker.Client.Transport = roundTrip(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 403, Body: http.NoBody, Header: http.Header{}, Request: r}, nil
+	})
+	words := strings.Repeat("Plenty of real words on this page. ", 10)
+	s.Snapper = &media.Snapper{Chrome: "/x/chrome",
+		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("93.184.216.34")}, nil },
+		Dump: func(context.Context, []string) ([]byte, error) {
+			return []byte("<html><head><title>Item</title></head><body>" + words + "</body></html>"), nil
+		}}
+	waitCheck(t, h, start(t, h, `{"workspace":"links"}`))
+	for range 100 {
+		if got, _ := s.Data.Links(ctx, nil); got["https://shop.example/item"].Status == "ok" {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	got, _ := s.Data.Links(ctx, nil)
+	t.Fatalf("%+v", got["https://shop.example/item"])
 }
