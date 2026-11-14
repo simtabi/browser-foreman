@@ -101,6 +101,9 @@ func (s Snapper) Snap(ctx context.Context, raw string) error {
 	argv := []string{s.Chrome, "--headless=new", "--disable-gpu", "--hide-scrollbars", "--mute-audio", "--no-first-run",
 		"--no-default-browser-check", "--disable-extensions", "--disable-sync", "--incognito",
 		"--user-data-dir=" + filepath.Join(dir, "profile"), fmt.Sprintf("--window-size=%d,%d", w, h), fmt.Sprintf("--virtual-time-budget=%d", wait.Milliseconds()),
+		// Chrome would resolve the host again, and a hostile name server could then answer with a private address
+		// (DNS rebinding): pin the host to the public address just checked.
+		"--host-resolver-rules=" + pinRule(u.Hostname(), ips[0]),
 		"--screenshot=" + shot, u.String()}
 	run := s.Run
 	if run == nil {
@@ -170,4 +173,13 @@ func FindChrome(paths []string) string {
 		}
 	}
 	return ""
+}
+
+// pinRule maps one host to an address in Chrome's --host-resolver-rules form (an IPv6 address in brackets).
+func pinRule(host string, ip net.IP) string {
+	a := ip.String()
+	if ip.To4() == nil {
+		a = "[" + a + "]"
+	}
+	return "MAP " + host + " " + a
 }

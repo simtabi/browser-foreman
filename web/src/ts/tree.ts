@@ -111,6 +111,13 @@ export function containsNode(folder: Folder, x: TreeNode, parents: Parents): boo
 export function detachNode(x: TreeNode, parents: Parents): void {
   const p = parents.get(x); if (p) p.c.splice(p.c.indexOf(x), 1);
 }
+/** Take many nodes out of their folders in one pass per folder (a node at a time is quadratic for a big selection).
+ *  Order among the nodes that stay is kept. */
+export function detachNodes(nodes: TreeNode[], parents: Parents): void {
+  const gone = new Set(nodes), folders = new Set<Folder>();
+  for (const x of nodes) { const p = parents.get(x); if (p) folders.add(p); }
+  for (const p of folders) { let w = 0; for (const x of p.c) if (!gone.has(x)) p.c[w++] = x; p.c.length = w; }
+}
 /** Every folder below `f`, depth first. */
 export function walkFolders(f: Folder, fn: (x: Folder) => void): void { for (const x of f.c) if (isFolder(x)) { fn(x); walkFolders(x, fn); } }
 /** Every bookmark id below `f`. */

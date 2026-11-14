@@ -142,6 +142,17 @@ func PoolFor(p store.Prefs, workspace string) string {
 	return ""
 }
 
+// inPool keeps the listed snapshots of one pool, in order, without opening any of them.
+func inPool(rows []store.TabSnapshot, pool string) []store.TabSnapshot {
+	out := rows[:0:0]
+	for _, r := range rows {
+		if r.Pool == pool {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // loadDoc reads one stored snapshot with its pool.
 func (s *Service) loadDoc(ctx context.Context, id string) (snapshotDoc, store.TabSnapshot, error) {
 	snap, err := s.Data.TabSnapshot(ctx, id)
@@ -169,7 +180,7 @@ func (s *Service) Take(ctx context.Context, reason string, force bool) (Saved, e
 	fp := Fingerprint(live)
 	if !force {
 		if recent, err := s.Data.TabSnapshots(ctx, 200); err == nil {
-			for _, r := range recent {
+			for _, r := range inPool(recent, pool) {
 				doc, prev, err := s.loadDoc(ctx, r.ID)
 				if err != nil || doc.Workspace != pool {
 					continue

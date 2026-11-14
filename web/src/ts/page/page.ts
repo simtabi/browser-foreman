@@ -37,7 +37,7 @@ import { layoutMenu } from "../ctxmenu";
 import { askConfirm, askText, hideModal, installDialogs, modalOpen, showModal, toast, visibleModals } from "../dialogs";
 import { hideTip, installTips, showPop, tipsFromTitles } from "../tips";
 import { afterTarget, dragged, dropAction, dropZone, looseGroupAt, navigate, rangeOf } from "../tree-rules";
-import { OLD_TRASH, TRASH, byName, containsNode, defaultTree as defaultTreeOf, descendants, detachNode, isFolder, mkFolder, nice, parentsOf, pathIn, plain, restoreTree, revive, walkFolders } from "../tree";
+import { OLD_TRASH, TRASH, byName, containsNode, defaultTree as defaultTreeOf, descendants, detachNode, detachNodes, isFolder, mkFolder, nice, parentsOf, pathIn, plain, restoreTree, revive, walkFolders } from "../tree";
 const DATA = window.BF_DATA;
 const LABEL = {dead: "dead link", moved: "moved — new address available", "moved-elsewhere": "redirects to another site",
   unverified: "could not be verified", "needs-login": "requires login", local: "local or staging site", skipped: "not checked (action link)"};
@@ -1460,7 +1460,8 @@ function moveNodes(nodes, target, before = null, quiet = false) {
   nodes = nodes.filter(x => x !== tf && !(isFolder(x) && contains(x, target)) && x !== before);
   if (!nodes.length) return toast("A folder can't go inside itself");
   if (!quiet) snapshot();
-  for (const x of nodes) { if (target !== tf && !contains(tf, target)) forgetFrom(x); detach(x); }
+  if (target !== tf && !contains(tf, target)) for (const x of nodes) forgetFrom(x);
+  detachNodes(nodes, PARENT);  // one pass per folder: moving thousands stays quick
   const at = before != null && target.c.includes(before) ? target.c.indexOf(before) : target.c.length;
   target.c.splice(at, 0, ...nodes);
   indexParents();
@@ -1539,9 +1540,14 @@ function trashNodes() {
   snapshot();
   let bin = trashFolder();
   if (!bin) { bin = mkFolder(TRASH); st().root.c.push(bin); indexParents(); }
-  const next = rows.slice(sel + 1).find(r => !xs.includes(r.node) && !xs.some(x => isFolder(x) && contains(x, r.node)))?.node;
+  // The row to select next: the first below that is neither going nor inside a folder that is (Sets, not array scans:
+  // a big selection in a big list stays quick).
+  const going = new Set(xs), leaving = node => { for (let p = node; p !== undefined; p = PARENT.get(p)) if (going.has(p)) return true; return false; };
+  const next = rows.slice(sel + 1).find(r => !leaving(r.node))?.node;
+  const indexIn = new Map();  // each folder's positions, read once
+  const positionOf = (p, x) => { let m = indexIn.get(p); if (!m) indexIn.set(p, m = new Map(p.c.map((y, i) => [y, i]))); return m.get(x); };
   for (const x of xs.filter(x => !inTrash(x))) {
-    const p = PARENT.get(x), from = {path: pathOf(p), index: p.c.indexOf(x)};
+    const p = PARENT.get(x), from = {path: pathOf(p), index: positionOf(p, x)};
     if (isFolder(x)) x.from = from; else st().trashFrom[x] = from;
   }
   moveNodes(xs.filter(x => !inTrash(x)), bin, null, true);

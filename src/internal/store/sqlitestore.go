@@ -53,6 +53,10 @@ func OpenSQLite(dir string) (*SQLiteStore, error) {
 	_, _ = db.Exec(`ALTER TABLE workspace_meta ADD COLUMN deleted TEXT NOT NULL DEFAULT ''`)
 	_, _ = db.Exec(`ALTER TABLE workspace_meta ADD COLUMN color TEXT NOT NULL DEFAULT ''`)
 	_, _ = db.Exec(`ALTER TABLE workspace_meta ADD COLUMN icon TEXT NOT NULL DEFAULT ''`)
+	// Each snapshot's tab pool, listed with the row; rows saved before it existed take it from their document once.
+	if _, err := db.Exec(`ALTER TABLE tabs ADD COLUMN pool TEXT NOT NULL DEFAULT ''`); err == nil {
+		_, _ = db.Exec(`UPDATE tabs SET pool = COALESCE(json_extract(windows, '$.workspace'), '') WHERE json_valid(windows)`)
+	}
 	return &SQLiteStore{db: db}, nil
 }
 
@@ -230,15 +234,16 @@ func (s *SQLiteStore) SaveTabs(ctx context.Context, t TabSnapshot) error {
 		return err
 	}
 	w := t.Windows
+	t.Pool = PoolOf(w) // the document names its pool; the column only lists it
 	if w == nil {
 		w = json.RawMessage("null")
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO tabs (id, at, reason, windows) VALUES (?, ?, ?, ?)`, t.ID, t.At.UTC().Format(ts), t.Reason, []byte(w))
+	_, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO tabs (id, at, reason, pool, windows) VALUES (?, ?, ?, ?, ?)`, t.ID, t.At.UTC().Format(ts), t.Reason, t.Pool, []byte(w))
 	return err
 }
 
 func (s *SQLiteStore) TabSnapshots(ctx context.Context, limit int) ([]TabSnapshot, error) {
-	q := `SELECT id, at, reason FROM tabs ORDER BY at DESC`
+	q := `SELECT id, at, reason, pool FROM tabs ORDER BY at DESC`
 	if limit > 0 {
 		q += fmt.Sprintf(" LIMIT %d", limit)
 	}
@@ -251,7 +256,7 @@ func (s *SQLiteStore) TabSnapshots(ctx context.Context, limit int) ([]TabSnapsho
 	for rows.Next() {
 		var t TabSnapshot
 		var at string
-		if err := rows.Scan(&t.ID, &at, &t.Reason); err != nil {
+		if err := rows.Scan(&t.ID, &at, &t.Reason, &t.Pool); err != nil {
 			return nil, err
 		}
 		t.At, _ = time.Parse(ts, at)
@@ -264,7 +269,7 @@ func (s *SQLiteStore) TabSnapshot(ctx context.Context, id string) (TabSnapshot, 
 	var t TabSnapshot
 	var at string
 	var w []byte
-	err := s.db.QueryRowContext(ctx, `SELECT id, at, reason, windows FROM tabs WHERE id = ?`, id).Scan(&t.ID, &at, &t.Reason, &w)
+	err := s.db.QueryRowContext(ctx, `SELECT id, at, reason, pool, windows FROM tabs WHERE id = ?`, id).Scan(&t.ID, &at, &t.Reason, &t.Pool, &w)
 	if errors.Is(err, sql.ErrNoRows) {
 		return TabSnapshot{}, ErrNotFound
 	}

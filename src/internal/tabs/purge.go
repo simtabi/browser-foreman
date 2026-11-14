@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/simtabi/browser-foreman/src/internal/store"
 )
 
 // Purged says what a purge removed.
@@ -22,15 +24,15 @@ type Purged struct {
 // counts included. Only snapshots taken before olderThan go (zero: all). Normal windows are never touched. The store
 // then scrubs what it freed.
 func (s *Service) Purge(ctx context.Context, level string, olderThan time.Duration) (Purged, error) {
-	return s.purge(ctx, level, olderThan, func(snapshotDoc) bool { return true })
+	return s.purge(ctx, level, olderThan, func(store.TabSnapshot) bool { return true })
 }
 
 // PurgePool is Purge for one pool (PoolFor) only: what a workspace's Open tabs panel counts is what it purges.
 func (s *Service) PurgePool(ctx context.Context, pool, level string, olderThan time.Duration) (Purged, error) {
-	return s.purge(ctx, level, olderThan, func(d snapshotDoc) bool { return d.Workspace == pool })
+	return s.purge(ctx, level, olderThan, func(r store.TabSnapshot) bool { return r.Pool == pool })
 }
 
-func (s *Service) purge(ctx context.Context, level string, olderThan time.Duration, in func(snapshotDoc) bool) (Purged, error) {
+func (s *Service) purge(ctx context.Context, level string, olderThan time.Duration, in func(store.TabSnapshot) bool) (Purged, error) {
 	if level != "pages" && level != "windows" {
 		return Purged{}, errors.New(`level: "pages" or "windows"`)
 	}
@@ -41,16 +43,16 @@ func (s *Service) purge(ctx context.Context, level string, olderThan time.Durati
 	}
 	cutoff := s.Now().Add(-olderThan)
 	for _, row := range list {
-		if olderThan > 0 && !row.At.Before(cutoff) {
-			continue
+		if (olderThan > 0 && !row.At.Before(cutoff)) || !in(row) {
+			continue // too recent, or another pool's: not even opened
 		}
 		snap, err := s.Data.TabSnapshot(ctx, row.ID)
 		if err != nil {
 			return out, err
 		}
 		var doc snapshotDoc
-		if err := json.Unmarshal(snap.Windows, &doc); err != nil || !in(doc) {
-			continue // unreadable (nothing of it can be shown either), or another pool's
+		if err := json.Unmarshal(snap.Windows, &doc); err != nil {
+			continue // unreadable: nothing of it can be shown either
 		}
 		changed := false
 		for bi := range doc.Browsers {
@@ -107,7 +109,7 @@ func (s *Service) Stored(ctx context.Context, pool string) (snapshots, privatePa
 	if err != nil {
 		return 0, 0, err
 	}
-	for _, row := range list {
+	for _, row := range inPool(list, pool) {
 		doc, _, err := s.loadDoc(ctx, row.ID)
 		if err != nil || doc.Workspace != pool {
 			continue
@@ -158,8 +160,8 @@ func (s *Service) DeleteSnapshots(ctx context.Context, pool string, ids []string
 		case len(want) > 0 && !want[x.ID], before != "" && !x.At.Before(day):
 			continue
 		}
-		if doc, _, err := s.loadDoc(ctx, x.ID); err == nil && doc.Workspace != pool {
-			continue // another pool's (an unreadable one is deletable from any pool: nothing else can show it)
+		if x.Pool != pool {
+			continue // another pool's
 		}
 		pick = append(pick, x.ID)
 	}

@@ -49,5 +49,15 @@ check("parents, paths, containment, detach, walks", () => {
   T.detachNode(1, parents); assert.deepEqual(T.descendants(root), [2]);
 });
 
+check("detachNodes takes many out in one pass and keeps the rest in order", () => {
+  const ids = Array.from({ length: 6000 }, (_, i) => ({ id: i + 1, path: "Big" }));
+  const root = T.defaultTree([], ids), parents = T.parentsOf(root), big = root.c[0];
+  const odd = big.c.filter(x => !T.isFolder(x) && x % 2 === 1);
+  const t0 = performance.now(); T.detachNodes(odd, parents); const ms = performance.now() - t0;
+  assert.equal(big.c.length, 3000);
+  assert.ok(big.c.every((x, i) => x === (i + 1) * 2), "the ones left changed order");
+  assert.ok(ms < 200, `3,000 of 6,000 took ${Math.round(ms)} ms`);
+});
+
 assert.ok(checks >= 4, `only ${checks} checks ran`);
 console.log(`${checks} tree checks passed`);

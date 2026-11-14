@@ -102,7 +102,8 @@ func TestSnapKeepsASmallJPEG(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(ran, " ")
-	for _, want := range []string{"--headless=new", "--user-data-dir=", "--incognito", "https://go.dev/", "--window-size=1280,800", "--virtual-time-budget=8000"} {
+	for _, want := range []string{"--headless=new", "--user-data-dir=", "--incognito", "https://go.dev/", "--window-size=1280,800", "--virtual-time-budget=8000",
+		"--host-resolver-rules=MAP go.dev 93.184.216.34"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing %s in %s", want, joined)
 		}
@@ -157,5 +158,11 @@ func TestIndexAgreesWithTheFolder(t *testing.T) {
 	}
 	if e := (Store{}).Index(); e.Icon("go.dev") != "" || e.HasThumb("https://go.dev/") {
 		t.Fatal("a store with no folder held something")
+	}
+}
+
+func TestPinRuleBracketsIPv6(t *testing.T) {
+	if got := pinRule("example.com", net.ParseIP("2606:2800:220:1::1")); got != "MAP example.com [2606:2800:220:1::1]" {
+		t.Fatal(got)
 	}
 }

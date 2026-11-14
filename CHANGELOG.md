@@ -143,6 +143,8 @@ ships.
 
 ### Fixed
 
+- The Timeline compares a workspace's tab snapshots with that workspace's own earlier snapshot; the one before the
+  range could come from another workspace's pool, so its first step showed every page as opened.
 - *Last opened* credits every bookmark of a page: two bookmarks of the same page (http and https, a trailing slash)
   both show its visits, where one of them showed none.
 - Reordering inside a folder of more than 2,000 bookmarks records just what moved; before, every child was recorded
@@ -185,6 +187,11 @@ ships.
 
 ### Changed
 
+- Each tab snapshot lists its pool, so Open tabs, the Timeline, counts, deletes and purges skip other workspaces'
+  snapshots without opening them; snapshots saved before this get their pool once, when the data is first opened.
+- Moving or trashing a big selection no longer slows down with its size (one pass per folder, not one per item).
+- Page snapshots pin Chrome to the public address that was checked, so a name server cannot point the page at a
+  private address between the check and the snapshot.
 - The page loads faster with many bookmarks: site icons and page snapshots are found with one read of each folder,
   not one per bookmark; history searches with an end date let the database skip what is newer.
 - Work that blocks the page dims it behind a centred card with a large spinner and what is happening, and turns every

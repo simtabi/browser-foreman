@@ -57,6 +57,9 @@ func (s *Service) Rows(ctx context.Context, limit int, names []string, pool stri
 		if len(out) >= limit && limit > 0 {
 			break
 		}
+		if x.Pool != pool {
+			continue // another pool's: not even opened
+		}
 		doc, snap, err := s.loadDoc(ctx, x.ID)
 		if err != nil || doc.Workspace != pool {
 			continue
@@ -115,10 +118,11 @@ func (s *Service) Timeline(ctx context.Context, days int, names []string, limit 
 // TimelineBetween is Timeline for a chosen range: snapshots taken from `since` to `until` (either zero: unbounded),
 // of one pool only (PoolFor), so what opened and closed is compared within it.
 func (s *Service) TimelineBetween(ctx context.Context, since, until time.Time, names []string, limit int, pool string) ([]Step, error) {
-	all, err := s.Data.TabSnapshots(ctx, 0)
+	rows, err := s.Data.TabSnapshots(ctx, 0)
 	if err != nil {
 		return nil, err
 	}
+	all := inPool(rows, pool) // the baseline before the window must be this pool's too
 	// all is newest first: walk it backwards, starting from the last snapshot before the window.
 	start := len(all) - 1
 	for start > 0 && all[start-1].At.Before(since) {

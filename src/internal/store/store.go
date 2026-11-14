@@ -190,10 +190,23 @@ type Change struct {
 
 // TabSnapshot is the open windows and tabs at one moment, as the browsers reported them.
 type TabSnapshot struct {
-	ID      string          `json:"id"`
-	At      time.Time       `json:"at"`
-	Reason  string          `json:"reason"` // auto, manual, before-close…
+	ID     string    `json:"id"`
+	At     time.Time `json:"at"`
+	Reason string    `json:"reason"` // auto, manual, before-close…
+	// Pool is the tab pool the snapshot belongs to ("" shared, else the workspace keeping its own): listed with the
+	// row, so one pool's snapshots are found without opening every other pool's. Read-only: SaveTabs sets it from
+	// the document's own "workspace" field.
+	Pool    string          `json:"pool,omitempty"`
 	Windows json.RawMessage `json:"windows"`
+}
+
+// PoolOf reads the pool a snapshot document names (its "workspace" field), for rows saved before Pool existed.
+func PoolOf(windows []byte) string {
+	var d struct {
+		Workspace string `json:"workspace"`
+	}
+	_ = json.Unmarshal(windows, &d)
+	return d.Workspace
 }
 
 // Store is what every driver provides. Implementations are safe for use by one process at a time.

@@ -263,6 +263,7 @@ func (s *JSONStore) SaveTabs(_ context.Context, t TabSnapshot) error {
 	if err := ValidID(t.ID); err != nil {
 		return err
 	}
+	t.Pool = PoolOf(t.Windows) // the document names its pool; the field only lists it
 	b, err := json.Marshal(t)
 	if err != nil {
 		return err
@@ -291,6 +292,9 @@ func (s *JSONStore) TabSnapshots(_ context.Context, limit int) ([]TabSnapshot, e
 		var t TabSnapshot
 		if err := json.Unmarshal(b, &t); err != nil {
 			return nil, err
+		}
+		if t.Pool == "" {
+			t.Pool = PoolOf(t.Windows) // saved before Pool existed
 		}
 		t.Windows = nil
 		out = append(out, t)
