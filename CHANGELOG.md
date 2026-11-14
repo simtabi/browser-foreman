@@ -10,6 +10,10 @@ ships.
 
 ### Added
 
+- *Find duplicates…* (workspace menu and command palette) lists bookmarks already in a workspace that lead to the same
+  page: the same address written differently, the same page after redirects, the same canonical address, or the same
+  page with another query and the same title. Ticked groups send their extra copies to the Trash as duplicates of the
+  one kept, in one history entry. The same list is `GET /api/v1/workspaces/{id}/duplicates`.
 - Link checks now confirm a dead link before calling it confirmed: the first failed check marks it *page gone?* (not
   confirmed yet), and a check at least 24 hours later that finds it dead again confirms it.
 - Link checks record whether a page forbids being shown in a frame. *Load the live page here* then keeps the snapshot

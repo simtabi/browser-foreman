@@ -207,6 +207,12 @@ if (boot) {
     },
     undo: step("undo"),
     redo: step("redo"),
+    /** Resolves once every edit made on this page has reached the server: for a change sent another way (a dialog's
+     *  own call), so it lands on top of them rather than racing them. */
+    async saved(): Promise<void> {
+      if (timer) flush();
+      while (sending) await sending;
+    },
   };
   window.BM_WS = ws;
 }

@@ -50,6 +50,7 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `POST` | `/api/v1/workspaces` | editor | body `{id, name}`; `201`, or `409` if the id is taken |
 | `POST` | `/api/v1/workspaces/{id}/import` | editor | the body is a bookmarks file (Chrome JSON or exported HTML, up to 64 MiB); replaces the tree as one entry; `?name=` labels it |
 | `POST` | `/api/v1/workspaces/{id}/sources` | editor | merges files (the body, or multipart `file` parts, up to 20) and `?from=` another workspace into this one, as one entry; copies of a page go to the Trash as duplicates (a copy the Trash already holds as a duplicate of the same kept bookmark is not added again); `?separate=1` keeps each source's folders apart; answers `added`, `duplicates`, `already_in_trash`, `folders` |
+| `GET` | `/api/v1/workspaces/{id}/duplicates` | viewer | bookmarks that lead to the same page, in groups, each naming the one to keep ([Workspaces](workspaces.md#finding-duplicates)) |
 | `GET` | `/api/v1/workspaces/{id}/duplicates.csv` | viewer | every copy merged away, with the bookmark kept for it |
 | `GET` | `/api/v1/profiles` | owner | every browser profile's bookmarks file on this computer, with `readable` and `why` |
 | `GET` | `/api/v1/workspaces/{id}/sources` | viewer | where the workspace's bookmarks came from: files (a copy is kept), other workspaces, files on this computer |

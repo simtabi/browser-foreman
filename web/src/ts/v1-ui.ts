@@ -9,6 +9,7 @@ import { DataTable, avatar, by, nameCell } from "./datatable";
 import { RangePicker } from "./rangepick";
 import { lookPicker, wsBadge } from "./wslook";
 import { busy } from "./busy";
+import { type DGroup, startsTicked, trashOps } from "./dupes";
 import { version as EXT_VERSION } from "../../package.json";  // the extension's manifest takes the same version
 
 interface Info { id: string; name: string; head: number; notes?: string; locked?: boolean; archived?: boolean; deleted?: string; bookmarks?: number; color?: string; icon?: string }
@@ -17,6 +18,7 @@ interface V1 {
   v1: true; id: string; locked: boolean; workspace: Info; workspaces: Info[];
   call<T>(method: string, path: string, body?: unknown): Promise<T>;
   headers(): Record<string, string>;
+  saved?(): Promise<void>;
   ui?: Record<string, unknown>;
 }
 
@@ -477,6 +479,70 @@ function install(W: V1): void {
     } catch (e) { fail(e); }
   }
 
+  // Find duplicates: bookmarks that lead to the same page, beyond the exact copies a merge catches (GET
+  // …/duplicates, dupes.Find). Each group's first bookmark is the one kept; the others go to the Trash as
+  // "duplicate of <kept>", so they join the merged copies in Duplicates and Put back brings them back. Groups found
+  // only by title start unticked: two pages can share a title.
+  const REASON: Record<string, [string, string]> = {
+    "same-address": ["Same page", "The same address once tracking parameters, “www.” and a trailing slash are set aside"],
+    "same-final": ["Redirects to the same page", "A link check followed a redirect to the other bookmark's page"],
+    "same-canonical": ["Same canonical page", "Both pages name the same address as their own"],
+    "similar-title": ["Same page, other query", "The same page with another query or fragment, and the same title; check before trashing"],
+  };
+  async function findDuplicates(): Promise<void> {
+    let res: { groups: DGroup[]; copies: number };
+    try { res = await busy("Looking for duplicates…", () => W.call("GET", ws("/duplicates"))); } catch (e) { fail(e); return; }
+    if (!res.groups.length) { toast("No two bookmarks here lead to the same page.", "success", "No duplicates"); return; }
+    const { body, foot } = modal("wsDupes", "Find duplicates", "xl");
+    const keepOf = new Map<DGroup, string>(), on = new Set<DGroup>(res.groups.filter(startsTicked));
+    const go = el("button", "btn btn-danger"); go.type = "button";
+    const count = () => [...on].reduce((n, g) => n + g.members.length - 1, 0);
+    const paint = () => { const n = count(); go.disabled = !n || W.locked; go.replaceChildren(icon("ti-trash", "me-1"), `Move ${n.toLocaleString()} cop${n === 1 ? "y" : "ies"} to the Trash`); };
+    body.append(el("p", "text-secondary", `${res.groups.length.toLocaleString()} group${res.groups.length === 1 ? "" : "s"}, ${res.copies.toLocaleString()} extra cop${res.copies === 1 ? "y" : "ies"}. ` +
+      "In each group the first bookmark is kept (the most specific folder, then the earliest added); choose another to keep it instead. " +
+      "The ticked groups' other copies go to the Trash, where Put back restores them. Groups matched only by title start unticked."));
+    if (W.locked) body.append(el("div", "alert alert-warning", "This workspace is locked: unlock it to move copies to the Trash."));
+    const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
+    res.groups.forEach((g, gi) => {
+      keepOf.set(g, g.keep);
+      const card = el("div", "card mb-2"), head = el("div", "card-header py-2 gap-2 flex-wrap");
+      const tick = el("input", "form-check-input m-0") as HTMLInputElement; tick.type = "checkbox"; tick.checked = on.has(g);
+      tick.setAttribute("aria-label", "Move this group's other copies to the Trash");
+      tick.onchange = () => { if (tick.checked) on.add(g); else on.delete(g); paint(); };
+      head.append(tick);
+      for (const r of g.reasons) { const b = el("span", "badge " + (r === "similar-title" ? "bg-yellow-lt" : "bg-blue-lt"), REASON[r]?.[0] ?? r); b.dataset.tip = REASON[r]?.[1] ?? ""; head.append(b); }
+      head.append(el("span", "text-secondary small ms-auto", `${g.members.length} bookmarks`));
+      const list = el("div", "list-group list-group-flush");
+      for (const m of g.members) {
+        const row = el("label", "list-group-item d-flex align-items-start gap-2 min-w-0");
+        const r = el("input", "form-check-input mt-1 flex-none") as HTMLInputElement; r.type = "radio"; r.name = `dk${gi}`; r.checked = m.id === g.keep;
+        r.setAttribute("aria-label", "Keep this one");
+        r.onchange = () => { if (r.checked) keepOf.set(g, m.id); };
+        const text = el("div", "min-w-0 flex-fill");
+        const t = el("div", "text-truncate", m.title || m.url); t.dataset.tip = m.title || m.url;
+        const sub = el("div", "small text-secondary text-truncate", `${host(m.url)} · ${m.path || "top level"}`); sub.dataset.tip = m.url;
+        text.append(t, sub);
+        row.append(r, text, el("span", "small text-secondary flex-none", m.added ? fmtDate(m.added) : ""));
+        list.append(row);
+      }
+      card.append(head, list); body.append(card);
+    });
+    const cancel = el("button", "btn"); cancel.type = "button"; cancel.textContent = "Close"; cancel.onclick = () => hideModal("#wsDupes");
+    go.onclick = async () => {
+      const ops = trashOps([...on], keepOf);
+      const n = count();
+      if (!(await askConfirm({ title: `Move ${n.toLocaleString()} cop${n === 1 ? "y" : "ies"} to the Trash?`, ok: "Move to Trash",
+        body: "Each goes to the Trash as a duplicate of the one kept, and joins Duplicates. It is one entry in the history, so Undo brings them all back." }))) return;
+      try {
+        await busy("Moving copies to the Trash…", async () => { await W.saved?.(); await W.call("POST", ws("/changes"), { ops }); });
+        hideModal("#wsDupes"); toast(`${n.toLocaleString()} moved to the Trash.`, "success", "Duplicates");
+        setTimeout(() => location.reload(), 700);
+      } catch (e) { fail(e); }
+    };
+    foot.append(cancel, go); paint();
+    showModal("#wsDupes");
+  }
+
   // Browser extension: the supported browsers first (the five major ones always shown, with whether each is on this
   // computer and connected, and how to install it there), then the pairing code, then the connected browsers.
   // Reached from the Browsers menu, beside Browsers and access (it was in the workspace menu until 2026-11-13).
@@ -678,7 +744,8 @@ function install(W: V1): void {
       el("div", "dropdown-divider"), el("h6", "dropdown-header", "This workspace"),
       item("ti-palette", "Appearance…", () => void appearance({ ...W.workspace, id: W.id })),
       item("ti-history", "History and progress…", () => void history()),
-      item("ti-refresh-dot", "Update from source…", () => void updateWs()));
+      item("ti-refresh-dot", "Update from source…", () => void updateWs()),
+      item("ti-copy", "Find duplicates…", () => void findDuplicates()));
     if (W.locked) dm.append(item("ti-lock-open", "Unlock", () => void toggleLock(false)));
     else dm.append(item("ti-pencil", "Rename…", () => void rename()), item("ti-notes", "Notes…", () => void notes()),
       item("ti-lock", "Lock (read-only)…", () => void toggleLock(true)),
@@ -717,7 +784,7 @@ function install(W: V1): void {
   }
 
   W.ui = {
-    history, manage, importer, addFiles, addLinks, updateWs, browserHistory, resetWs, menu, download, toggleLock, backup, restore, extensions, duplicatesCsv,
+    history, manage, importer, addFiles, addLinks, updateWs, browserHistory, resetWs, menu, download, toggleLock, backup, restore, extensions, duplicatesCsv, findDuplicates,
     rename, notes,
   };
   watchRequests();  // an extension asking to connect is answered from wherever the owner is in the page

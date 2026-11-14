@@ -20,6 +20,26 @@ The workspace switcher sits in the top bar beside the logo, in every view. *All 
 ⋮ menu) lists them with their bookmark count, changes and status, and opens, renames, notes, archives, locks, deletes
 and restores each one. `?ws=<id>` in the address opens a workspace directly.
 
+## Finding duplicates
+
+A merge keeps one copy of each page it brings in. *Find duplicates…*, in the workspace menu and the command palette,
+finds copies already in a workspace, by four rules from surest to weakest:
+
+| Rule | Two bookmarks match when |
+|---|---|
+| Same page | their addresses agree once tracking parameters (`utm_…`, `fbclid`, `ref`…), `www.` and a trailing slash are set aside |
+| Redirects to the same page | a link check followed one to the other's address, or both to the same place |
+| Same canonical page | both pages name the same address as their own (`<link rel="canonical">`, read by link checks) |
+| Same page, other query | the same site and path with another query or fragment, and the same title |
+
+Each group names the bookmark to keep: the one in the most specific folder, then the earliest added. You can pick
+another. The groups you tick send their other copies to the Trash as duplicates of the kept one, in one history entry,
+so they join *Duplicates* and *Put back* or *Undo* brings them back. Groups found only by the last rule start
+unticked, because a search page and its results can share a title.
+
+The same list is `GET /api/v1/workspaces/{id}/duplicates` (viewer). It changes nothing. To act on it, send a `trash`
+change with `"reason": "duplicate of <kept id>"` to `POST /api/v1/workspaces/{id}/changes`.
+
 ## Tab snapshots: own or shared
 
 Open-tab snapshots live in **pools**. By default every workspace uses the one **shared** pool. A workspace set to

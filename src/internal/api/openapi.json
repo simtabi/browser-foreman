@@ -637,6 +637,30 @@
         ]
       }
     },
+    "/api/v1/workspaces/{id}/duplicates": {
+      "get": {
+        "summary": "Bookmarks that lead to the same page: the same address written differently, the same page after redirects, the same canonical address, or the same site and title. Each group names the one to keep; nothing is changed",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "viewer",
+        "responses": {
+          "default": {
+            "description": "{\"groups\": [{\"reasons\": [...], \"keep\": id, \"members\": [{\"id\", \"title\", \"url\", \"path\", \"added\"}]}], \"copies\": n}; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
     "/api/v1/workspaces/{id}/update": {
       "get": {
         "summary": "What Update would do: bookmarks new upstream, titles changed upstream (not renamed here), bookmarks gone upstream (they stay), and sources that cannot be read",

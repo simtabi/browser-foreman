@@ -6,7 +6,7 @@
     "build:web": "node src/build.mjs",
     "build:extension": "node src/build-extension.mjs",
     "check:web": "node node_modules/typescript/bin/tsc -p src && node node_modules/typescript/bin/tsc -p src/extension",
-    "test:web": "node src/tests/page-names.test.mjs && node src/tests/tree.test.mjs && node src/tests/tree-rules.test.mjs && node src/tests/commands.test.mjs && node src/tests/tabs.test.mjs && node src/tests/link-panel.test.mjs && node src/tests/trash.test.mjs && node src/tests/keys-export.test.mjs && node src/tests/ctxmenu.test.mjs && node src/tests/v1.test.mjs && node src/tests/v1-compat.test.mjs && node src/tests/extension.test.mjs && node src/tests/busy.test.mjs"
+    "test:web": "node src/tests/page-names.test.mjs && node src/tests/tree.test.mjs && node src/tests/tree-rules.test.mjs && node src/tests/commands.test.mjs && node src/tests/tabs.test.mjs && node src/tests/link-panel.test.mjs && node src/tests/trash.test.mjs && node src/tests/keys-export.test.mjs && node src/tests/ctxmenu.test.mjs && node src/tests/v1.test.mjs && node src/tests/v1-compat.test.mjs && node src/tests/extension.test.mjs && node src/tests/busy.test.mjs && node src/tests/dupes.test.mjs"
   },
   "keywords": [],
   "author": "Simtabi LLC",
