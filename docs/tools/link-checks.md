@@ -55,8 +55,9 @@ signed in as you. Browser Foreman never sees a token. The API tells apart:
 
 What it finds is folded in like any check, so a dead result is confirmed only a day after the first one. Each run asks
 about at most 500 links and stops as soon as GitHub says the budget is spent; the rest keep what the run found. Links
-whose path holds `.` or `..` segments, or names GitHub would never use, are not sent. Without `gh` installed and
-signed in, this step is skipped.
+whose path holds `.` or `..` segments, or names GitHub would never use, are not sent. Without `gh` installed, this
+step is skipped; if `gh` cannot answer at all (signed out, offline), it stops at the first link and every result
+stays as the run found it.
 
 ## Internet Archive copies
 

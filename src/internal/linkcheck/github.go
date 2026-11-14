@@ -74,7 +74,8 @@ var (
 
 // GitHub judges a github.com or gist.github.com link through the API: a gist, an account, an organisation, a
 // repository (renamed ones become "moved"), or a file or branch inside one. ok is false for any other link, and for
-// one whose parts are not plain GitHub names. limited says the API budget is spent.
+// one whose parts are not plain GitHub names. limited says the API budget is spent, or GitHub could not be asked at
+// all: stop asking, and keep what the run found.
 func GitHub(ctx context.Context, api GitHubAPI, raw string) (r Result, ok, limited bool) {
 	u, err := url.Parse(raw)
 	if err != nil || api == nil {
@@ -94,7 +95,8 @@ func GitHub(ctx context.Context, api GitHubAPI, raw string) (r Result, ok, limit
 	}
 	ask := func(path string) GitHubAnswer {
 		a := api(ctx, path)
-		limited = limited || a.Limited
+		// No answer at all (gh signed out, no network) says nothing about the link, and the next will fare no better.
+		limited = limited || a.Limited || a.Code == 0
 		return a
 	}
 	unreachable := Result{Status: StatusUnverified, Note: "GitHub could not be asked; try later"}

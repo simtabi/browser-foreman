@@ -301,3 +301,18 @@ func TestARunAsksGitHubAboutItsFailingGitHubLinks(t *testing.T) {
 	got, _ := s.Data.Links(ctx, nil)
 	t.Fatalf("%+v", got["https://github.com/alive/repo"])
 }
+
+// When gh cannot answer at all (signed out, no network), the run's own results stay and nothing more is asked.
+func TestGitHubThatCannotAnswerChangesNothing(t *testing.T) {
+	s := newServer(t, "tok")
+	ctx := context.Background()
+	asked := 0
+	s.GitHub = func(context.Context, string) linkcheck.GitHubAnswer { asked++; return linkcheck.GitHubAnswer{} }
+	r := store.LinkResult{URL: "https://github.com/a/b", Status: "unverified", Note: "timed out", Checked: time.Now()}
+	_ = s.Data.SaveLinks(ctx, []store.LinkResult{r, {URL: "https://github.com/c/d", Status: "dead", Checked: time.Now()}})
+	s.askGitHub([]string{"https://github.com/a/b", "https://github.com/c/d"})
+	got, _ := s.Data.Links(ctx, nil)
+	if got["https://github.com/a/b"].Note != "timed out" || got["https://github.com/c/d"].Status != "dead" || asked != 1 {
+		t.Fatalf("%+v, asked %d", got, asked)
+	}
+}
