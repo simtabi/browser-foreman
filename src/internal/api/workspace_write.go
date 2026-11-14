@@ -25,7 +25,8 @@ import (
 // is refused (412 or 409) instead of overwriting a change it never saw. Without either, the change applies to the
 // current head.
 
-func nodeID() string {
+// NodeID makes the id of a new bookmark or folder.
+func NodeID() string {
 	b := make([]byte, 6)
 	_, _ = rand.Read(b)
 	return "b" + hex.EncodeToString(b)
@@ -144,7 +145,7 @@ func (s *Server) change(w http.ResponseWriter, r *http.Request, ops []edit.Op, b
 		writeErr(w, 500, err.Error())
 		return
 	}
-	next, events, err := edit.Apply(t, ops, s.Now(), nodeID)
+	next, events, err := edit.Apply(t, ops, s.Now(), NodeID)
 	if edit.IsRefusal(err) {
 		writeErr(w, 400, err.Error())
 		return

@@ -90,7 +90,7 @@ func (s *Server) saveLinks(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if found == nil {
-			found = &store.Node{ID: nodeID(), Kind: store.KindFolder, Title: p}
+			found = &store.Node{ID: NodeID(), Kind: store.KindFolder, Title: p}
 			parent.Children = append(parent.Children, found)
 		}
 		parent = found
@@ -106,13 +106,13 @@ func (s *Server) saveLinks(w http.ResponseWriter, r *http.Request) {
 		unique = fmt.Sprintf("%s (%d)", name, n)
 	}
 	added := s.Now().Unix()
-	folder := &store.Node{ID: nodeID(), Kind: store.KindFolder, Title: unique}
+	folder := &store.Node{ID: NodeID(), Kind: store.KindFolder, Title: unique}
 	for _, l := range in.Links {
 		t := l.Title
 		if t == "" {
 			t = l.URL
 		}
-		folder.Children = append(folder.Children, &store.Node{ID: nodeID(), Kind: store.KindBookmark, Title: t, URL: l.URL, Added: added})
+		folder.Children = append(folder.Children, &store.Node{ID: NodeID(), Kind: store.KindBookmark, Title: t, URL: l.URL, Added: added})
 	}
 	parent.Children = append(parent.Children, folder)
 	events, err := edit.Diff(prev, next)
