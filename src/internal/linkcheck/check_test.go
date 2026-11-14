@@ -255,3 +255,33 @@ func TestARateLimitedLinkIsFinishedInTheSameRun(t *testing.T) {
 		t.Fatalf("%+v %+v", v, got)
 	}
 }
+
+// A site still paused after one link has waited it out is not waited out again for each of its other links.
+func TestASiteStillPausedIsWaitedOutOnce(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "slow down", 429) }))
+	defer s.Close()
+	c := checker()
+	// A site that rate-limits every time, with pauses the run is willing to wait out: each wait meets another 429,
+	// and the pause doubles (200 ms, 400 ms, 800 ms…).
+	c.Limiter.MinBackoff = 200 * time.Millisecond
+	c.Limiter.MaxWait = 10 * time.Millisecond
+	c.Patience = 5 * time.Second
+	var urls []string
+	for i := range 6 {
+		urls = append(urls, fmt.Sprintf("%s/p%d", s.URL, i))
+	}
+	t0 := time.Now()
+	j := c.Start("j", urls, 1, nil)
+	j.Wait()
+	if took := time.Since(t0); took > 2*time.Second {
+		t.Fatalf("took %v: each link waited out the pause again", took)
+	}
+	for u, r := range j.Results() {
+		if r.Status != StatusUnverified {
+			t.Errorf("%s: %+v", u, r)
+		}
+	}
+	if len(j.Results()) != 6 {
+		t.Fatalf("%d results", len(j.Results()))
+	}
+}

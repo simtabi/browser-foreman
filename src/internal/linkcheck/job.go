@@ -76,6 +76,9 @@ func (c *Checker) Start(id string, urls []string, workers int, onResult func(Res
 	// rest are done, waiting out the pause: one run then does what used to take a second one.
 	var later []string
 	var laterMu sync.Mutex
+	// In the patient pass, a site that is still paused after one link has waited it out gives up for good: the rest
+	// of its links would each wait the whole Patience again, a few at a time, for hours.
+	var gaveUp sync.Map
 	work := func(queue <-chan string, wait time.Duration, deferPaused bool) {
 		var wg sync.WaitGroup
 		for range max(1, workers) {
@@ -86,7 +89,14 @@ func (c *Checker) Start(id string, urls []string, workers int, onResult func(Res
 					if !j.waitWhilePaused() { // checked here, not only when queued, so a pause holds every check not yet started
 						return
 					}
-					r, siteWaiting := c.checkWaiting(ctx, u, wait)
+					w := wait
+					if _, done := gaveUp.Load(Site(u)); done && !deferPaused {
+						w = 0
+					}
+					r, siteWaiting := c.checkWaiting(ctx, u, w)
+					if siteWaiting && !deferPaused {
+						gaveUp.Store(Site(u), true)
+					}
 					if ctx.Err() != nil {
 						return // cancelled mid-check: an interrupted result says nothing
 					}
