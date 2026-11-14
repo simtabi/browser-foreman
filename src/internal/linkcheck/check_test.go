@@ -196,3 +196,62 @@ func TestJobPauseResumeCancel(t *testing.T) {
 		t.Fatalf("%+v got %d", v, got.Load())
 	}
 }
+
+func TestHostingPlatformsAreOneSiteEach(t *testing.T) {
+	for u, want := range map[string]string{
+		"https://alice.github.io/x": "alice.github.io", "https://docs.alice.github.io/": "alice.github.io",
+		"https://bob.github.io": "bob.github.io", "https://my-app.vercel.app": "my-app.vercel.app",
+		"https://github.io/": "github.io", "https://api.github.com/x": "github.com",
+	} {
+		if got := Site(u); got != want {
+			t.Errorf("%s: %q, want %q", u, got, want)
+		}
+	}
+}
+
+// A timeout gets one more try, as a person would refresh once.
+func TestATimeoutIsTriedOnceMore(t *testing.T) {
+	var hits atomic.Int32
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hits.Add(1) == 1 {
+			select {
+			case <-time.After(2 * time.Second):
+			case <-r.Context().Done():
+			}
+			return
+		}
+		w.Write([]byte("fine"))
+	}))
+	defer s.Close()
+	c := New(300 * time.Millisecond)
+	c.AllowPrivate = true
+	c.Limiter.Default = Rule{4, 0}
+	if r := c.Check(context.Background(), s.URL+"/p"); r.Status != StatusOK || hits.Load() != 2 {
+		t.Fatalf("%+v after %d visits", r, hits.Load())
+	}
+}
+
+// A link whose site asks to slow down is checked again at the end of the run, once the pause is over, instead of
+// being left as "try later".
+func TestARateLimitedLinkIsFinishedInTheSameRun(t *testing.T) {
+	var limited atomic.Bool
+	limited.Store(true)
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/a" && limited.Swap(false) {
+			http.Error(w, "slow down", 429)
+			return
+		}
+		w.Write([]byte("fine"))
+	}))
+	defer s.Close()
+	c := checker()
+	c.Limiter.MinBackoff = 200 * time.Millisecond
+	c.Limiter.MaxWait = 10 * time.Millisecond // the main pass does not wait out the pause
+	c.Patience = 5 * time.Second
+	j := c.Start("j", []string{s.URL + "/a", s.URL + "/b"}, 1, nil)
+	j.Wait()
+	got := j.Results()
+	if v := j.View(); v.Checked != 2 || got[s.URL+"/a"].Status != StatusOK || got[s.URL+"/b"].Status != StatusOK {
+		t.Fatalf("%+v %+v", v, got)
+	}
+}

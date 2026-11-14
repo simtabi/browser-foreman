@@ -169,6 +169,10 @@ ships.
 
 ### Fixed
 
+- A link check no longer leaves a rate-limited site's links as "could not verify". They are checked again at the end
+  of the same run, once the site's pause is over. A timeout gets one more try, and each name on a hosting platform
+  (`alice.github.io`, `my-app.vercel.app`…) is its own site rather than sharing one pause. On the 2026-11-10 export,
+  the first pass left 1,998 of 6,151 links unverified, 525 of them GitHub links skipped during a pause.
 - The MCP dialog no longer names the old Python folder (`~/Artisan/bookmarks-cleanup`) as where Claude Code finds the
   server; it names the folder the server runs from.
 - The search placeholder is no longer cut when the header search is narrow: the magnifier gives way first.

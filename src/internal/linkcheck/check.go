@@ -70,13 +70,16 @@ type Checker struct {
 	// AllowPrivate lets checks reach loopback and private addresses. Tests set it to talk to httptest servers; the
 	// server never does.
 	AllowPrivate bool
+	// Patience is how long a run waits, at its end, for a site that was pausing (rate limited, or failing on the
+	// network) before calling its links "try later": just past the longest pause, so a run finishes them.
+	Patience time.Duration
 }
 
 // New returns a Checker whose connections are refused, at dial time, to any private address: a bookmark, or a
 // redirect from one, can never make it reach the router, a printer or a service on this computer, whatever the
 // name resolves to by then.
 func New(timeout time.Duration) *Checker {
-	c := &Checker{Limiter: NewLimiter(), Now: time.Now}
+	c := &Checker{Limiter: NewLimiter(), Now: time.Now, Patience: maxBackoff + time.Minute}
 	dialer := &net.Dialer{Timeout: timeout, Control: func(_, address string, _ syscall.RawConn) error {
 		host, _, err := net.SplitHostPort(address)
 		if err != nil {
@@ -112,34 +115,52 @@ func New(timeout time.Duration) *Checker {
 
 // Check classifies one URL. It never returns an error: what went wrong is the result.
 func (c *Checker) Check(ctx context.Context, raw string) Result {
-	r := c.check(ctx, raw)
+	r, _ := c.checkWaiting(ctx, raw, c.Limiter.MaxWait)
+	return r
+}
+
+// How one visit ended, beyond its result.
+type attempt int
+
+const (
+	settled  attempt = iota
+	paused           // the site stayed paused: the result is only "try later", and a patient retry may do better
+	retrying         // a timeout or a dropped connection: worth one more try
+)
+
+// checkWaiting is Check, waiting up to wait for a paused site; it reports whether the site stayed paused.
+func (c *Checker) checkWaiting(ctx context.Context, raw string, wait time.Duration) (Result, bool) {
+	r, a := c.check(ctx, raw, wait)
+	if a == retrying && ctx.Err() == nil {
+		r, a = c.check(ctx, raw, wait) // one more try, as a person would
+	}
 	r.URL, r.Checked = raw, c.Now().UTC()
 	if r.Final == raw {
 		r.Final = ""
 	}
-	return r
+	return r, a == paused
 }
 
-func (c *Checker) check(ctx context.Context, raw string) Result {
+func (c *Checker) check(ctx context.Context, raw string, wait time.Duration) (Result, attempt) {
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return Result{Status: StatusSkipped, Note: "not a web link"}
+		return Result{Status: StatusSkipped, Note: "not a web link"}, settled
 	}
 	host := strings.ToLower(u.Hostname())
 	if ip := net.ParseIP(strings.Trim(host, "[]")); localRe.MatchString(host) || ip != nil && privateIP(ip) && !c.AllowPrivate {
-		return Result{Status: StatusLocal, Note: "local or staging host"}
+		return Result{Status: StatusLocal, Note: "local or staging host"}, settled
 	}
 	if actionRe.MatchString(raw) {
-		return Result{Status: StatusSkipped, Note: "looks like an action link; not visited"}
+		return Result{Status: StatusSkipped, Note: "looks like an action link; not visited"}, settled
 	}
-	site, ok := c.Limiter.Acquire(ctx, raw)
+	site, ok := c.Limiter.AcquireFor(ctx, raw, wait)
 	if !ok {
-		return Result{Status: StatusUnverified, Note: site + " is pausing after rate limiting; try later"}
+		return Result{Status: StatusUnverified, Note: site + " is pausing after rate limiting; try later"}, paused
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
 	if err != nil {
 		c.Limiter.Release(site, OtherError, 0)
-		return Result{Status: StatusSkipped, Note: "not a valid URL"}
+		return Result{Status: StatusSkipped, Note: "not a valid URL"}, settled
 	}
 	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
@@ -148,24 +169,27 @@ func (c *Checker) check(ctx context.Context, raw string) Result {
 	if err != nil {
 		res, outcome := classifyErr(err)
 		c.Limiter.Release(site, outcome, 0)
-		return res
+		if outcome == NetworkError && res.Status == StatusUnverified {
+			return res, retrying
+		}
+		return res, settled
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if resp.StatusCode == 429 || resp.StatusCode == 503 {
 		secs, _ := strconv.Atoi(resp.Header.Get("Retry-After"))
 		c.Limiter.Release(site, RateLimited, time.Duration(secs)*time.Second)
-		return Result{Status: StatusUnverified, Code: resp.StatusCode, Note: fmt.Sprintf("HTTP %d: the site asked us to slow down; try later", resp.StatusCode)}
+		return Result{Status: StatusUnverified, Code: resp.StatusCode, Note: fmt.Sprintf("HTTP %d: the site asked us to slow down; try later", resp.StatusCode)}, paused
 	}
 	c.Limiter.Release(site, OK, 0)
 	final := resp.Request.URL.String()
 	switch {
 	case resp.StatusCode == 404 || resp.StatusCode == 410:
-		return Result{Status: StatusDead, Kind: "page", Code: resp.StatusCode, Final: final, Note: "HTTP " + strconv.Itoa(resp.StatusCode)}
+		return Result{Status: StatusDead, Kind: "page", Code: resp.StatusCode, Final: final, Note: "HTTP " + strconv.Itoa(resp.StatusCode)}, settled
 	case resp.StatusCode == 401:
-		return Result{Status: StatusLogin, Code: 401, Final: final, Note: "HTTP 401"}
+		return Result{Status: StatusLogin, Code: 401, Final: final, Note: "HTTP 401"}, settled
 	case resp.StatusCode >= 400:
-		return Result{Status: StatusUnverified, Code: resp.StatusCode, Final: final, Note: "HTTP " + strconv.Itoa(resp.StatusCode)}
+		return Result{Status: StatusUnverified, Code: resp.StatusCode, Final: final, Note: "HTTP " + strconv.Itoa(resp.StatusCode)}, settled
 	}
 	res := classify(raw, resp.StatusCode, final)
 	if res.Status == StatusOK || res.Status == StatusMoved {
@@ -175,17 +199,17 @@ func (c *Checker) check(ctx context.Context, raw string) Result {
 			title, text := pageText(body)
 			switch v, why := Verdict(title, text, final); v {
 			case "soft-404":
-				return Result{Status: StatusDead, Kind: "page", Code: resp.StatusCode, Final: final, Note: why}
+				return Result{Status: StatusDead, Kind: "page", Code: resp.StatusCode, Final: final, Note: why}, settled
 			case "parked", "suspended":
-				return Result{Status: StatusDead, Kind: "host", Code: resp.StatusCode, Final: final, Note: why}
+				return Result{Status: StatusDead, Kind: "host", Code: resp.StatusCode, Final: final, Note: why}, settled
 			case "challenge":
-				return Result{Status: StatusUnverified, Code: resp.StatusCode, Final: final, Note: why}
+				return Result{Status: StatusUnverified, Code: resp.StatusCode, Final: final, Note: why}, settled
 			case "suspect-404":
 				res.Note = why
 			}
 		}
 	}
-	return res
+	return res, settled
 }
 
 func sameAddress(a, b *url.URL) bool {

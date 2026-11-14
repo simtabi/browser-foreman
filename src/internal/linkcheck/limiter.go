@@ -34,7 +34,14 @@ const (
 	breakerCooldown = 5 * time.Minute
 )
 
-// Site is the registrable part of a host, so github.com and gist.github.com share one budget.
+// hosted are domains under which every name is someone's own site (the private section of the public suffix list):
+// alice.github.io and bob.github.io are two sites, and one rate-limiting must not pause the other.
+var hosted = []string{"github.io", "gitlab.io", "netlify.app", "vercel.app", "pages.dev", "web.app", "firebaseapp.com",
+	"herokuapp.com", "blogspot.com", "wordpress.com", "substack.com", "notion.site", "glitch.me", "surge.sh",
+	"onrender.com", "fly.dev", "azurewebsites.net", "readthedocs.io"}
+
+// Site is the registrable part of a host, so github.com and gist.github.com share one budget. On a hosting platform
+// (hosted) it is the owner's name with the platform: alice.github.io.
 func Site(rawURL string) string {
 	host := rawURL
 	if u, err := url.Parse(rawURL); err == nil && u.Host != "" {
@@ -43,7 +50,13 @@ func Site(rawURL string) string {
 	if net.ParseIP(strings.Trim(host, "[]")) != nil {
 		return host // an address is its own site
 	}
-	p := strings.Split(strings.TrimPrefix(strings.ToLower(host), "www."), ".")
+	host = strings.TrimPrefix(strings.ToLower(host), "www.")
+	p := strings.Split(host, ".")
+	for _, h := range hosted {
+		if strings.HasSuffix(host, "."+h) {
+			return strings.Join(p[len(p)-strings.Count(h, ".")-2:], ".")
+		}
+	}
 	n := 2
 	if len(p) > 2 && len(p[len(p)-1]) == 2 {
 		switch p[len(p)-2] {
@@ -84,11 +97,13 @@ type Limiter struct {
 	Rules   map[string]Rule
 	Default Rule
 	MaxWait time.Duration
-	Now     func() time.Time
+	// MinBackoff is the first pause after a site asks to slow down; it doubles from there.
+	MinBackoff time.Duration
+	Now        func() time.Time
 }
 
 func NewLimiter() *Limiter {
-	return &Limiter{sites: map[string]*siteState{}, Rules: Rules, Default: Default, MaxWait: 45 * time.Second, Now: time.Now}
+	return &Limiter{sites: map[string]*siteState{}, Rules: Rules, Default: Default, MaxWait: 45 * time.Second, MinBackoff: 30 * time.Second, Now: time.Now}
 }
 
 func (l *Limiter) rule(site string) Rule {
@@ -112,10 +127,15 @@ func (l *Limiter) state(site string) *siteState {
 // Acquire waits for a slot for rawURL's site. It returns false when the site stays paused past MaxWait or ctx ends;
 // otherwise the caller must call Release with the outcome.
 func (l *Limiter) Acquire(ctx context.Context, rawURL string) (string, bool) {
+	return l.AcquireFor(ctx, rawURL, l.MaxWait)
+}
+
+// AcquireFor is Acquire, waiting up to maxWait.
+func (l *Limiter) AcquireFor(ctx context.Context, rawURL string, maxWait time.Duration) (string, bool) {
 	site := Site(rawURL)
 	s := l.state(site)
-	deadline := l.Now().Add(l.MaxWait)
-	wait := time.NewTimer(l.MaxWait)
+	deadline := l.Now().Add(maxWait)
+	wait := time.NewTimer(maxWait)
 	defer wait.Stop()
 	select {
 	case s.sem <- struct{}{}:
@@ -157,7 +177,7 @@ func (l *Limiter) Release(site string, o Outcome, retryAfter time.Duration) {
 	now := l.Now()
 	switch o {
 	case RateLimited:
-		b := min(max(s.backoff*2, 30*time.Second), maxBackoff)
+		b := min(max(s.backoff*2, l.MinBackoff), maxBackoff)
 		if retryAfter > 0 {
 			b = min(max(b, retryAfter), maxBackoff)
 		}

@@ -31,6 +31,7 @@ func newServer(t *testing.T, token string) *Server {
 	checker := linkcheck.New(5 * time.Second)
 	checker.AllowPrivate = true // tests check httptest servers on loopback
 	checker.Limiter.Default = linkcheck.Rule{Concurrent: 4}
+	checker.Patience = 100 * time.Millisecond // a rate-limited test site is not waited out for minutes
 	bs := &browsers.Service{Platform: &fakeBrowsers{}}
 	return &Server{Cfg: c, Bus: events.New(1000, time.Now), Hooks: st, Data: data, Now: time.Now, Checker: checker,
 		Browsers: bs, Tabs: &tabs.Service{Data: data, Browsers: bs, Reader: &fakeTabs{}, Closer: &fakeTabs{}, Now: time.Now},

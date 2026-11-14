@@ -72,8 +72,13 @@ nothing is sent while it is off.
   GitHub and Stack Overflow), with their starts spaced out; `github.com` and `gist.github.com` share one budget.
   Addresses are interleaved by site, so no site gets a burst.
 - **Backing off.** A `429` or `503` pauses that site for 30 seconds, doubling up to 15 minutes and honouring
-  `Retry-After`; three network failures in a row pause it for 5 minutes. While a site is paused its links come back
-  `unverified`, never `dead`.
+  `Retry-After`; three network failures in a row pause it for 5 minutes. A paused site's links are set aside and
+  checked at the end of the run, once the pause is over (waiting up to 16 minutes), so one run finishes them. Only if
+  the site is still paused then do they come back `unverified`, never `dead`.
+- **One more try.** A timeout or a dropped connection is tried once more before the link is called `unverified`. A
+  domain that does not exist is not retried.
+- **Hosting platforms are many sites.** Each name on `github.io`, `netlify.app`, `vercel.app`, `blogspot.com` and
+  similar platforms is its own site, so one owner's rate limit never pauses everyone else's pages.
 - **Nothing local.** Connections to loopback, private, link-local (cloud metadata), multicast and similar addresses
   are refused when the connection is made, on the address actually dialled. A redirect, or a public name that
   resolves to a private address, cannot get round it.

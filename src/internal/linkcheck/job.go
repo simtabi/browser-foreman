@@ -72,31 +72,58 @@ func (c *Checker) Start(id string, urls []string, workers int, onResult func(Res
 			}
 		}
 	}()
-	var wg sync.WaitGroup
-	for range max(1, workers) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for u := range queue {
-				if !j.waitWhilePaused() { // checked here, not only when queued, so a pause holds every check not yet started
-					return
+	// Links whose site was pausing (rate limited, or failing on the network) are set aside, then checked again once the
+	// rest are done, waiting out the pause: one run then does what used to take a second one.
+	var later []string
+	var laterMu sync.Mutex
+	work := func(queue <-chan string, wait time.Duration, deferPaused bool) {
+		var wg sync.WaitGroup
+		for range max(1, workers) {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for u := range queue {
+					if !j.waitWhilePaused() { // checked here, not only when queued, so a pause holds every check not yet started
+						return
+					}
+					r, siteWaiting := c.checkWaiting(ctx, u, wait)
+					if ctx.Err() != nil {
+						return // cancelled mid-check: an interrupted result says nothing
+					}
+					if siteWaiting && deferPaused {
+						laterMu.Lock()
+						later = append(later, u)
+						laterMu.Unlock()
+						continue
+					}
+					if onResult != nil {
+						r = onResult(r)
+					}
+					j.mu.Lock()
+					j.results[u] = r
+					j.checked++
+					j.mu.Unlock()
 				}
-				r := c.Check(ctx, u)
-				if ctx.Err() != nil {
-					return // cancelled mid-check: an interrupted result says nothing
-				}
-				if onResult != nil {
-					r = onResult(r)
-				}
-				j.mu.Lock()
-				j.results[u] = r
-				j.checked++
-				j.mu.Unlock()
-			}
-		}()
+			}()
+		}
+		wg.Wait()
 	}
 	go func() {
-		wg.Wait()
+		work(queue, c.Limiter.MaxWait, true)
+		if len(later) > 0 && ctx.Err() == nil {
+			again := make(chan string)
+			go func() {
+				defer close(again)
+				for _, u := range Interleave(later) {
+					select {
+					case again <- u:
+					case <-ctx.Done():
+						return
+					}
+				}
+			}()
+			work(again, c.Patience, false)
+		}
 		j.mu.Lock()
 		if j.state != Cancelled {
 			j.state = Done
