@@ -20,7 +20,8 @@ export function tabRowElement(i: TabItem, o: { live: boolean; picked: boolean; c
   const r = el("div", "list-group-item tab-row" + (!o.live && (x.missing ?? []).includes(t) ? " missing" : "") + (o.picked ? " picked" : "") + (x.inc ? " inc" : ""));
   const hst = d.host(t.url) || t.url.split(":")[0] || "";
   const tx = el("div", "min-w-0 flex-fill"), url = el("div", "tab-url", d.shortUrl(t.url, 80)); url.dataset.tip = t.url;
-  tx.append(el("div", "tab-title", t.title || t.url), url);
+  const title = el("div", "tab-title", t.title || t.url); title.title = t.title || t.url;  // the whole title on hover
+  tx.append(title, url);
   r.append(o.checkbox, siteLetter(hst, d), tx);
   if (o.note) {
     const tg = el("span", "tab-tags");

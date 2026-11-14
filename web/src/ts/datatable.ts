@@ -227,7 +227,9 @@ export function avatar(name: string, cls = "avatar-sm"): HTMLElement {
 export function nameCell(title: string | Node, sub: string, lead?: HTMLElement): HTMLElement {
   const d = el("div", "d-flex py-1 align-items-center dt-name"), t = el("div", "flex-fill min-w-0");
   const top = el("div", "font-weight-medium text-truncate"); top.append(title);
-  t.append(top, el("div", "text-secondary small text-truncate", sub));
+  const under = el("div", "text-secondary small text-truncate", sub);
+  top.title = top.textContent ?? ""; under.title = sub;  // what an ellipsis hides is still readable on hover
+  t.append(top, under);
   if (lead) { lead.classList.add("me-2"); d.append(lead); }
   d.append(t); return d;
 }

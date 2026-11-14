@@ -37,7 +37,9 @@ html, body { overflow-x: clip; }
 .modal-body .datatable thead th .table-sort, .pane-scroll .datatable thead th .table-sort { background: transparent; }
 .modal-footer:empty { display: none; }
 .datatable th.text-end .table-sort { text-align: end; } .datatable th, .datatable td:not(.text-wrap) { white-space: nowrap; } .datatable td:first-child { white-space: normal; } .dt-name { max-width: min(28rem, 52vw); }
-@media (max-width: 575.98px) { .dt-name { max-width: 30vw; } .dt-name .avatar { display: none; } .datatable .table-sort { padding-inline: .5rem; } .datatable td, .datatable th { padding-inline: .5rem; } } .datatable td .empty { padding-inline: 0; }
+.datatable .table-sort { min-width: max-content; }  /* a narrow column grows to its heading and arrow, never clips them */
+.d-flex > .badge, .d-inline-flex > .badge { flex: none; }  /* text beside a badge wraps; the badge keeps its word */
+@media (max-width: 575.98px) { .dt-name { max-width: 30vw; } .dt-name .text-truncate { white-space: normal; overflow-wrap: anywhere; } .dt-name .avatar { display: none; } .datatable .table-sort { padding-inline: .5rem; } .datatable td, .datatable th { padding-inline: .5rem; } } .datatable td .empty { padding-inline: 0; }
 .bf-save-banner{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:3000;width:min(560px,calc(100vw - 32px))}
 /* Layout: the app fills the window; the tree and the detail pane scroll on their own. */
 html, body { height: 100%; }
@@ -88,6 +90,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .hdr-find { flex: 1 1 220px; max-width: 560px; min-width: 0; container-type: inline-size; }  /* sized by the row; what is inside fits it */
 .hdr-find .hdr-search { width: 100%; }
 @container (max-width: 380px) { .hdr-search #paletteBtn .hide-narrow, .hdr-search .hdr-kbd { display: none; } }
+/* Narrow: the magnifier goes before the placeholder is cut (it says "Search" already), the palette button last. */
+@container (max-width: 300px) { .hdr-search > .input-group-text:first-child { display: none; } .hdr-search #hq { border-top-left-radius: var(--tblr-border-radius); border-bottom-left-radius: var(--tblr-border-radius); } }
 @container (max-width: 240px) { .hdr-search #paletteBtn { display: none; } }
 /* Room for the search as the window narrows: the workspace name and the view counts give way first. */
 .hdr-views { flex: none; }
@@ -269,9 +273,12 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .tab-win-title { font-weight: 600; }
 .tab-row { display: flex; align-items: center; gap: .6rem; padding: .4rem .85rem; }
 .tab-row .fvd { margin-top: 0; }
+.tab-row > .badge, .tab-row > .btn, .tab-row > .tabs-check { flex: none; }  /* the title gives way, never a badge or a button */
 .tab-row.active-tab { background: color-mix(in srgb, var(--tblr-primary) 5%, transparent); }
 .tab-row.missing .tab-title { color: var(--tblr-warning); }
 .tab-title { font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A phone has no hover to show the rest: titles take two lines there before they are cut. */
+@media (max-width: 575.98px) { .tab-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; } }
 .tab-url { font-size: .72rem; color: var(--tblr-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 900px) { .tabs-view { grid-template-columns: 1fr; }
   /* Stacked, the snapshots side (its settings and every saved snapshot) scrolls within itself, so the open windows
@@ -502,7 +509,7 @@ body.no-tree-thumbs .bm-fav { position: static; padding: 0; box-shadow: none; ba
 .about-name { font-size: 1.35rem; font-weight: 700; line-height: 1.2; display: flex; align-items: center; gap: .5rem; }
 .about-ver { font-size: .7rem; font-weight: 600; padding: .15rem .45rem; border-radius: 999px; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); }
 .about-tag { color: var(--tblr-secondary); font-size: .9rem; margin-top: .15rem; }
-.about-tabs { display: flex; gap: .25rem; margin-top: 1.25rem; overflow-x: auto; }
+.about-tabs { display: flex; flex-wrap: wrap; gap: 0 .25rem; margin-top: 1.25rem; }  /* every tab in sight, never scrolled off the edge */
 .about-tab { display: inline-flex; align-items: center; gap: .4rem; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--tblr-secondary); padding: .55rem .25rem; margin-right: 1rem; font-size: .85rem; font-weight: 500; white-space: nowrap; }
 .about-tab:hover { color: var(--tblr-body-color); }
 .about-tab.active { color: var(--tblr-primary); border-bottom-color: var(--tblr-primary); }

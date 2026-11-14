@@ -149,6 +149,11 @@ ships.
 
 ### Fixed
 
+- The search placeholder is no longer cut when the header search is narrow: the magnifier gives way first.
+- Badges ("active", "now") and table sort headings keep their whole word instead of being squeezed.
+- On a phone, tab titles take two lines, names in the Workspaces and Extensions dialogs wrap, and the About dialog's tabs wrap instead of running off the edge; on a desktop a cut tab title or name shows in full on hover.
+- The snapshot folder's placeholder fits the field on a phone.
+
 - A search that finds nothing says so, with what was searched for: Bookmarks shows *Nothing matches “…”* with a
   button to clear the search and filters (the empty Trash row is not a result); Open tabs shows *No tab matches “…”*
   instead of every window saying no tab here matches, and counts the matching tabs when there are some; the Timeline

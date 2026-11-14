@@ -58,7 +58,7 @@ export class SnapshotSettingsPanel {
     // Folder.
     const box = el("div", "snap-dir");
     const input = el("input", "form-control form-control-sm"); input.type = "text"; input.value = c.snapshot_dir; input.spellcheck = false;
-    input.placeholder = "Default: the data folder's media/"; input.setAttribute("aria-label", "Folder for snapshots and site icons");
+    input.placeholder = "Default: data folder/media"; input.setAttribute("aria-label", "Folder for snapshots and site icons");
     const save = el("button", "btn btn-sm"); save.type = "button"; save.append(icon("ti-device-floppy", "me-1"), "Save");
     const reset = el("button", "btn btn-sm btn-ghost-secondary"); reset.type = "button"; reset.textContent = "Use default"; reset.hidden = !c.snapshot_dir;
     save.onclick = () => void this.save({ snapshot_dir: input.value.trim() }, input.value.trim() ? "Snapshots and icons are kept in the new folder" : "Snapshots and icons are kept in the data folder");
