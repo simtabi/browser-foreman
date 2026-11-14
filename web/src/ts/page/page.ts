@@ -1904,6 +1904,7 @@ function commands() {
     ["ws-delete", "Delete this workspace… (to the workspace trash)", "ti-trash", "", () => !!wsUI()?.deleteWs && window.BM_WS.id !== "main", () => wsUI().deleteWs(), "Workspace", true],
     ["mcp-access", "MCP access (Claude): connect, disconnect, allow changes…", "ti-plug-connected", "", () => !!wsUI()?.mcpAccess, () => wsUI().mcpAccess(), "Workspace"],
     ["ws-update", "Update this workspace from its source…", "ti-refresh-dot", "", () => !!wsUI()?.updateWs, () => wsUI().updateWs(), "Workspace"],
+    ["sort-folders", "Sort into folders… (by your filing rules)", "ti-folders", "", () => !!wsUI()?.sortFolders, () => wsUI().sortFolders(), "Workspace"],
     ["find-dupes", "Find duplicates… (same page, redirects, canonical address)", "ti-copy", "", () => !!wsUI()?.findDuplicates, () => wsUI().findDuplicates(), "Workspace"],
     ["ws-reset", "Reset this workspace to its start…", "ti-restore", "", () => !!wsUI()?.resetWs, () => wsUI().resetWs(), "Workspace", true],
     ["reset-edits", "Reset edits…", "ti-restore", "", () => !readOnly(), resetEdits, "General", true],

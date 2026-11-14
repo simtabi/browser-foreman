@@ -10,6 +10,11 @@ ships.
 
 ### Added
 
+- *Sort into folders…* (workspace menu, command palette, `browser-foreman sort`, `POST /api/v1/workspaces/{id}/sort`)
+  files bookmarks by your own rules in `sort-rules.json`. Protected folders stay as they are and pull matching links
+  in; dead links, local addresses and sign-out pages go to review folders; loose links are filed by site and keyword
+  topics; big folders get type and topic subfolders. The plan shows first, and applying is one history entry. It is
+  the Python tool's category build, with the rules as data.
 - *Find duplicates…* (workspace menu and command palette) lists bookmarks already in a workspace that lead to the same
   page: the same address written differently, the same page after redirects, the same canonical address, or the same
   page with another query and the same title. Ticked groups send their extra copies to the Trash as duplicates of the

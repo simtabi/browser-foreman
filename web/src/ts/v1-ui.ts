@@ -543,6 +543,63 @@ function install(W: V1): void {
     showModal("#wsDupes");
   }
 
+  // Sort into folders: the owner's filing rules (sort-rules.json in the data folder, sorting.Rules) say where each
+  // bookmark goes. The plan shows first, folder by folder; applying makes every move as one history entry.
+  type SMove = { id: string; title: string; url: string; from: string; to: string; reason: string };
+  type SPlan = { moves: SMove[]; folders: Record<string, number>; new: string[] | null };
+  async function sortFolders(): Promise<void> {
+    if (W.locked) { toast("Unlock the workspace first.", "warning", "Locked"); return; }
+    let plan: SPlan;
+    try { plan = (await busy("Working out where each bookmark goes…", async () => { await W.saved?.(); return W.call<{ plan: SPlan }>("POST", ws("/sort"), {}); })).plan; }
+    catch (e) { fail(e); return; }
+    if (!plan.moves.length) { toast("Every bookmark is already where your rules put it.", "success", "Nothing to sort"); return; }
+    const fresh = new Set(plan.new ?? []);
+    const into = new Map<string, SMove[]>();
+    for (const m of plan.moves) { const l = into.get(m.to); if (l) l.push(m); else into.set(m.to, [m]); }
+    const order = [...into.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+    const { body, foot } = modal("wsSort", "Sort into folders", "xl");
+    body.append(el("p", "text-secondary", `${plan.moves.length.toLocaleString()} bookmark${plan.moves.length === 1 ? "" : "s"} would move into ` +
+      `${order.length.toLocaleString()} folder${order.length === 1 ? "" : "s"}, ${fresh.size.toLocaleString()} of them new. ` +
+      "Untick a folder to leave its bookmarks where they are. Nothing changes until you apply, and applying is one entry in the history, so Undo puts everything back."));
+    const ticked = new Set(order.map(([to]) => to));
+    const go = el("button", "btn btn-primary"); go.type = "button";
+    const paint = () => {
+      const n = order.reduce((k, [to, ms]) => k + (ticked.has(to) ? ms.length : 0), 0);
+      go.disabled = !n; go.replaceChildren(icon("ti-folders", "me-1"), `Move ${n.toLocaleString()} bookmark${n === 1 ? "" : "s"}`);
+    };
+    for (const [to, ms] of order) {
+      const d = el("details", "card mb-2"), s = el("summary", "card-header py-2 d-flex gap-2 align-items-center min-w-0");
+      const tick = el("input", "form-check-input m-0 flex-none") as HTMLInputElement; tick.type = "checkbox"; tick.checked = true;
+      tick.setAttribute("aria-label", `Move bookmarks into ${to}`);
+      tick.onclick = e => e.stopPropagation();  // ticking does not open or close the folder's list
+      tick.onchange = () => { if (tick.checked) ticked.add(to); else ticked.delete(to); paint(); };
+      const name = el("span", "text-truncate flex-fill", to || "(top level)"); name.dataset.tip = to;
+      s.append(tick, name);
+      if (fresh.has(to)) s.append(el("span", "badge bg-blue-lt flex-none", "new"));
+      s.append(el("span", "badge bg-secondary-lt flex-none", ms.length.toLocaleString()));
+      const list = el("div", "list-group list-group-flush");
+      for (const m of ms.slice(0, 50)) {
+        const row = el("div", "list-group-item min-w-0");
+        const t = el("div", "text-truncate", m.title || m.url); t.dataset.tip = m.url;
+        const why = el("div", "small text-secondary text-truncate", `from ${m.from || "top level"} · ${m.reason}`); why.dataset.tip = `from ${m.from || "top level"} · ${m.reason}`;
+        row.append(t, why); list.append(row);
+      }
+      if (ms.length > 50) list.append(el("div", "list-group-item small text-secondary", `… and ${(ms.length - 50).toLocaleString()} more`));
+      d.append(s, list); body.append(d);
+    }
+    const close = el("button", "btn"); close.type = "button"; close.textContent = "Close"; close.onclick = () => hideModal("#wsSort");
+    go.onclick = async () => {
+      try {
+        const folders = [...ticked];
+        const j = await busy("Sorting into folders…", async () => { await W.saved?.(); return W.call<{ entry: Entry | null }>("POST", ws("/sort"), { apply: true, folders }); });
+        hideModal("#wsSort"); toast(j.entry ? j.entry.summary : "Nothing to move", "success", "Folders");
+        if (j.entry) setTimeout(() => location.reload(), 700);
+      } catch (e) { fail(e); }
+    };
+    foot.append(close, go); paint();
+    showModal("#wsSort");
+  }
+
   // Browser extension: the supported browsers first (the five major ones always shown, with whether each is on this
   // computer and connected, and how to install it there), then the pairing code, then the connected browsers.
   // Reached from the Browsers menu, beside Browsers and access (it was in the workspace menu until 2026-11-13).
@@ -745,7 +802,8 @@ function install(W: V1): void {
       item("ti-palette", "Appearance…", () => void appearance({ ...W.workspace, id: W.id })),
       item("ti-history", "History and progress…", () => void history()),
       item("ti-refresh-dot", "Update from source…", () => void updateWs()),
-      item("ti-copy", "Find duplicates…", () => void findDuplicates()));
+      item("ti-copy", "Find duplicates…", () => void findDuplicates()),
+      item("ti-folders", "Sort into folders…", () => void sortFolders()));
     if (W.locked) dm.append(item("ti-lock-open", "Unlock", () => void toggleLock(false)));
     else dm.append(item("ti-pencil", "Rename…", () => void rename()), item("ti-notes", "Notes…", () => void notes()),
       item("ti-lock", "Lock (read-only)…", () => void toggleLock(true)),
@@ -784,7 +842,7 @@ function install(W: V1): void {
   }
 
   W.ui = {
-    history, manage, importer, addFiles, addLinks, updateWs, browserHistory, resetWs, menu, download, toggleLock, backup, restore, extensions, duplicatesCsv, findDuplicates,
+    history, manage, importer, addFiles, addLinks, updateWs, browserHistory, resetWs, menu, download, toggleLock, backup, restore, extensions, duplicatesCsv, findDuplicates, sortFolders,
     rename, notes,
   };
   watchRequests();  // an extension asking to connect is answered from wherever the owner is in the page

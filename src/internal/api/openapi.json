@@ -661,6 +661,30 @@
         ]
       }
     },
+    "/api/v1/workspaces/{id}/sort": {
+      "post": {
+        "summary": "File the workspace's bookmarks into folders by the owner's rules (sort-rules.json in the data folder). Without apply, only the plan; with apply, the moves as one history entry; folders limits either to those destinations",
+        "tags": [
+          "Workspaces"
+        ],
+        "x-role": "editor",
+        "responses": {
+          "default": {
+            "description": "{\"plan\": {\"moves\": [{\"id\", \"title\", \"url\", \"from\", \"to\", \"reason\"}], \"folders\": {path: n}, \"new\": [path]}, \"entry\": entry or null}; 409 when there are no rules; errors are {\"error\": \"message\"}"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
     "/api/v1/workspaces/{id}/update": {
       "get": {
         "summary": "What Update would do: bookmarks new upstream, titles changed upstream (not renamed here), bookmarks gone upstream (they stay), and sources that cannot be read",

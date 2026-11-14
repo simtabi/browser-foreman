@@ -86,7 +86,8 @@ Hosted at <https://opensource.simtabi.com/documentation/simtabi/browser-foreman/
 - [Browsers and tabs](docs/tools/browsers-and-tabs.md) — opening links, open tabs, snapshots, restoring a session
 - [Backup and restore](docs/tools/backup.md) — what a backup holds and leaves out, restoring without replacing
 - [Web interface](docs/tools/web-interface.md) — the views, list and grid, menus, keyboard
-- [Workspaces](docs/tools/workspaces.md) — switching, managing, and own or shared tab snapshots
+- [Workspaces](docs/tools/workspaces.md) — switching, managing, finding duplicates, and own or shared tab snapshots
+- [Sorting into folders](docs/tools/sorting.md) — filing bookmarks by your own rules, previewed first
 - [Labels](docs/tools/labels.md) — ratings, tags and when each bookmark was last opened
 - [Page snapshots](docs/tools/page-snapshots.md) — how pictures of pages are taken, window size, wait and folder
 
