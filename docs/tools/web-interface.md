@@ -51,6 +51,13 @@ restores any of them, and chooses for each whether it keeps its **own tab snapsh
 Shared is the default: every workspace that does not keep its own reads and saves one central set. Switching a
 workspace to its own starts it empty; snapshots already taken stay where they were saved.
 
+## A loading screen until it is ready
+
+The page opens behind a loading screen that covers it until everything is ready: the bookmarks drawn, the menus and
+filters filled, and the fonts and styles loaded. You never see it half built. Turn it off in Settings › Startup ›
+*Loading screen* to see each panel fill in behind its own placeholder instead; the change applies from the next load.
+If something stops the page from finishing, the screen lifts by itself after 15 seconds.
+
 ## It remembers where you were
 
 The address carries the view, filter, search, selected folder or bookmark and tab snapshot, for example

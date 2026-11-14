@@ -30,6 +30,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
     ["liveMs", "Refresh from the browsers every", "How often the page reads your browsers again while it is open, to show tabs and windows that opened, closed or changed. Reading takes a moment for each browser, so very short times use more processor.", "select", [[0, "Off"], [2000, "2 seconds"], [5000, "5 seconds"], [10000, "10 seconds"], [30000, "30 seconds"], [60000, "1 minute"]]],
   ]],
   ["Startup", [
+    ["bootLoader", "Loading screen", "Cover the whole page while it loads, until everything is ready. Off: each panel shows its own placeholder as it fills in. Takes effect the next time the page loads.", "switch"],
     ["rememberPlace", "Remember where I was", "Reopen at the same view, filter, search, folder or bookmark and tab snapshot after a refresh or on the next visit. Off: always start at Bookmarks.", "switch"],
   ]],
   ["Opening links", [

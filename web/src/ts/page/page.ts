@@ -84,7 +84,8 @@ const store = {
 };
 // ---------- settings: preferences for this tool, kept in this browser (never in a workspace, never exported) ----------
 const SETTINGS_DEFAULT = {theme: "system", tooltips: true, tipDelay: 400, toastSecs: 4.5, openWarn: 20,
-  treeThumbs: true, treeDesc: true, treeDates: true, tileLimit: 120, rememberPlace: true, pageSize: 25, liveMs: 5000};
+  treeThumbs: true, treeDesc: true, treeDates: true, tileLimit: 120, rememberPlace: true, pageSize: 25, liveMs: 5000,
+  bootLoader: true};  // bootLoader is read before the page paints, by theme-early.ts
 const SETTINGS_KEY = STORE + ":settings";
 let SET = (() => { try { return Object.assign({}, SETTINGS_DEFAULT, JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); } catch { return {...SETTINGS_DEFAULT}; } })();
 function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(SET)); } catch {} applySettings(); window.dispatchEvent(new CustomEvent("bf:settings")); }

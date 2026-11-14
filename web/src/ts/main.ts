@@ -4,6 +4,7 @@ import "./ws_client.js";  // the workspace store first: the page script reads an
 import "./v1-ui";  // with the Go server: the workspace menu, History and file handling (window.BM_WS.ui)
 import "./page/page";  // the page script first: everything else builds on what it sets up
 import Alpine from "alpinejs";
+import { bootReady } from "./boot";
 import { browserPicker, closeWithConfirm, historyTools, moveToMode, noteEditor, rechecks, tabCleanup, tabHistory } from "./components";
 import type { OpenTab } from "./tabs";
 
@@ -32,3 +33,4 @@ window.BF = {
 };
 
 Alpine.start();
+void bootReady();  // the page script and Alpine have drawn: lift the loading screen once fonts and styles are in

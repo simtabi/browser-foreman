@@ -10,6 +10,9 @@ ships.
 
 ### Added
 
+- A loading screen covers the whole page from its first paint until everything is ready (bookmarks drawn, menus and
+  filters filled, fonts and styles loaded), so the page is never seen half built. Settings › Startup › *Loading
+  screen* turns it off. It lifts by itself after 15 seconds if the page cannot finish.
 - Failing GitHub links are checked again through GitHub's API, with `gh` signed in as you, after each link-check run.
   A deleted repository is told apart from a private, renamed or archived one, and a file or branch gone from a
   repository that still exists is caught. It is the Python tool's GitHub check, ported.
