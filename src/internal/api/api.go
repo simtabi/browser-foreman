@@ -47,9 +47,11 @@ type Server struct {
 	WaybackAPI string
 	// GitHub asks GitHub's API about failing GitHub links after each run (linkcheck.GhCLI: the gh command, signed in);
 	// nil skips it.
-	GitHub   linkcheck.GitHubAPI
-	Browsers *browsers.Service
-	Tabs     *tabs.Service
+	GitHub linkcheck.GitHubAPI
+	// StackExchangeAPI is where Stack Exchange questions are looked up ("": linkcheck.StackExchangeAPI).
+	StackExchangeAPI string
+	Browsers         *browsers.Service
+	Tabs             *tabs.Service
 	// Media keeps site icons and page snapshots; Snapper takes snapshots (nil: the installed Chrome, found when asked).
 	Media   media.Store
 	Snapper *media.Snapper

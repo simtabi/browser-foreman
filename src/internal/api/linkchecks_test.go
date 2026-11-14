@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -390,4 +391,57 @@ func TestARunSettlesBlockedLinksInChrome(t *testing.T) {
 	}
 	got, _ := s.Data.Links(ctx, nil)
 	t.Fatalf("%+v", got["https://shop.example/item"])
+}
+
+// Failing Stack Overflow questions are settled through the Stack Exchange API, a hundred to a request.
+func TestFailingStackOverflowLinksAreSettledThroughTheAPI(t *testing.T) {
+	s := newServer(t, "tok")
+	ctx := context.Background()
+	s.Checker.Client.Transport = roundTrip(func(r *http.Request) (*http.Response, error) {
+		body := `{"items":[]}`
+		if strings.Contains(r.URL.Path, "/questions/") && strings.Contains(r.URL.Path, "11") {
+			body = `{"items":[{"question_id":11}]}`
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{}, Request: r}, nil
+	})
+	now := time.Now()
+	_ = s.Data.SaveLinks(ctx, []store.LinkResult{
+		{URL: "https://stackoverflow.com/questions/11/x", Status: "unverified", Code: 403, Note: "HTTP 403", Checked: now},
+		{URL: "https://stackoverflow.com/questions/12/y", Status: "unverified", Code: 403, Note: "HTTP 403", Checked: now}})
+	s.askStackExchange([]string{"https://stackoverflow.com/questions/11/x", "https://stackoverflow.com/questions/12/y"})
+	got, _ := s.Data.Links(ctx, nil)
+	if r := got["https://stackoverflow.com/questions/11/x"]; r.Status != "ok" {
+		t.Errorf("%+v", r)
+	}
+	if r := got["https://stackoverflow.com/questions/12/y"]; r.Status != "dead" || r.DeadSince.IsZero() {
+		t.Errorf("%+v", r)
+	}
+}
+
+// A run asks the Stack Exchange API about the Stack Overflow links it could not settle, once it finishes.
+func TestARunAsksStackExchange(t *testing.T) {
+	s := newServer(t, "tok")
+	h := s.Handler()
+	ctx := context.Background()
+	_, _ = s.Data.CreateWorkspace(ctx, "links", "Links", time.Now())
+	tr := store.Tree{Root: &store.Node{ID: "root", Kind: store.KindFolder, Children: []*store.Node{
+		{ID: "a", Kind: store.KindBookmark, Title: "Q", URL: "https://stackoverflow.com/questions/11/x"}}}}
+	_, _ = s.Data.Commit(ctx, "links", 0, store.Change{Op: "import", Summary: "x", Tree: tr}, time.Now())
+	s.StackExchangeAPI = "https://api.example/2.3"
+	s.Checker.Client.Transport = roundTrip(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Host == "api.example" {
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"items":[{"question_id":11}]}`)), Header: http.Header{}, Request: r}, nil
+		}
+		return &http.Response{StatusCode: 403, Body: http.NoBody, Header: http.Header{}, Request: r}, nil // scripts get 403
+	})
+	_ = s.Data.SavePrefsDoc(ctx, []byte(`{"render_checks":false,"open_with":["System default"]}`))
+	waitCheck(t, h, start(t, h, `{"workspace":"links"}`))
+	for range 100 {
+		if got, _ := s.Data.Links(ctx, nil); got["https://stackoverflow.com/questions/11/x"].Status == "ok" {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	got, _ := s.Data.Links(ctx, nil)
+	t.Fatalf("%+v", got["https://stackoverflow.com/questions/11/x"])
 }

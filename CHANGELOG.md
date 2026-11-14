@@ -10,6 +10,9 @@ ships.
 
 ### Added
 
+- Stack Overflow and other Stack Exchange question links a check could not settle are looked up through the public
+  Stack Exchange API, a hundred to a request: deleted questions are dead, closed ones say why. On the 2026-11-10
+  export, 224 of the 390 links still blocked were Stack Exchange questions.
 - Links a plain check could not settle (bot checks, `403`s, timeouts) are opened in headless Chrome after each run and
   judged from what Chrome shows: working only for a real page with content and no error title, dead for a "not
   found" page. It is the Python tool's render evidence, ported, and can be turned off (*Confirm in Chrome*).
@@ -175,6 +178,9 @@ ships.
 
 ### Fixed
 
+- A site that kept rate-limiting made each of its deferred links wait out the pause again at the end of a run, a few at
+  a time. One proof-of-concept pass took 4.4 hours because of it. Now the site's other links stop waiting once one has
+  waited in vain.
 - A link check no longer leaves a rate-limited site's links as "could not verify". They are checked again at the end
   of the same run, once the site's pause is over. A timeout gets one more try, and each name on a hosting platform
   (`alice.github.io`, `my-app.vercel.app`…) is its own site rather than sharing one pause. On the 2026-11-10 export,

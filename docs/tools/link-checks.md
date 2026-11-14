@@ -37,6 +37,15 @@ is confirmed on its next check.
 A check that reads nothing about the page, such as a dead one, keeps the `meta` and `frame` that an earlier check
 found.
 
+## Stack Exchange questions
+
+Stack Overflow, Server Fault, Super User, Ask Ubuntu and the other `*.stackexchange.com` sites answer scripts with
+`403`, and a headless browser with a bot check. So once a run finishes, each question link (`/questions/<id>/…` or
+`/q/<id>`) it could not settle is looked up through the public Stack Exchange API, a hundred to a request. A question
+the API returns is `ok`, and one closed as a duplicate or off-topic says so in the note. One it does not return was
+deleted, so it is `dead`, confirmed a day later like any dead link. If the API refuses, for example because the day's
+quota is spent, nothing is concluded. Only the question numbers go to the API, and only to Stack Exchange itself.
+
 ## Confirming blocked pages in Chrome
 
 Some sites answer a script with `403` or a bot check while a person's browser gets the page. So once a run finishes,
@@ -91,8 +100,9 @@ nothing is sent while it is off.
   Addresses are interleaved by site, so no site gets a burst.
 - **Backing off.** A `429` or `503` pauses that site for 30 seconds, doubling up to 15 minutes and honouring
   `Retry-After`; three network failures in a row pause it for 5 minutes. A paused site's links are set aside and
-  checked at the end of the run, once the pause is over (waiting up to 16 minutes), so one run finishes them. Only if
-  the site is still paused then do they come back `unverified`, never `dead`.
+  checked at the end of the run, once the pause is over (waiting up to 16 minutes), so one run finishes them. If the
+  site is still paused after one link has waited, its other links stop waiting at once. Those links come back
+  `unverified`, never `dead`.
 - **One more try.** A timeout or a dropped connection is tried once more before the link is called `unverified`. A
   domain that does not exist is not retried.
 - **Hosting platforms are many sites.** Each name on `github.io`, `netlify.app`, `vercel.app`, `blogspot.com` and

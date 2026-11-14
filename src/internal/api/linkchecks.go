@@ -240,6 +240,7 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		mu.Unlock()
 		if v.State == linkcheck.Done { // after the run is reported finished: these are slow and optional
 			s.askGitHub(fails)
+			s.askStackExchange(fails)
 			s.renderBlocked(fails)
 			s.lookUpArchives(found)
 		}
@@ -414,4 +415,37 @@ func (s *Server) renderBlocked(urls []string) {
 	}
 	close(queue)
 	wg.Wait()
+}
+
+// askStackExchange settles failing Stack Exchange question links (Stack Overflow and its sister sites, which answer
+// scripts with 403) through the public API, a hundred to a request; what it learns is folded in as any check is.
+func (s *Server) askStackExchange(urls []string) {
+	if len(urls) == 0 {
+		return
+	}
+	ctx := context.Background()
+	end := s.StackExchangeAPI
+	if end == "" {
+		end = linkcheck.StackExchangeAPI
+	}
+	found := s.Checker.StackExchange(ctx, end, urls)
+	if len(found) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(found))
+	for u := range found {
+		keys = append(keys, u)
+	}
+	prev, err := s.Data.Links(ctx, keys)
+	if err != nil {
+		return
+	}
+	now := s.Checker.Now().UTC()
+	var save []store.LinkResult
+	for u, r := range found {
+		r.URL, r.Checked = u, now
+		before, known := prev[u]
+		save = append(save, linkcheck.Settle(before, known, r))
+	}
+	_ = s.Data.SaveLinks(ctx, save)
 }
