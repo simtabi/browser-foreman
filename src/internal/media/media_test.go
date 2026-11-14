@@ -3,6 +3,7 @@ package media
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"image"
@@ -10,6 +11,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,8 +20,11 @@ import (
 )
 
 func TestHostAndNames(t *testing.T) {
+	// An address carrying a user and password: both generated, so no credential is written down.
+	creds := url.UserPassword(rand.Text()[:8], rand.Text())
+	withCreds := (&url.URL{Scheme: "http", User: creds, Host: "docs.go.dev:8080", Path: "/x"}).String()
 	for in, want := range map[string]string{
-		"https://www.Example.com/a?b#c": "example.com", "http://user:pw@docs.go.dev:8080/x": "docs.go.dev", "javascript:x": "",
+		"https://www.Example.com/a?b#c": "example.com", withCreds: "docs.go.dev", "javascript:x": "",
 	} {
 		if got := Host(in); got != want {
 			t.Errorf("Host(%q) = %q, want %q", in, got, want)
@@ -164,5 +169,26 @@ func TestIndexAgreesWithTheFolder(t *testing.T) {
 func TestPinRuleBracketsIPv6(t *testing.T) {
 	if got := pinRule("example.com", net.ParseIP("2606:2800:220:1::1")); got != "MAP example.com [2606:2800:220:1::1]" {
 		t.Fatal(got)
+	}
+}
+
+func TestRenderOpensThePageInAThrowawayProfile(t *testing.T) {
+	public := func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("93.184.216.34")}, nil }
+	var argv []string
+	sn := Snapper{Chrome: "/x/chrome", Resolve: public, Dump: func(_ context.Context, a []string) ([]byte, error) {
+		argv = a
+		return []byte("<html><title>Hi</title></html>"), nil
+	}}
+	dom, err := sn.Render(context.Background(), "https://site.example/a?b=1")
+	got := strings.Join(argv, " ")
+	if err != nil || string(dom) != "<html><title>Hi</title></html>" || !strings.Contains(got, "--dump-dom https://site.example/a?b=1") ||
+		!strings.Contains(got, "--host-resolver-rules=MAP site.example 93.184.216.34") || !strings.Contains(got, "--user-data-dir=") ||
+		!strings.Contains(got, "--incognito") {
+		t.Fatalf("%v %q %s", err, dom, got)
+	}
+	argv = nil
+	sn.Resolve = func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("10.0.0.7")}, nil }
+	if _, err := sn.Render(context.Background(), "https://inside.example/"); err != ErrNotPublic || argv != nil {
+		t.Fatalf("a private address was opened: %v %v", err, argv)
 	}
 }
