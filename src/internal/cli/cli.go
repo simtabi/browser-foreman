@@ -68,35 +68,12 @@ func serveCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			bus := events.New(1000, time.Now)
 			data, err := store.Open(c.Storage.Driver, c.Storage.Path)
 			if err != nil {
 				return err
 			}
 			defer data.Close()
-			hooks := webhooks.NewStore(c.Storage.Path)
-			deliveries := webhooks.NewLog(c.Storage.Path)
-			bs := &browsers.Service{Platform: browsers.NewPlatform()}
-			tabReader := tabs.NewMac()
-			srv := &api.Server{Cfg: c, Bus: bus, Hooks: hooks, Data: data, Now: time.Now, Deliveries: deliveries,
-				Limit:    auth.NewLimiter(5, 15*time.Minute, 15*time.Minute),
-				Checker:  linkcheck.New(15 * time.Second),
-				GitHub:   linkcheck.GhCLI(),
-				Browsers: bs,
-				Media:    media.Store{Dir: filepath.Join(c.Storage.Path, "media")},
-				Dispatch: &webhooks.Dispatcher{
-					Store: hooks, Client: &http.Client{Timeout: c.Webhooks.Timeout.Duration}, Attempts: c.Webhooks.Attempts,
-					Backoff: 2 * time.Second, Now: time.Now,
-					Log: func(d webhooks.Delivery) {
-						if err := deliveries.Add(d); err != nil {
-							fmt.Fprintf(os.Stderr, "webhook delivery log: %v\n", err)
-						}
-						if !d.OK {
-							fmt.Fprintf(os.Stderr, "webhook %s: event %d failed after %d attempts: %s\n", d.Subscription, d.Event, d.Attempts, d.Error)
-						}
-					},
-				}}
-			srv.Tabs = &tabs.Service{Data: data, Browsers: bs, Reader: tabReader, Closer: tabReader, Now: time.Now}
+			srv := newServer(c, data, time.Now)
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			fmt.Fprintf(cmd.OutOrStdout(), "Browser Foreman %s on http://%s (config %s, state %s)\n", version.Version, c.Server.Addr, p.Config, c.Storage.Path)
@@ -112,6 +89,35 @@ func serveCmd() *cobra.Command {
 			return srv.Run(ctx)
 		},
 	}
+}
+
+// newServer assembles the API server on an open store, as `serve` runs it (and `mcp` when no server is running).
+func newServer(c config.Config, data store.Store, now func() time.Time) *api.Server {
+	bus := events.New(1000, now)
+	hooks := webhooks.NewStore(c.Storage.Path)
+	deliveries := webhooks.NewLog(c.Storage.Path)
+	bs := &browsers.Service{Platform: browsers.NewPlatform()}
+	tabReader := tabs.NewMac()
+	srv := &api.Server{Cfg: c, Bus: bus, Hooks: hooks, Data: data, Now: now, Deliveries: deliveries,
+		Limit:    auth.NewLimiter(5, 15*time.Minute, 15*time.Minute),
+		Checker:  linkcheck.New(15 * time.Second),
+		GitHub:   linkcheck.GhCLI(),
+		Browsers: bs,
+		Media:    media.Store{Dir: filepath.Join(c.Storage.Path, "media")},
+		Dispatch: &webhooks.Dispatcher{
+			Store: hooks, Client: &http.Client{Timeout: c.Webhooks.Timeout.Duration}, Attempts: c.Webhooks.Attempts,
+			Backoff: 2 * time.Second, Now: now,
+			Log: func(d webhooks.Delivery) {
+				if err := deliveries.Add(d); err != nil {
+					fmt.Fprintf(os.Stderr, "webhook delivery log: %v\n", err)
+				}
+				if !d.OK {
+					fmt.Fprintf(os.Stderr, "webhook %s: event %d failed after %d attempts: %s\n", d.Subscription, d.Event, d.Attempts, d.Error)
+				}
+			},
+		}}
+	srv.Tabs = &tabs.Service{Data: data, Browsers: bs, Reader: tabReader, Closer: tabReader, Now: now}
+	return srv
 }
 
 func versionCmd() *cobra.Command {
