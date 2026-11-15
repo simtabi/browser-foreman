@@ -10,6 +10,8 @@ ships.
 
 ### Added
 
+- `browser-foreman mcp` works without a running server: when none answers at the configured address, it opens the
+  store and runs the same API in-process, on no port, as the Python tool's MCP server read its files directly.
 - The MCP tools take the arguments the Python server's did: `list_workspaces` `include_archived`,
   `read_tab_snapshot` `query`, `move_bookmarks` `create`, `save_tabs_as_bookmarks` from one window of a tab snapshot,
   and `refresh_links` `ids`.

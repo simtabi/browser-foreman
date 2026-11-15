@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"time"
@@ -18,10 +19,37 @@ type API struct {
 	Base   string // http://127.0.0.1:8765
 	Token  string
 	Client *http.Client
+
+	handler http.Handler // set by InProcess
 }
 
 func NewAPI(base, token string) *API {
 	return &API{Base: strings.TrimRight(base, "/"), Token: token, Client: &http.Client{Timeout: 150 * time.Second}}
+}
+
+// InProcess calls the API handler h directly, with no port: for when no server is running, so the tools still work
+// on the store, as the Python server's did. Requests carry the token and come to host (the server's own address), so
+// the handler applies the same checks as over the network.
+func InProcess(h http.Handler, host, token string) *API {
+	a := NewAPI("http://"+host, token)
+	a.handler = h
+	a.Client.Transport = handlerTransport{h}
+	return a
+}
+
+type handlerTransport struct{ h http.Handler }
+
+func (t handlerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	in := r.Clone(r.Context())
+	in.Host = r.URL.Host
+	in.RemoteAddr = "127.0.0.1:0"
+	in.RequestURI = r.URL.RequestURI()
+	if in.Body == nil {
+		in.Body = http.NoBody
+	}
+	rec := httptest.NewRecorder()
+	t.h.ServeHTTP(rec, in)
+	return rec.Result(), nil
 }
 
 // apiError keeps the server's own message, which says what to do.

@@ -26,6 +26,12 @@ import (
 // setup runs a real API server with one workspace and returns an MCP client session talking to it in memory.
 func setup(t *testing.T, writes bool) (*mcp.ClientSession, *API) {
 	t.Helper()
+	return setupWith(t, writes, false)
+}
+
+// setupWith reaches the API over a real port, or with inProcess through InProcess, which calls the handler directly.
+func setupWith(t *testing.T, writes, inProcess bool) (*mcp.ClientSession, *API) {
+	t.Helper()
 	token, err := auth.NewSecret("brofo_")
 	if err != nil {
 		t.Fatal(err)
@@ -42,9 +48,12 @@ func setup(t *testing.T, writes bool) (*mcp.ClientSession, *API) {
 		Checker: linkcheck.New(5 * time.Second), Browsers: bs, Tabs: &tabs.Service{Data: data, Browsers: bs, Now: time.Now},
 		Limit:    auth.NewLimiter(5, 15*time.Minute, 15*time.Minute),
 		Dispatch: &webhooks.Dispatcher{Store: hooks, Client: http.DefaultClient, Attempts: 1, Backoff: time.Millisecond, Now: time.Now}}
-	ts := httptest.NewServer(s.Handler())
-	t.Cleanup(ts.Close)
-	a := NewAPI(ts.URL, token)
+	a := InProcess(s.Handler(), "127.0.0.1:8765", token)
+	if !inProcess {
+		ts := httptest.NewServer(s.Handler())
+		t.Cleanup(ts.Close)
+		a = NewAPI(ts.URL, token)
+	}
 	ctx := context.Background()
 	must := func(err error) {
 		t.Helper()
@@ -289,5 +298,30 @@ func TestArgumentsCarriedOverFromThePythonServer(t *testing.T) {
 	}
 	if out, ok := call(t, cs, "refresh_links", map[string]any{"workspace": "main", "ids": []string{"b1"}, "folder": "Bookmarks Bar"}); ok {
 		t.Fatalf("both ids and folder were accepted: %v", out)
+	}
+}
+
+// TestInProcessNeedsNoRunningServer: with no server running, mcp calls the API handler directly, as the Python server
+// read the store itself. Reads and writes both work, and nothing listens on a port.
+func TestInProcessNeedsNoRunningServer(t *testing.T) {
+	cs, a := setupWith(t, true, true)
+	if a.Client.Transport == nil {
+		t.Fatal("not in process")
+	}
+	out, ok := call(t, cs, "search_bookmarks", map[string]any{"workspace": "main", "query": "go docs"})
+	if !ok || out["untrusted_data"].(map[string]any)["total"].(float64) != 1 {
+		t.Fatalf("search in process: %v", out)
+	}
+	if out, ok := call(t, cs, "rename", map[string]any{"workspace": "main", "id": "b3", "title": "Daily news"}); !ok {
+		t.Fatalf("rename in process: %v", out)
+	}
+	out, _ = call(t, cs, "read_folder", map[string]any{"workspace": "main", "path": "Bookmarks Bar"})
+	if !strings.Contains(toJSON(out), "Daily news") {
+		t.Fatalf("the rename did not land: %v", out)
+	}
+	// The token still matters: a wrong one is refused, as over the network.
+	bad := InProcess(a.handler, "127.0.0.1:8765", "wrong")
+	if err := bad.get(context.Background(), "workspaces", &struct{}{}); err == nil {
+		t.Fatal("a wrong token was let in")
 	}
 }

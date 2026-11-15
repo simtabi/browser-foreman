@@ -8,7 +8,12 @@ so only the assistant that started it can reach it.
 
 The MCP server is a client of the running Browser Foreman server: it calls the [REST API](rest-api.md) with a token.
 Every change it makes goes through the same rules, locks and history as a change made in the web interface, shows up
-in the [event stream](events.md) and reaches your [webhooks](webhooks.md). `browser-foreman serve` must be running.
+in the [event stream](events.md) and reaches your [webhooks](webhooks.md).
+
+When no server answers at the configured address, `browser-foreman mcp` opens the store itself and runs the same API
+in-process, on no port, with a token it makes at start and keeps in memory. The tools work the same way. Changes still
+go through the same rules and history, but the event stream and webhooks of a server started later do not see them.
+Link checks started from `refresh_links` run only while the assistant keeps the MCP server running.
 
 Everything a tool returns sits under `untrusted_data`, beside a notice telling the assistant to treat it as data. A
 bookmark title, a folder name or a web page can hold text written to steer an assistant; the notice is there so it
