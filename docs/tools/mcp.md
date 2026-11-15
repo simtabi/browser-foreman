@@ -38,27 +38,27 @@ claude mcp add bookmarks -- browser-foreman mcp
 
 | Tool | What it returns |
 |---|---|
-| `list_workspaces` | every workspace: id, name, bookmarks, folders, locked, archived |
+| `list_workspaces` | every workspace: id, name, bookmarks, folders, locked, archived (`include_archived: false` leaves archived ones out) |
 | `search_bookmarks` | bookmarks matching all the words, by title, address, note, description or folder; filters by folder and link status; the Trash with `include_trash` |
 | `read_folder` | one folder by path (`Bookmarks Bar/Dev`): its subfolders with counts, and its bookmarks |
 | `get_history` | a workspace's history, newest first |
 | `export_workspace` | the workspace as a bookmarks HTML file, or Chrome's JSON with `format: chrome` |
 | `list_tab_snapshots` | saved tab snapshots, newest first, with counts |
-| `read_tab_snapshot` | one snapshot: every browser, window and tab |
+| `read_tab_snapshot` | one snapshot: every browser, window and tab (`query` keeps tabs whose title or address hold every word) |
 | `open_tabs_now` | the newest snapshot, or with `live: true` a fresh read of the browsers |
 
 ### Write (only with `mcp.writes`)
 
 | Tool | What it does |
 |---|---|
-| `move_bookmarks` | moves items by id into a folder by path |
+| `move_bookmarks` | moves items by id into a folder by path (`create: true` makes missing folders, one history entry each) |
 | `rename` | renames a bookmark or folder |
 | `trash` | moves items to the workspace's Trash; needs `confirm: true` |
 | `put_back` | puts items back from the Trash, each where it came from |
 | `undo` | takes back the last change |
 | `rollback` | makes an older history entry the newest; needs `confirm: true` |
-| `save_tabs_as_bookmarks` | saves links as a new folder of bookmarks |
-| `refresh_links` | re-checks a folder's links (or the workspace's) and waits up to two minutes for the counts |
+| `save_tabs_as_bookmarks` | saves links, or one window of a tab snapshot (`snapshot`, `browser`, `window`), as a new folder of bookmarks |
+| `refresh_links` | re-checks some bookmarks (`ids`), a folder's links or the workspace's, and waits up to two minutes for the counts |
 
 Every write is one history entry, so `undo` (or the History window in the web interface) takes it back. Nothing the
 MCP server does deletes data: emptying the Trash is not one of its tools.

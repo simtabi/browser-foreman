@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/simtabi/browser-foreman/src/internal/store"
+	"github.com/simtabi/browser-foreman/src/internal/tabs"
 )
 
 // Notice comes with every result.
@@ -63,25 +65,25 @@ func New(api *API, o Options) *mcp.Server {
 	}
 	s := mcp.NewServer(&mcp.Implementation{Name: "browser-foreman", Version: o.Version}, &mcp.ServerOptions{Instructions: instructions})
 	t := &tools{api: api}
-	mcp.AddTool(s, &mcp.Tool{Name: "list_workspaces", Description: "List the bookmark workspaces: id, name, bookmarks, folders, history length, locked, archived.", Annotations: readOnly("List workspaces")}, t.listWorkspaces)
+	mcp.AddTool(s, &mcp.Tool{Name: "list_workspaces", Description: "List the bookmark workspaces: id, name, bookmarks, folders, history length, locked, archived. include_archived: false leaves archived ones out.", Annotations: readOnly("List workspaces")}, t.listWorkspaces)
 	mcp.AddTool(s, &mcp.Tool{Name: "search_bookmarks", Description: "Search a workspace's bookmarks by words in the title, address, note, description or folder. Returns id, title, url, folder, status. The Trash is left out unless include_trash.", Annotations: readOnly("Search bookmarks")}, t.search)
 	mcp.AddTool(s, &mcp.Tool{Name: "read_folder", Description: "One folder of a workspace (path like \"Bookmarks Bar/Dev\"; empty for the top): its subfolders with counts, and its bookmarks.", Annotations: readOnly("Read a folder")}, t.readFolder)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_history", Description: "A workspace's history, newest first: seq, when, what changed.", Annotations: readOnly("Workspace history")}, t.history)
 	mcp.AddTool(s, &mcp.Tool{Name: "export_workspace", Description: "A workspace as a bookmarks file any browser imports (format html) or Chrome's JSON (format chrome). The Trash is left out.", Annotations: readOnly("Export a workspace")}, t.export)
 	mcp.AddTool(s, &mcp.Tool{Name: "list_tab_snapshots", Description: "Saved snapshots of open tabs, newest first, with counts.", Annotations: readOnly("List tab snapshots")}, t.listSnapshots)
-	mcp.AddTool(s, &mcp.Tool{Name: "read_tab_snapshot", Description: "One tab snapshot: every browser, window and tab. Private windows show only a count unless the owner keeps their pages.", Annotations: readOnly("Read a tab snapshot")}, t.readSnapshot)
+	mcp.AddTool(s, &mcp.Tool{Name: "read_tab_snapshot", Description: "One tab snapshot: every browser, window and tab. Private windows show only a count unless the owner keeps their pages. query keeps only tabs whose title or address contain every word.", Annotations: readOnly("Read a tab snapshot")}, t.readSnapshot)
 	mcp.AddTool(s, &mcp.Tool{Name: "open_tabs_now", Description: "The tabs open now: the newest snapshot, or with live: true a fresh read of the browsers.", Annotations: readOnly("Open tabs now")}, t.openNow)
 	if !o.Writes {
 		return s
 	}
-	mcp.AddTool(s, &mcp.Tool{Name: "move_bookmarks", Description: "Move bookmarks or folders (by id) into a folder (by path), at the end or at index. One history entry; undo takes it back.", Annotations: writes("Move bookmarks", false)}, t.move)
+	mcp.AddTool(s, &mcp.Tool{Name: "move_bookmarks", Description: "Move bookmarks or folders (by id) into a folder (by path), at the end or at index; create: true makes the folder when it is missing. One history entry; undo takes it back.", Annotations: writes("Move bookmarks", false)}, t.move)
 	mcp.AddTool(s, &mcp.Tool{Name: "rename", Description: "Rename a bookmark or folder (by id). One history entry.", Annotations: writes("Rename", false)}, t.rename)
 	mcp.AddTool(s, &mcp.Tool{Name: "trash", Description: "Move bookmarks or folders (by id) to the workspace's Trash, where put_back or undo brings them back. Needs confirm: true.", Annotations: writes("Move to the Trash", true)}, t.trash)
 	mcp.AddTool(s, &mcp.Tool{Name: "put_back", Description: "Put items (by id) back from the Trash, each where it came from.", Annotations: writes("Put back from the Trash", false)}, t.putBack)
 	mcp.AddTool(s, &mcp.Tool{Name: "undo", Description: "Take back the workspace's last change, as a new history entry.", Annotations: writes("Undo", false)}, t.undo)
 	mcp.AddTool(s, &mcp.Tool{Name: "rollback", Description: "Make the state after history entry `to` the newest, as a new entry (undo brings today's back). Needs confirm: true.", Annotations: writes("Go back in history", true)}, t.rollback)
-	mcp.AddTool(s, &mcp.Tool{Name: "save_tabs_as_bookmarks", Description: "Save links (url and title) as a new folder of bookmarks, inside the folder at parent (by path; \"Saved tabs\" when left out). One history entry.", Annotations: writes("Save tabs as bookmarks", false)}, t.saveTabs)
-	mcp.AddTool(s, &mcp.Tool{Name: "refresh_links", Description: "Check a folder's links again (or the whole workspace) and wait up to two minutes for the result: how many are working, moved, dead.", Annotations: &mcp.ToolAnnotations{Title: "Re-check links", DestructiveHint: &no, OpenWorldHint: &yes}}, t.refresh)
+	mcp.AddTool(s, &mcp.Tool{Name: "save_tabs_as_bookmarks", Description: "Save links (url and title), or one window of a tab snapshot (snapshot, browser, window from read_tab_snapshot), as a new folder of bookmarks inside the folder at parent (by path; \"Saved tabs\" when left out). Only web links are kept. One history entry.", Annotations: writes("Save tabs as bookmarks", false)}, t.saveTabs)
+	mcp.AddTool(s, &mcp.Tool{Name: "refresh_links", Description: "Check links again: some bookmarks or folders (ids), one folder (by path), or the whole workspace; and wait up to two minutes for the result: how many are working, moved, dead.", Annotations: &mcp.ToolAnnotations{Title: "Re-check links", DestructiveHint: &no, OpenWorldHint: &yes}}, t.refresh)
 	return s
 }
 
@@ -191,10 +193,17 @@ func confirmNeeded(ok bool, what string) error {
 
 // ---- read tools ----
 
-func (t *tools) listWorkspaces(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, Untrusted, error) {
+type listIn struct {
+	IncludeArchived *bool `json:"include_archived,omitempty" jsonschema:"list archived workspaces too (the default)"`
+}
+
+func (t *tools) listWorkspaces(ctx context.Context, _ *mcp.CallToolRequest, in listIn) (*mcp.CallToolResult, Untrusted, error) {
 	var out struct{ Workspaces []wsView }
 	if err := t.api.get(ctx, "workspaces", &out); err != nil {
 		return nil, Untrusted{}, err
+	}
+	if in.IncludeArchived != nil && !*in.IncludeArchived {
+		out.Workspaces = slices.DeleteFunc(out.Workspaces, func(w wsView) bool { return w.Archived })
 	}
 	return nil, wrap(out.Workspaces), nil
 }
@@ -339,16 +348,51 @@ func (t *tools) listSnapshots(ctx context.Context, _ *mcp.CallToolRequest, in li
 	return nil, wrap(out.Snapshots), nil
 }
 
-type idIn struct {
-	ID string `json:"id" jsonschema:"the snapshot id, like 2026-11-12_184210"`
+type snapIn struct {
+	ID    string `json:"id" jsonschema:"the snapshot id, like 2026-11-12_184210"`
+	Query string `json:"query,omitempty" jsonschema:"only tabs whose title or address contain every word"`
 }
 
-func (t *tools) readSnapshot(ctx context.Context, _ *mcp.CallToolRequest, in idIn) (*mcp.CallToolResult, Untrusted, error) {
-	var out any
-	if err := t.api.get(ctx, "tabs/snapshots/"+url.PathEscape(in.ID), &out); err != nil {
+type snapshotView struct {
+	ID     string     `json:"id"`
+	At     time.Time  `json:"at"`
+	Reason string     `json:"reason"`
+	State  tabs.State `json:"state"`
+}
+
+func (t *tools) snapshot(ctx context.Context, id string) (snapshotView, error) {
+	var out snapshotView
+	err := t.api.get(ctx, "tabs/snapshots/"+url.PathEscape(id), &out)
+	return out, err
+}
+
+func (t *tools) readSnapshot(ctx context.Context, _ *mcp.CallToolRequest, in snapIn) (*mcp.CallToolResult, Untrusted, error) {
+	out, err := t.snapshot(ctx, in.ID)
+	if err != nil {
 		return nil, Untrusted{}, err
 	}
+	if words := strings.Fields(strings.ToLower(in.Query)); len(words) > 0 {
+		for bi := range out.State.Browsers {
+			b := &out.State.Browsers[bi]
+			for wi := range b.Windows {
+				b.Windows[wi].Tabs = slices.DeleteFunc(b.Windows[wi].Tabs, func(tb tabs.Tab) bool {
+					hay := strings.ToLower(tb.Title + " " + tb.URL)
+					return !all(words, func(w string) bool { return strings.Contains(hay, w) })
+				})
+			}
+			b.Windows = slices.DeleteFunc(b.Windows, func(w tabs.Window) bool { return len(w.Tabs) == 0 })
+		}
+	}
 	return nil, wrap(out), nil
+}
+
+func all[T any](xs []T, ok func(T) bool) bool {
+	for _, x := range xs {
+		if !ok(x) {
+			return false
+		}
+	}
+	return true
 }
 
 type nowIn struct {
@@ -370,7 +414,7 @@ func (t *tools) openNow(ctx context.Context, req *mcp.CallToolRequest, in nowIn)
 	if len(list.Snapshots) == 0 {
 		return nil, wrap(map[string]any{"snapshot": nil, "note": "no snapshots yet; ask with live: true"}), nil
 	}
-	return t.readSnapshot(ctx, req, idIn{list.Snapshots[0].ID})
+	return t.readSnapshot(ctx, req, snapIn{ID: list.Snapshots[0].ID})
 }
 
 // ---- write tools ----
@@ -385,14 +429,45 @@ type moveIn struct {
 	IDs       []string `json:"ids" jsonschema:"bookmark or folder ids, from search_bookmarks or read_folder"`
 	ToFolder  string   `json:"to_folder" jsonschema:"destination folder path"`
 	Index     *int     `json:"index,omitempty" jsonschema:"position in the destination; the end when left out"`
+	Create    bool     `json:"create,omitempty" jsonschema:"create the destination folder (and any missing folders above it) when it is missing"`
+}
+
+// ensureFolder returns the folder at path, creating the missing folders on the way when create is set (one history
+// entry each).
+func (t *tools) ensureFolder(ctx context.Context, workspace, path string, create bool) (*store.Node, error) {
+	l, err := t.load(ctx, workspace)
+	if err != nil {
+		return nil, err
+	}
+	if f, err := folderAt(l.tree.Root, path); err == nil || !create {
+		return f, err
+	}
+	parent, sofar := l.tree.Root, ""
+	for _, part := range strings.Split(strings.Trim(path, "/"), "/") {
+		if part == "" {
+			return nil, fmt.Errorf("folder path %q has an empty name", path)
+		}
+		sofar = strings.TrimPrefix(sofar+"/"+part, "/")
+		if f, err := folderAt(l.tree.Root, sofar); err == nil {
+			parent = f
+			continue
+		}
+		title := part
+		if err := t.api.do(ctx, "POST", ws(workspace)+"/nodes", map[string]any{"parent": parent.ID, "kind": store.KindFolder, "title": &title}, nil); err != nil {
+			return nil, err
+		}
+		if l, err = t.load(ctx, workspace); err != nil {
+			return nil, err
+		}
+		if parent, err = folderAt(l.tree.Root, sofar); err != nil {
+			return nil, err
+		}
+	}
+	return parent, nil
 }
 
 func (t *tools) move(ctx context.Context, _ *mcp.CallToolRequest, in moveIn) (*mcp.CallToolResult, Untrusted, error) {
-	l, err := t.load(ctx, in.Workspace)
-	if err != nil {
-		return nil, Untrusted{}, err
-	}
-	f, err := folderAt(l.tree.Root, in.ToFolder)
+	f, err := t.ensureFolder(ctx, in.Workspace, in.ToFolder, in.Create)
 	if err != nil {
 		return nil, Untrusted{}, err
 	}
@@ -478,10 +553,55 @@ type saveIn struct {
 	Workspace string `json:"workspace"`
 	Folder    string `json:"folder" jsonschema:"the new folder's name"`
 	Parent    string `json:"parent,omitempty" jsonschema:"where to put it, a folder path; Saved tabs when left out"`
-	Links     []link `json:"links"`
+	Links     []link `json:"links,omitempty" jsonschema:"the links to save; or name a snapshot window instead"`
+	Snapshot  string `json:"snapshot,omitempty" jsonschema:"save one window of this tab snapshot (from list_tab_snapshots) instead of links"`
+	Browser   string `json:"browser,omitempty" jsonschema:"the snapshot window's browser, as read_tab_snapshot names it"`
+	Window    *int   `json:"window,omitempty" jsonschema:"the snapshot window's index, as read_tab_snapshot gives it"`
+}
+
+// windowLinks is one window's web tabs from a snapshot.
+func (t *tools) windowLinks(ctx context.Context, in saveIn) ([]link, error) {
+	if len(in.Links) > 0 {
+		return nil, errors.New("give either links or a snapshot window, not both")
+	}
+	if in.Browser == "" || in.Window == nil {
+		return nil, errors.New("a snapshot window needs browser and window")
+	}
+	s, err := t.snapshot(ctx, in.Snapshot)
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range s.State.Browsers {
+		if !strings.EqualFold(b.Browser, in.Browser) {
+			continue
+		}
+		for _, w := range b.Windows {
+			if w.Index != *in.Window {
+				continue
+			}
+			var out []link
+			for _, tb := range w.Tabs {
+				if strings.HasPrefix(tb.URL, "https://") || strings.HasPrefix(tb.URL, "http://") {
+					out = append(out, link{URL: tb.URL, Title: tb.Title})
+				}
+			}
+			if len(out) == 0 {
+				return nil, errors.New("that window has no web tabs (a private window keeps only a count)")
+			}
+			return out, nil
+		}
+	}
+	return nil, fmt.Errorf("snapshot %s has no %s window %d", in.Snapshot, in.Browser, *in.Window)
 }
 
 func (t *tools) saveTabs(ctx context.Context, _ *mcp.CallToolRequest, in saveIn) (*mcp.CallToolResult, Untrusted, error) {
+	if in.Snapshot != "" {
+		links, err := t.windowLinks(ctx, in)
+		if err != nil {
+			return nil, Untrusted{}, err
+		}
+		in.Links = links
+	}
 	if len(in.Links) == 0 || len(in.Links) > 500 {
 		return nil, Untrusted{}, errors.New("give 1 to 500 links")
 	}
@@ -500,12 +620,19 @@ func (t *tools) saveTabs(ctx context.Context, _ *mcp.CallToolRequest, in saveIn)
 }
 
 type refreshIn struct {
-	Workspace string `json:"workspace"`
-	Folder    string `json:"folder,omitempty" jsonschema:"a folder path; the whole workspace when left out"`
+	Workspace string   `json:"workspace"`
+	Folder    string   `json:"folder,omitempty" jsonschema:"a folder path; the whole workspace when neither this nor ids is given"`
+	IDs       []string `json:"ids,omitempty" jsonschema:"only these bookmarks or folders (ids from search_bookmarks or read_folder)"`
 }
 
 func (t *tools) refresh(ctx context.Context, _ *mcp.CallToolRequest, in refreshIn) (*mcp.CallToolResult, Untrusted, error) {
 	body := map[string]any{"workspace": in.Workspace}
+	if in.Folder != "" && len(in.IDs) > 0 {
+		return nil, Untrusted{}, errors.New("give either folder or ids, not both")
+	}
+	if len(in.IDs) > 0 {
+		body["nodes"] = in.IDs
+	}
 	if in.Folder != "" {
 		l, err := t.load(ctx, in.Workspace)
 		if err != nil {

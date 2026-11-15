@@ -230,3 +230,64 @@ func TestAPIErrorsCarryTheServersMessage(t *testing.T) {
 }
 
 func toJSON(v any) string { b, _ := json.Marshal(v); return string(b) }
+
+// TestArgumentsCarriedOverFromThePythonServer covers what the Python server's tools took that Go's first lacked.
+func TestArgumentsCarriedOverFromThePythonServer(t *testing.T) {
+	cs, a := setup(t, true)
+	ctx := context.Background()
+	if err := a.do(ctx, "POST", "workspaces", map[string]any{"id": "old", "name": "Old"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.do(ctx, "PATCH", "workspaces/old", map[string]any{"archived": true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := call(t, cs, "list_workspaces", nil)
+	if s := toJSON(out); !strings.Contains(s, `"id":"old"`) {
+		t.Fatalf("archived workspaces are listed by default: %s", s)
+	}
+	out, _ = call(t, cs, "list_workspaces", map[string]any{"include_archived": false})
+	if s := toJSON(out); strings.Contains(s, `"id":"old"`) || !strings.Contains(s, `"id":"main"`) {
+		t.Fatalf("include_archived false: %s", s)
+	}
+
+	out, _ = call(t, cs, "read_tab_snapshot", map[string]any{"id": "2026-11-12_184210", "query": "nothing matches"})
+	if s := toJSON(out); strings.Contains(s, "go.dev") {
+		t.Fatalf("query kept a tab that does not match: %s", s)
+	}
+	out, _ = call(t, cs, "read_tab_snapshot", map[string]any{"id": "2026-11-12_184210", "query": "GO dev"})
+	if s := toJSON(out); !strings.Contains(s, "https://go.dev/") {
+		t.Fatalf("query dropped the matching tab: %s", s)
+	}
+
+	if out, ok := call(t, cs, "move_bookmarks", map[string]any{"workspace": "main", "ids": []string{"b3"}, "to_folder": "Other bookmarks/Later/News"}); ok {
+		t.Fatalf("moved into a missing folder without create: %v", out)
+	}
+	if out, ok := call(t, cs, "move_bookmarks", map[string]any{"workspace": "main", "ids": []string{"b3"}, "to_folder": "Other bookmarks/Later/News", "create": true}); !ok {
+		t.Fatalf("create: %v", out)
+	}
+	out, _ = call(t, cs, "read_folder", map[string]any{"workspace": "main", "path": "Other bookmarks/Later/News"})
+	if s := toJSON(out); !strings.Contains(s, "news.example") {
+		t.Fatalf("the bookmark is not in the created folder: %s", s)
+	}
+
+	out, ok := call(t, cs, "save_tabs_as_bookmarks", map[string]any{"workspace": "main", "folder": "From snapshot", "snapshot": "2026-11-12_184210", "browser": "chrome", "window": 1})
+	if !ok || !strings.Contains(toJSON(out), `"saved":1`) {
+		t.Fatalf("saving a snapshot window: %v", out)
+	}
+	if out, ok := call(t, cs, "save_tabs_as_bookmarks", map[string]any{"workspace": "main", "folder": "X", "snapshot": "2026-11-12_184210", "browser": "Chrome", "window": 9}); ok {
+		t.Fatalf("a missing window was saved: %v", out)
+	}
+	if out, ok := call(t, cs, "save_tabs_as_bookmarks", map[string]any{"workspace": "main", "folder": "X", "snapshot": "2026-11-12_184210", "browser": "Chrome", "window": 1,
+		"links": []map[string]any{{"url": "https://a.example/"}}}); ok {
+		t.Fatalf("both a snapshot and links were accepted: %v", out)
+	}
+
+	// ids limits the check to those bookmarks: one link, not the workspace's three.
+	out, _ = call(t, cs, "refresh_links", map[string]any{"workspace": "main", "ids": []string{"b1"}})
+	if d := out["untrusted_data"].(map[string]any); d["total"].(float64) != 1 {
+		t.Fatalf("refresh by id checked %v", d)
+	}
+	if out, ok := call(t, cs, "refresh_links", map[string]any{"workspace": "main", "ids": []string{"b1"}, "folder": "Bookmarks Bar"}); ok {
+		t.Fatalf("both ids and folder were accepted: %v", out)
+	}
+}

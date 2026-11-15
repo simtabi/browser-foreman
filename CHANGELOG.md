@@ -10,6 +10,9 @@ ships.
 
 ### Added
 
+- The MCP tools take the arguments the Python server's did: `list_workspaces` `include_archived`,
+  `read_tab_snapshot` `query`, `move_bookmarks` `create`, `save_tabs_as_bookmarks` from one window of a tab snapshot,
+  and `refresh_links` `ids`.
 - Stack Overflow and other Stack Exchange question links a check could not settle are looked up through the public
   Stack Exchange API, a hundred to a request: deleted questions are dead, closed ones say why. On the 2026-11-10
   export, 224 of the 390 links still blocked were Stack Exchange questions.
