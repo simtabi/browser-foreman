@@ -1,0 +1,90 @@
+{
+   "checksum": "b99cf568490cf01317b4a3bba57623cd",
+   "roots": {
+      "bookmark_bar": {
+         "children": [
+            {
+               "date_added": "13340000000000000",
+               "date_last_used": "0",
+               "guid": "00000000-0000-4000-8000-000000000005",
+               "id": "5",
+               "name": "Go docs",
+               "type": "url",
+               "url": "https://go.dev/doc/"
+            },
+            {
+               "children": [
+                  {
+                     "date_added": "13340000000000000",
+                     "date_last_used": "0",
+                     "guid": "00000000-0000-4000-8000-000000000007",
+                     "id": "7",
+                     "name": "Café ☕ 🚀",
+                     "type": "url",
+                     "url": "https://café.example/x?a=1&b=2"
+                  }
+               ],
+               "date_added": "13340000000000000",
+               "date_last_used": "0",
+               "date_modified": "13340000000000001",
+               "guid": "00000000-0000-4000-9000-000000000006",
+               "id": "6",
+               "name": "Dev ",
+               "type": "folder"
+            }
+         ],
+         "date_added": "13340000000000000",
+         "date_last_used": "0",
+         "date_modified": "13340000000000001",
+         "guid": "00000000-0000-4000-9000-000000000001",
+         "id": "1",
+         "name": "Bookmarks bar",
+         "type": "folder"
+      },
+      "other": {
+         "children": [
+            {
+               "date_added": "13340000000000000",
+               "date_last_used": "0",
+               "guid": "00000000-0000-4000-8000-000000000008",
+               "id": "8",
+               "name": "News",
+               "type": "url",
+               "url": "https://news.example/",
+               "meta_info": {
+                  "power_bookmark_meta": "abc"
+               }
+            }
+         ],
+         "date_added": "13340000000000000",
+         "date_last_used": "0",
+         "date_modified": "13340000000000001",
+         "guid": "00000000-0000-4000-9000-000000000002",
+         "id": "2",
+         "name": "Other bookmarks",
+         "type": "folder"
+      },
+      "synced": {
+         "children": [
+            {
+               "date_added": "13340000000000000",
+               "date_last_used": "0",
+               "guid": "00000000-0000-4000-8000-000000000009",
+               "id": "9",
+               "name": "Phone",
+               "type": "url",
+               "url": "https://m.example/"
+            }
+         ],
+         "date_added": "13340000000000000",
+         "date_last_used": "0",
+         "date_modified": "13340000000000001",
+         "guid": "00000000-0000-4000-9000-000000000003",
+         "id": "3",
+         "name": "Mobile bookmarks",
+         "type": "folder"
+      }
+   },
+   "sync_metadata": "c3luYw==",
+   "version": 1
+}
