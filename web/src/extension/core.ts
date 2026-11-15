@@ -95,7 +95,7 @@ export class Client {
 
 export interface PairRequest { id: string; poll: string; match: string; expires: string }
 
-export interface Command { id: string; kind: "open" | "open-group" | "reload"; urls: string[]; title?: string; color?: string; incognito?: boolean }
+export interface Command { id: string; kind: "open" | "open-group" | "reload" | "read-bookmarks"; urls: string[]; title?: string; color?: string; incognito?: boolean }
 
 /** Tab group colours the browsers accept; anything else becomes grey. */
 export const GROUP_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -47,6 +49,7 @@ func env(t *testing.T) {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("BROFO_SERVER_ADDR", "127.0.0.1:9") // nothing answers there: tests never reach a running server
 	s, err := openStore()
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +150,107 @@ func TestApplyAsksForWhatItIsNotGivenAndRefusesWithoutATerminal(t *testing.T) {
 	if _, err := run(t, "apply", "--base", "export", "--file", path, "--mode", "merge"); err == nil || !strings.Contains(err.Error(), "--route") {
 		t.Fatalf("no route: %v", err)
 	}
-	if _, err := run(t, "apply", "--base", "export", "--mode", "replace", "--route", "extension"); err == nil || !strings.Contains(err.Error(), "chrome-live") {
-		t.Fatalf("the extension route with nothing read: %v", err)
+	if _, err := run(t, "apply", "--base", "export", "--mode", "merge", "--route", "extension"); err == nil || !strings.Contains(err.Error(), "--read") {
+		t.Fatalf("the extension route asks how to read the profile: %v", err)
+	}
+	if _, err := run(t, "apply", "--base", "export", "--mode", "merge", "--route", "extension", "--read", "extension"); err == nil || !strings.Contains(err.Error(), "chrome-live") {
+		t.Fatalf("the extension route with no server and nothing read: %v", err)
+	}
+}
+
+func TestTheExtensionRouteReadsTheFileOrTheLastExtensionRead(t *testing.T) {
+	env(t)
+	path := chromeProfile(t)
+	out, err := run(t, "apply", "--base", "export", "--mode", "merge", "--route", "extension", "--read", "file", "--file", path, "--yes")
+	if err != nil || !strings.Contains(out, "Saved as workspace chrome-target") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	s, err := openStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, _, err := s.State(context.Background(), "chrome-target", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]string{}
+	var walk func(n *store.Node)
+	walk = func(n *store.Node) {
+		for _, c := range n.Children {
+			ids[c.Title] = c.ID
+			walk(c)
+		}
+	}
+	walk(target.Root)
+	if ids["Bookmarks bar"] != "ext-1" || ids["A"] != "ext-5" || ids["C"] != "ext-7" || !strings.HasPrefix(ids["Reading"], "new-") {
+		t.Fatalf("the target's ids are not the extension's: %v", ids)
+	}
+	// With no server running, the extension route uses what the extension read last, and says so.
+	live := writeback.WithPrefix(must(writeback.ReadFile(path)), "ext-")
+	if _, err := writeback.Save(context.Background(), s, "chrome-live", "Chrome", "import", "read", live, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	out, err = run(t, "apply", "--base", "export", "--mode", "merge", "--route", "extension", "--read", "extension")
+	if err != nil || !strings.Contains(out, "read last (chrome-live") || !strings.Contains(out, "Against chrome-live") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+}
+
+func TestChoicesComeFromTheConfigurationUnlessAsk(t *testing.T) {
+	env(t)
+	path := chromeProfile(t)
+	dir := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "browser-foreman")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "20-writeback.json"), []byte(`{"writeback":{"mode":"merge","route":"file","read":"ask"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := run(t, "apply", "--base", "export", "--file", path); err != nil || !strings.Contains(out, "What the write changes (merge)") {
+		t.Fatalf("configured mode and route: %v\n%s", err, out)
+	}
+	if out, err := run(t, "apply", "--base", "export", "--file", path, "--mode", "replace"); err != nil || !strings.Contains(out, "(replace)") {
+		t.Fatalf("a flag wins over the configuration: %v\n%s", err, out)
+	}
+}
+
+func must[T any](v T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func TestAskExtensionToReadWaitsForItsAnswer(t *testing.T) {
+	for _, final := range []string{"done", "failed"} {
+		var posted map[string]any
+		polls := 0
+		mux := http.NewServeMux()
+		mux.HandleFunc("POST /api/v1/extension/commands", func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewDecoder(r.Body).Decode(&posted)
+			if r.Header.Get("Authorization") != "Bearer tok" {
+				http.Error(w, `{"error":"no token"}`, 401)
+				return
+			}
+			_, _ = w.Write([]byte(`{"command":{"id":"cmd_1","state":"queued"}}`))
+		})
+		mux.HandleFunc("GET /api/v1/extension/commands/cmd_1", func(w http.ResponseWriter, _ *http.Request) {
+			polls++
+			state := "sent"
+			if polls == 2 {
+				state = final
+			}
+			_, _ = w.Write([]byte(`{"command":{"id":"cmd_1","state":"` + state + `","error":"no access"}}`))
+		})
+		srv := httptest.NewServer(mux)
+		err := askExtensionToRead(context.Background(), srv.URL, "tok", "Chrome", 10*time.Second)
+		srv.Close()
+		if posted["kind"] != "read-bookmarks" || posted["browser"] != "Chrome" || polls != 2 {
+			t.Fatalf("%s: posted %v, polled %d times", final, posted, polls)
+		}
+		if (final == "done") != (err == nil) {
+			t.Fatalf("%s: %v", final, err)
+		}
 	}
 }

@@ -1,5 +1,5 @@
 // The extension's background: reports this browser's tabs to the local server when they change (and each minute),
-// waits for the server's commands (open links, open a tab group), and carries out what the popup asks.
+// waits for the server's commands (open links, open a tab group, read the bookmarks), and carries out what the popup asks.
 
 import { ext, type ExtBookmark } from "./ext";
 import { browserName, Client, groupColor, tabReport, webOnly, type Command } from "./core";
@@ -60,6 +60,11 @@ async function poll(): Promise<void> {
       try { got = await c.commands(25); } catch (e) { await unpairedIf(e); return; }
       for (const cmd of got.commands) {
         if (cmd.kind === "reload") { await c.done(cmd.id, true).catch(() => {}); ext.runtime.reload(); return; } // read the folder again
+        if (cmd.kind === "read-bookmarks") { // a write-back's dry run wants the bookmarks as they are now, in <browser>-live
+          try { await readInto(c); await c.done(cmd.id, true); }
+          catch (e) { await c.done(cmd.id, false, String((e as Error).message)).catch(() => {}); }
+          continue;
+        }
         try { await openLinks(cmd); await c.done(cmd.id, true); }
         catch (e) { await c.done(cmd.id, false, String((e as Error).message)).catch(() => {}); }
       }

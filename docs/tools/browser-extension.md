@@ -69,7 +69,9 @@ again, so a fresh `make extension` takes effect without visiting the browser's e
   the web interface, opening a folder's links *one window per folder* opens each folder as a tab group named after
   it in a browser whose extension is connected, and as a window of its own elsewhere.
 - **Read bookmarks.** *Read this browser's bookmarks into Browser Foreman* takes the browser's whole bookmark tree
-  into a workspace (`<browser>-live`), as one history entry. Each item keeps the browser's own id.
+  into a workspace (`<browser>-live`), as one history entry. Each item keeps the browser's own id. The server can ask
+  for the same read (`POST /api/v1/extension/commands` with `"kind": "read-bookmarks"`), which a
+  [write-back](write-back.md) dry run does to see the browser as it is now.
 - **Write a workspace back.** Choose a workspace read from this browser and edited, see exactly what would change
   (added, renamed, moved, removed), and confirm. The bookmarks as they are first go to Browser Foreman
   (`<browser>-before-write`), the changes are made, any order a browser placed differently is fixed, and the result is

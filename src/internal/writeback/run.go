@@ -141,6 +141,43 @@ func ApplyFile(ctx context.Context, s store.Store, j Job, path string, o FileOpt
 	return Applied{Report: p.Report, Backup: backup, Kept: kept, Drift: again.Report}, nil
 }
 
+// PlanTree plans the job against theirs as given: a profile read some other way (its file, for the extension to
+// write: see WithPrefix).
+func PlanTree(ctx context.Context, s store.Store, j Job, theirs store.Tree) (store.Tree, Report, error) {
+	return planAgainst(ctx, s, j, theirs)
+}
+
+// WithPrefix is t with every id but the root's prefixed: a profile read from its file, whose ids are the ones its
+// extension sees, given the extension's "ext-" so the extension can write a plan made from it.
+func WithPrefix(t store.Tree, prefix string) store.Tree {
+	var conv func(n *store.Node) *store.Node
+	conv = func(n *store.Node) *store.Node {
+		c := *n
+		c.ID = prefix + n.ID
+		c.Children = nil
+		for _, k := range n.Children {
+			c.Children = append(c.Children, conv(k))
+		}
+		return &c
+	}
+	root := *t.Root
+	root.Children = nil
+	for _, k := range t.Root.Children {
+		root.Children = append(root.Children, conv(k))
+	}
+	return store.Tree{Root: &root}
+}
+
+// ReadFile reads a profile's Bookmarks file as a tree with the profile's own ids.
+func ReadFile(path string) (store.Tree, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return store.Tree{}, err
+	}
+	_, t, err := chromefile.Read(b)
+	return t, err
+}
+
 // PlanWorkspace plans the job against a workspace the browser's extension read (its ids are "ext-" and the
 // browser's own), for the extension to write.
 func PlanWorkspace(ctx context.Context, s store.Store, j Job, theirsWS string) (store.Tree, Report, error) {

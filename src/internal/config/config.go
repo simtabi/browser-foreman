@@ -60,15 +60,24 @@ type MCP struct {
 	Writes  bool `json:"writes"`
 }
 
+// Writeback is how `browser-foreman apply` writes a cleaned workspace into a browser: each choice is a value, or
+// "ask" (the default) to be asked every time.
+type Writeback struct {
+	Read  string `json:"read"`  // where the dry run reads the profile now: file, extension or ask
+	Route string `json:"route"` // how the write reaches it: file, extension or ask
+	Mode  string `json:"mode"`  // merge, replace or ask
+}
+
 // Config is the whole configuration. APIToken is never read from a JSON file: secrets come from .env or the
 // environment, so a config file can be shared without one.
 type Config struct {
-	Server   Server   `json:"server"`
-	Storage  Storage  `json:"storage"`
-	Webhooks Webhooks `json:"webhooks"`
-	Auth     Auth     `json:"auth"`
-	MCP      MCP      `json:"mcp"`
-	APIToken string   `json:"-"`
+	Server    Server    `json:"server"`
+	Storage   Storage   `json:"storage"`
+	Webhooks  Webhooks  `json:"webhooks"`
+	Auth      Auth      `json:"auth"`
+	MCP       MCP       `json:"mcp"`
+	Writeback Writeback `json:"writeback"`
+	APIToken  string    `json:"-"`
 	// Sources lists what was read, in order, for `browser-foreman config show`.
 	Sources []string `json:"-"`
 }
@@ -99,10 +108,11 @@ func (d Duration) MarshalJSON() ([]byte, error) { return json.Marshal(d.String()
 // Defaults is a working configuration with nothing set.
 func Defaults() Config {
 	return Config{
-		Server:   Server{Addr: "127.0.0.1:8765", Mode: ModeLocal},
-		Storage:  Storage{Driver: "sqlite"},
-		Webhooks: Webhooks{Timeout: Duration{10 * time.Second}, Attempts: 5},
-		Auth:     Auth{SessionTTL: Duration{24 * time.Hour}},
+		Server:    Server{Addr: "127.0.0.1:8765", Mode: ModeLocal},
+		Storage:   Storage{Driver: "sqlite"},
+		Webhooks:  Webhooks{Timeout: Duration{10 * time.Second}, Attempts: 5},
+		Auth:      Auth{SessionTTL: Duration{24 * time.Hour}},
+		Writeback: Writeback{Read: "ask", Route: "ask", Mode: "ask"},
 	}
 }
 
@@ -229,6 +239,15 @@ func (c Config) Validate() error {
 	}
 	if c.Webhooks.Timeout.Duration < time.Second || c.Webhooks.Timeout.Duration > 2*time.Minute {
 		return fmt.Errorf("webhooks.timeout %s: use 1s-2m", c.Webhooks.Timeout)
+	}
+	for _, w := range []struct{ key, v, a, b string }{
+		{"writeback.read", c.Writeback.Read, "file", "extension"},
+		{"writeback.route", c.Writeback.Route, "file", "extension"},
+		{"writeback.mode", c.Writeback.Mode, "merge", "replace"},
+	} {
+		if w.v != "ask" && w.v != w.a && w.v != w.b {
+			return fmt.Errorf("%s %q: use ask, %s or %s", w.key, w.v, w.a, w.b)
+		}
 	}
 	return nil
 }

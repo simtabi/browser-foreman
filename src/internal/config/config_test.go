@@ -76,6 +76,9 @@ func TestValidateRefusesUnsafeOrBrokenSettings(t *testing.T) {
 		"unknown driver":                 func(c *Config) { c.Storage.Driver = "mongo" },
 		"zero attempts":                  func(c *Config) { c.Webhooks.Attempts = 0 },
 		"tiny timeout":                   func(c *Config) { c.Webhooks.Timeout = Duration{time.Millisecond} },
+		"unknown write-back read":        func(c *Config) { c.Writeback.Read = "api" },
+		"unknown write-back route":       func(c *Config) { c.Writeback.Route = "sync" },
+		"unknown write-back mode":        func(c *Config) { c.Writeback.Mode = "overwrite" },
 	}
 	for name, f := range bad {
 		c := Defaults()
@@ -88,6 +91,14 @@ func TestValidateRefusesUnsafeOrBrokenSettings(t *testing.T) {
 	c.Server.Addr, c.Server.Mode = "0.0.0.0:8765", ModeAccounts
 	if err := c.Validate(); err != nil {
 		t.Errorf("accounts mode may listen widely: %v", err)
+	}
+	c = Defaults()
+	if c.Writeback != (Writeback{Read: "ask", Route: "ask", Mode: "ask"}) {
+		t.Errorf("write-back choices are asked unless set: %+v", c.Writeback)
+	}
+	c.Writeback = Writeback{Read: "extension", Route: "file", Mode: "replace"}
+	if err := c.Validate(); err != nil {
+		t.Errorf("set write-back choices: %v", err)
 	}
 }
 

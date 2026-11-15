@@ -50,7 +50,7 @@ type extState struct {
 type command struct {
 	ID        string    `json:"id"`
 	Browser   string    `json:"browser"`
-	Kind      string    `json:"kind"` // open, open-group, reload
+	Kind      string    `json:"kind"` // open, open-group, reload, read-bookmarks
 	URLs      []string  `json:"urls"`
 	Title     string    `json:"title,omitempty"`
 	Color     string    `json:"color,omitempty"`
@@ -240,9 +240,10 @@ func (s *Server) pushTabs(w http.ResponseWriter, r *http.Request, browser string
 	w.WriteHeader(http.StatusNoContent)
 }
 
-var errUnknownKind = errors.New(`kind must be "open", "open-group" or "reload"`)
+var errUnknownKind = errors.New(`kind must be "open", "open-group", "reload" or "read-bookmarks"`)
 
-// queueCommand asks a browser's extension to open links (as tabs, or as one named tab group). Owner only.
+// queueCommand asks a browser's extension to open links (as tabs, or as one named tab group), to reload itself, or to
+// read its browser's bookmarks into <browser>-live (for a write-back's dry run). Owner only.
 func (s *Server) queueCommand(w http.ResponseWriter, r *http.Request) {
 	var in command
 	if !decode(w, r, &in) {
@@ -255,6 +256,8 @@ func (s *Server) queueCommand(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "reload": // the extension reloads itself: an unpacked one reads its folder again, so a new build takes effect
+		in.URLs = nil
+	case "read-bookmarks": // the extension sends its browser's bookmarks, as its popup's Read button does
 		in.URLs = nil
 	default:
 		writeErr(w, 400, errUnknownKind.Error())

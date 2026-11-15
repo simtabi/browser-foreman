@@ -32,9 +32,24 @@ Browser Foreman; the report counts them.
 | `file` | the browser is quit | Writes the profile's `Bookmarks` file with Chromium's checksum. It refuses while the browser runs (its `SingletonLock`), and for a profile that syncs its bookmarks unless you add `--sync-risk-ok`: Sync can overwrite the file, or pass it on to every device. |
 | `extension` | the browser runs, or the profile syncs | Plans against `<browser>-live`, the workspace the [extension](browser-extension.md) read, and with `--yes` saves the result as `<browser>-target`. In the extension's popup you then write `<browser>-target` back, after it shows the counts. If the profile syncs, the change reaches every device signed in to it. |
 
-The route that is safe for the profile is offered first. Any choice you leave out (`--profile`, `--mode`, `--route`)
-is asked on a terminal, and is an error everywhere else. The profile is asked for unless there is only one, and
-`Default` is listed first.
+The route that is safe for the profile is offered first, and the file route is not offered when the profile's file
+cannot be read.
+
+## Reading the profile now
+
+The file route always reads the file it is about to write. The extension route can read the profile either way
+(`--read`):
+
+| Read | How | Needs |
+|---|---|---|
+| `extension` | The server asks the browser's extension to read its bookmarks into `<browser>-live` now, and waits up to a minute. If Browser Foreman is not running, the bookmarks the extension read last are used instead, and the dry run says when they were read. | The extension installed and connected. |
+| `file` | The profile's `Bookmarks` file is read, with the ids the extension sees. | Access to the profile's folder (see below). |
+
+## Choosing
+
+Each choice comes from its flag, else from the configuration (`writeback.mode`, `writeback.route` and
+`writeback.read`), unless the setting is `ask`, which is the default. A choice still open is asked on a terminal,
+and is an error everywhere else. The profile is asked for unless there is only one, and `Default` is listed first.
 
 ## Writing it
 
@@ -63,7 +78,7 @@ plan twice changes nothing the second time.
 
 macOS keeps other apps' data private. If reading a profile fails with *Operation not permitted*, allow the terminal
 or app running Browser Foreman to read it: System Settings › Privacy & Security › Full Disk Access. Otherwise use
-`--route extension`, which needs no such access.
+`--route extension --read extension`, which needs no such access.
 
 ---
 [← Docs index](../../README.md#documentation)

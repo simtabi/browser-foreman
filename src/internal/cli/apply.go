@@ -2,10 +2,14 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -15,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/importer"
 	"github.com/simtabi/browser-foreman/src/internal/store"
 	"github.com/simtabi/browser-foreman/src/internal/writeback"
@@ -76,7 +81,7 @@ func slug(s string) string {
 }
 
 func applyCmd() *cobra.Command {
-	var ws, base, browser, profile, file, mode, route, fingerprint string
+	var ws, base, browser, profile, file, mode, route, read, fingerprint string
 	var yes, syncRiskOK bool
 	var dropNew, list int
 	cmd := &cobra.Command{
@@ -97,6 +102,18 @@ func applyCmd() *cobra.Command {
 			if base == "" {
 				return errors.New("--base names the export the cleanup started from (a workspace)")
 			}
+			_, c, err := load()
+			if err != nil {
+				return err
+			}
+			// A flag wins; else the configuration, unless it says "ask".
+			setting := func(flag, cfg string) string {
+				if flag != "" || cfg == "ask" {
+					return flag
+				}
+				return cfg
+			}
+			mode, route, read = setting(mode, c.Writeback.Mode), setting(route, c.Writeback.Route), setting(read, c.Writeback.Read)
 			m, err := choose(in, out, interactive, "Mode", "mode", mode, []choice{
 				{"merge", "merge: apply the cleanup, keep what the profile changed after the export (recommended)"},
 				{"replace", "replace: the profile becomes the cleanup; what it gained after the export is dropped (asks for the count)"},
@@ -112,34 +129,70 @@ func applyCmd() *cobra.Command {
 			ctx, now := context.Background(), time.Now()
 			j := writeback.Job{Workspace: ws, Base: base, Mode: writeback.Mode(m), DropNew: dropNew}
 
-			if route == "extension" {
-				return applyThroughExtension(ctx, s, out, j, browser, yes, list, now)
+			// The profile's file, unless the extension route was chosen and the extension reads it: then it is
+			// looked for only if the file is to be read.
+			path, pathErr := file, error(nil)
+			findPath := func() error {
+				if path == "" && pathErr == nil {
+					path, pathErr = pickProfile(in, out, interactive, browser, profile)
+				}
+				return pathErr
 			}
-			path := file
-			if path == "" {
-				if path, err = pickProfile(in, out, interactive, browser, profile); err != nil {
+			r := route
+			if r == "" {
+				running, syncs := false, false
+				if findPath() == nil {
+					if p, err := writeback.PlanFile(ctx, s, j, path); err == nil {
+						running, syncs = p.Running, p.SyncOn
+					}
+				}
+				// The safe route for this profile is offered first.
+				opts := []choice{
+					{"file", "file: write the profile's Bookmarks file (the browser must be quit)"},
+					{"extension", "extension: write through the browser's extension (works while it runs; Sync passes it on)"},
+				}
+				switch {
+				case pathErr != nil:
+					opts = opts[1:] // the file cannot be read, so it cannot be written
+				case running || syncs:
+					opts[0], opts[1] = opts[1], opts[0]
+					opts[0].label += " (recommended: " + map[bool]string{true: "the browser is running", false: "the profile syncs"}[running] + ")"
+				}
+				if r, err = choose(in, out, interactive, "Route", "route", "", opts); err != nil {
 					return err
 				}
 			}
-			running, syncs := false, false
-			if p, err := writeback.PlanFile(ctx, s, j, path); err == nil {
-				running, syncs = p.Running, p.SyncOn
-			}
-			// The safe route for this profile is offered first.
-			opts := []choice{
-				{"file", "file: write the profile's Bookmarks file (the browser must be quit)"},
-				{"extension", "extension: write through the browser's extension (works while it runs; Sync passes it on)"},
-			}
-			if running || syncs {
-				opts[0], opts[1] = opts[1], opts[0]
-				opts[0].label += " (recommended: " + map[bool]string{true: "the browser is running", false: "the profile syncs"}[running] + ")"
-			}
-			r, err := choose(in, out, interactive, "Route", "route", route, opts)
-			if err != nil {
-				return err
-			}
 			if r == "extension" {
-				return applyThroughExtension(ctx, s, out, j, browser, yes, list, now)
+				rd, err := choose(in, out, interactive, "Read the profile now", "read", read, []choice{
+					{"extension", "extension: the extension reads the browser's bookmarks now (Browser Foreman must be running)"},
+					{"file", "file: read the profile's Bookmarks file (macOS may need Full Disk Access for this)"},
+				})
+				if err != nil {
+					return err
+				}
+				var theirs store.Tree
+				var from string
+				if rd == "file" {
+					if err := findPath(); err != nil {
+						return err
+					}
+					t, err := writeback.ReadFile(path)
+					if err != nil {
+						return err
+					}
+					theirs, from = writeback.WithPrefix(t, importer.ExtPrefix), path
+				} else {
+					if theirs, from, err = readThroughExtension(ctx, s, c, cmd.ErrOrStderr(), browser); err != nil {
+						return err
+					}
+				}
+				return applyThroughExtension(ctx, s, out, j, browser, theirs, from, yes, list, now)
+			}
+			if r != "file" {
+				return fmt.Errorf("--route %q: use file or extension", r)
+			}
+			if err := findPath(); err != nil {
+				return err
 			}
 			p, err := writeback.PlanFile(ctx, s, j, path)
 			if err != nil {
@@ -181,8 +234,9 @@ func applyCmd() *cobra.Command {
 	f.StringVar(&browser, "browser", "Chrome", "the browser (Chrome, Brave, Edge, Vivaldi, Chromium…)")
 	f.StringVar(&profile, "profile", "", "the profile: its folder (Default, Profile 1…) or the name the browser shows")
 	f.StringVar(&file, "file", "", "a Bookmarks file to write instead of looking the profile up")
-	f.StringVar(&mode, "mode", "", "merge or replace")
-	f.StringVar(&route, "route", "", "file or extension")
+	f.StringVar(&mode, "mode", "", "merge or replace (or writeback.mode)")
+	f.StringVar(&route, "route", "", "file or extension (or writeback.route)")
+	f.StringVar(&read, "read", "", "extension route: read the profile through the extension or its file (or writeback.read)")
 	f.BoolVar(&yes, "yes", false, "write (without it, a dry run)")
 	f.StringVar(&fingerprint, "fingerprint", "", "the dry run's fingerprint: the write refuses a profile that changed since")
 	f.IntVar(&dropNew, "drop-new", 0, "replace: how many bookmarks the profile gained after the export you agree to drop")
@@ -251,18 +305,94 @@ func confirmFlags(j writeback.Job, p writeback.FilePlan) string {
 	return s
 }
 
-// applyThroughExtension plans against what the extension read (<browser>-live) and, with yes, saves the target as
-// <browser>-target for the extension's popup to write.
-func applyThroughExtension(ctx context.Context, s store.Store, out io.Writer, j writeback.Job, browser string, yes bool, list int, now time.Time) error {
-	live, target := slug(browser)+"-live", slug(browser)+"-target"
-	t, rep, err := writeback.PlanWorkspace(ctx, s, j, live)
-	if errors.Is(err, store.ErrNotFound) {
-		return fmt.Errorf("no workspace %s: in %s, open the Browser Foreman extension and read this browser's bookmarks first", live, browser)
+// readThroughExtension has the browser's extension read its bookmarks into <browser>-live now, through the running
+// server, and returns them. With no server running it falls back to the copy the extension read last, and says when.
+func readThroughExtension(ctx context.Context, s store.Store, c config.Config, warn io.Writer, browser string) (store.Tree, string, error) {
+	live := slug(browser) + "-live"
+	token := os.Getenv("BROFO_TOKEN")
+	if token == "" {
+		token = c.APIToken
 	}
+	if answers(ctx, c.Server.Addr) {
+		if err := askExtensionToRead(ctx, "http://"+c.Server.Addr, token, browser, 60*time.Second); err != nil {
+			return store.Tree{}, "", err
+		}
+	} else {
+		if _, err := s.Workspace(ctx, live); err != nil {
+			return store.Tree{}, "", fmt.Errorf("Browser Foreman is not running, so the extension cannot be asked to read %s, and there is no earlier read (%s): start `browser-foreman serve`, or read the profile's file with --read file", browser, live)
+		}
+		t, e, err := s.State(ctx, live, 0)
+		if err == nil {
+			fmt.Fprintf(warn, "Browser Foreman is not running: using the bookmarks the extension read last (%s, %s).\n", live, e.At.Local().Format("2 Jan 15:04"))
+		}
+		return t, live, err
+	}
+	t, _, err := s.State(ctx, live, 0)
+	return t, live, err
+}
+
+// askExtensionToRead queues a read-bookmarks command for the browser's extension and waits until it is done.
+func askExtensionToRead(ctx context.Context, base, token, browser string, wait time.Duration) error {
+	call := func(method, path string, body any, out any) error {
+		var rd io.Reader
+		if body != nil {
+			b, _ := json.Marshal(body)
+			rd = bytes.NewReader(b)
+		}
+		req, err := http.NewRequestWithContext(ctx, method, base+"/api/v1/"+path, rd)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		var e struct{ Error string }
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		if resp.StatusCode >= 300 {
+			_ = json.Unmarshal(raw, &e)
+			return fmt.Errorf("%s (HTTP %d)", e.Error, resp.StatusCode)
+		}
+		return json.Unmarshal(raw, out)
+	}
+	var q struct {
+		Command struct{ ID, State, Error string }
+	}
+	if err := call("POST", "extension/commands", map[string]any{"browser": browser, "kind": "read-bookmarks"}, &q); err != nil {
+		return fmt.Errorf("asking %s's extension to read: %w", browser, err)
+	}
+	deadline := time.Now().Add(wait)
+	for time.Now().Before(deadline) {
+		if err := call("GET", "extension/commands/"+url.PathEscape(q.Command.ID), nil, &q); err != nil {
+			return err
+		}
+		switch q.Command.State {
+		case "done":
+			return nil
+		case "failed":
+			return fmt.Errorf("%s's extension could not read its bookmarks: %s", browser, q.Command.Error)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+	return fmt.Errorf("%s's extension did not answer within %s: is it installed, paired and is %s running?", browser, wait, browser)
+}
+
+// applyThroughExtension plans against theirs (read from where from says) and, with yes, saves the target as
+// <browser>-target for the extension's popup to write.
+func applyThroughExtension(ctx context.Context, s store.Store, out io.Writer, j writeback.Job, browser string, theirs store.Tree, from string, yes bool, list int, now time.Time) error {
+	target := slug(browser) + "-target"
+	t, rep, err := writeback.PlanTree(ctx, s, j, theirs)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Against %s, as the extension read it. If the profile syncs, the write reaches every device signed in to it.\n", live)
+	fmt.Fprintf(out, "Against %s. If the profile syncs, the write reaches every device signed in to it.\n", from)
 	printReport(out, rep, list)
 	if j.Mode == writeback.Replace && rep.DropNew != j.DropNew {
 		return fmt.Errorf("replace removes %d bookmarks the profile gained after the export: confirm with --drop-new %d", rep.DropNew, rep.DropNew)
@@ -271,7 +401,7 @@ func applyThroughExtension(ctx context.Context, s store.Store, out io.Writer, j 
 		fmt.Fprintln(out, "\nDry run: nothing saved. With --yes, the result is saved as workspace "+target+" for the extension to write.")
 		return nil
 	}
-	e, err := writeback.Save(ctx, s, target, browser+" write-back", "writeback", fmt.Sprintf("Write-back of %s (%s) planned against %s", j.Workspace, j.Mode, live), t, now)
+	e, err := writeback.Save(ctx, s, target, browser+" write-back", "writeback", fmt.Sprintf("Write-back of %s (%s) planned against %s", j.Workspace, j.Mode, from), t, now)
 	if err != nil {
 		return err
 	}

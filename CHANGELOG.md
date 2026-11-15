@@ -10,6 +10,10 @@ ships.
 
 ### Added
 
+- The write-back's dry run reads the profile through the extension (the server asks it to read now, or uses its last
+  read when Browser Foreman is not running) or from the profile's file, as `--read` or `writeback.read` says.
+  `writeback.mode`, `writeback.route` and `writeback.read` set the choices, each `ask` by default. The extension
+  (0.1.1) carries out the server's new `read-bookmarks` command.
 - `browser-foreman apply` writes a cleaned workspace back into a Chromium profile as a three-way merge of the export,
   the cleanup and the profile now: merge keeps what the profile changed after the export, and replace drops what it
   gained once you confirm the count. It is a dry run unless `--yes`. The file route writes the profile's `Bookmarks`

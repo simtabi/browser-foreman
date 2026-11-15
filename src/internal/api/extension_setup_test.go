@@ -153,11 +153,14 @@ func TestCommandsDoNotPileUp(t *testing.T) {
 	if w := send(h, "POST", "/api/v1/extension/commands", `{"browser":"Firefox","kind":"reload","urls":["javascript:alert(1)"]}`); w.Code != 202 || strings.Contains(w.Body.String(), "javascript") {
 		t.Fatalf("reload: %d %s", w.Code, w.Body)
 	}
+	if w := send(h, "POST", "/api/v1/extension/commands", `{"browser":"Firefox","kind":"read-bookmarks","urls":["https://x.example/"]}`); w.Code != 202 || strings.Contains(w.Body.String(), "x.example") {
+		t.Fatalf("read-bookmarks: %d %s", w.Code, w.Body)
+	}
 	if w := send(h, "POST", "/api/v1/extension/commands", `{"browser":"Firefox","kind":"uninstall"}`); w.Code != 400 {
 		t.Fatalf("an unknown command was queued: %d", w.Code)
 	}
 	s.ext.mu.Lock()
-	n := len(s.ext.byID) - 1 // less the reload
+	n := len(s.ext.byID) - 2 // less the reload and the read
 	s.ext.mu.Unlock()
 	if n != 1 {
 		t.Fatalf("%d commands kept, want 1", n)
