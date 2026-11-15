@@ -10,6 +10,11 @@ ships.
 
 ### Added
 
+- `browser-foreman apply` writes a cleaned workspace back into a Chromium profile as a three-way merge of the export,
+  the cleanup and the profile now: merge keeps what the profile changed after the export, and replace drops what it
+  gained once you confirm the count. It is a dry run unless `--yes`. The file route writes the profile's `Bookmarks`
+  file with Chromium's checksum, refuses a running browser, a syncing profile and a profile that changed since the
+  dry run, and saves the profile first. The extension route saves the result for the extension to write.
 - `browser-foreman mcp` works without a running server: when none answers at the configured address, it opens the
   store and runs the same API in-process, on no port, as the Python tool's MCP server read its files directly.
 - The MCP tools take the arguments the Python server's did: `list_workspaces` `include_archived`,
