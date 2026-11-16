@@ -36,6 +36,21 @@ requests nobody answered; **Connect** in its popup asks again at any time (and s
 request waits five minutes; at most five wait at once; only an extension can ask (a web page or another program
 cannot), and nothing connects unless the owner approves.
 
+**From the page, in one click** (0.1.6 and later): open Browser Foreman in the browser the extension is in, then
+*Browsers › Browser extensions…*. The page asks that browser's extension directly whether it is installed and
+connected, every few seconds while the dialog is open, so the row says *Extension 0.1.6 installed · ready to
+connect* as soon as it is. **Connect** has the extension ask this server, and the page approves that very request:
+no letters to compare, because both ends are in the same browser. This also reconnects an extension that was
+disconnected or denied, which does not ask again by itself. Installed or reloaded the extension after opening the
+page? Reload the page: they find each other when the page loads.
+
+How the page reaches the extension: a small content script on pages from this computer (`127.0.0.1`, `localhost`,
+already in the extension's permissions) passes two questions, *are you here?* and *connect to me*, to the
+extension. The extension checks the page's origin as the browser reports it, answers only pages on this computer,
+and connects only to the server it already uses, or, while it is not connected, to the asking page's server. So a
+page on another port cannot take a connected extension away, and no page can reach the popup's own actions
+(pairing codes, writes, disconnecting).
+
 The prompt offers **Connect**, **Deny** and **Not now**. Not now (or Escape) decides nothing: the request keeps
 waiting, the prompt does not come back for it, and you can still approve it in *Browser extensions…* or from a
 terminal until it expires.

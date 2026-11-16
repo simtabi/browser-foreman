@@ -2,7 +2,7 @@
 // waits for the server's commands (open links, open a tab group, read the bookmarks), and carries out what the popup asks.
 
 import { ext, type ExtBookmark } from "./ext";
-import { browserName, Client, connectStep, extFingerprint, groupColor, tabReport, webOnly, workerGone, type Command } from "./core";
+import { browserName, Client, connectRefusal, connectStep, extFingerprint, groupColor, isLoopback, messageAllowed, tabReport, webOnly, workerGone, type Command } from "./core";
 import { plan, run, type WsNode } from "./apply";
 
 interface Settings { server?: string; token?: string; browser?: string }
@@ -215,8 +215,51 @@ async function handle(msg: any): Promise<unknown> {
   }
   throw new Error("unknown request");
 }
-ext.runtime.onMessage.addListener((msg, _sender, reply) => {
-  handle(msg).then(r => reply({ ok: true, result: r }), e => {
+// ---- the page bridge (bridge.ts): Browser Foreman's page in this browser asks directly ----
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+/** After the page asked to connect, wait for the owner's answer every two seconds (two minutes at most), so the
+ *  connection lands at once rather than at the next minute's alarm. */
+async function awaitAnswer(): Promise<void> {
+  for (let i = 0; i < 60; i++) {
+    await sleep(2000);
+    const { asking } = await ext.storage.local.get(["asking"]);
+    if (!asking) return;
+    if (await settle(asking) !== "pending") return;
+  }
+}
+async function handlePage(kind: string, origin: string): Promise<unknown> {
+  if (!isLoopback(origin)) throw new Error("only a page on this computer may ask");
+  const s = await settings();
+  const server = s.server ?? DEFAULT_SERVER;
+  const st = await ext.storage.local.get(["asking", "declined"]);
+  const asking = st.asking as { server: string; match: string } | undefined;
+  const same = (a: string) => { try { return new URL(a).origin === new URL(origin).origin; } catch { return false; } };
+  if (kind === "page-hello") {
+    return { installed: true, version: VERSION(), browser: thisBrowser(), paired: !!s.token, server: new URL(server).origin,
+      here: !!s.token && same(server), asking: asking && same(asking.server) ? asking.match : "", declined: !!st.declined };
+  }
+  const why = connectRefusal(origin, server, !!s.token);
+  if (why) throw new Error(why);
+  if (s.token && same(server)) return { connected: true };
+  const req = await Client.request(origin, thisBrowser(), VERSION(), (u, i) => fetch(u, i));
+  await ext.storage.local.set({ asking: { server: origin, ...req }, unanswered: 0 });
+  await ext.storage.local.remove(["declined"]);
+  await badge(req.match);
+  background(awaitAnswer);
+  return { id: req.id, match: req.match };
+}
+// Where a message came from: a page (through bridge.ts) carries its tab, and the browser fills in its origin; the
+// popup carries neither. A page may only use the two bridge requests, never the popup's (pair, apply, unpair…).
+function pageOrigin(sender: unknown): string | null {
+  const x = sender as { tab?: unknown; origin?: string; url?: string };
+  if (!x?.tab) return null;
+  try { return x.origin ?? new URL(x.url ?? "").origin; } catch { return ""; }
+}
+ext.runtime.onMessage.addListener((msg, sender, reply) => {
+  const origin = pageOrigin(sender);
+  const page = origin !== null;
+  if (!messageAllowed(page, msg?.kind)) { reply({ ok: false, error: "not allowed" }); return false; }
+  (page ? handlePage(msg.kind, origin) : handle(msg)).then(r => reply({ ok: true, result: r }), e => {
     const m = String((e as Error).message ?? e);
     reply({ ok: false, error: workerGone(m) ? "The extension was restarting: try again." : m });
   }).catch(() => { /* the popup closed before the reply */ });

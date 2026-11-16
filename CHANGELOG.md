@@ -10,6 +10,12 @@ ships.
 
 ### Added
 
+- Extension 0.1.6 and *Browser extensions…*: the page now asks the extension in its own browser directly whether it
+  is installed and connected, every few seconds while the dialog is open, and **Connect** pairs it in one click (the
+  extension asks; the page approves that very request). A disconnected or denied extension, which no longer asks by
+  itself, can be reconnected the same way. A content script on loopback pages carries the two questions; the
+  extension checks the page's origin, never moves a connected extension to another server, and keeps the popup's
+  actions out of a page's reach.
 - Smart folders: saved searches on a new *Saved* row under Show. Save the current Show filter and search with a name,
   open it in one click (with its live count), forget it from there. Kept in the server's preferences
   (`smart_folders`), so they appear in every browser; MCP lists and opens them (`smart_folders`, `open_smart_folder`).

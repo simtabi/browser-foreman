@@ -139,3 +139,29 @@ export async function extFingerprint(roots: { id: string; title?: string; url?: 
 export function workerGone(message: string): boolean {
   return /\bNo SW\b|Extension context invalidated/i.test(message);
 }
+
+/** Whether origin is a page on this computer (http on 127.0.0.1, localhost or ::1): the only pages the bridge serves. */
+export function isLoopback(origin: string): boolean {
+  try {
+    const u = new URL(origin);
+    return u.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(u.hostname);
+  } catch { return false; }
+}
+
+/** Why a page at origin may not ask this extension to connect to it, or "" when it may. A connected extension
+ *  connects again only to the server it uses; an unconnected one goes to the asking page's server, whose owner must
+ *  still approve it there. So a page on another port can never take a connected extension away. */
+export function connectRefusal(origin: string, server: string, paired: boolean): string {
+  if (!isLoopback(origin)) return "only a Browser Foreman page on this computer can ask the extension to connect";
+  if (paired && new URL(origin).origin !== new URL(server).origin) {
+    return `the extension is connected to ${new URL(server).origin}: disconnect it there (or in its popup) first`;
+  }
+  return "";
+}
+
+/** Which messages the background takes from whom: a page (through the bridge) only "page-hello" and "page-connect";
+ *  the popup only its own, never those two. So no web page can ask for a pairing code, a write or an unpair. */
+export function messageAllowed(fromPage: boolean, kind: unknown): boolean {
+  const bridge = kind === "page-hello" || kind === "page-connect";
+  return fromPage === bridge;
+}

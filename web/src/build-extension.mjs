@@ -18,6 +18,9 @@ const base = {
   manifest_version: 3, name: "Browser Foreman", version,
   description: "Your tabs and bookmarks, kept by Browser Foreman on this computer.",
   host_permissions: hosts,
+  // The page bridge: Browser Foreman's own page asks this browser's extension whether it is here and connected, and
+  // to connect, without the extension's id (ts: src/extension/bridge.ts). Only pages on this computer.
+  content_scripts: [{ matches: hosts, js: ["bridge.js"], run_at: "document_start" }],
   icons: { 16: "icons/16.png", 32: "icons/32.png", 48: "icons/48.png", 128: "icons/128.png" },
   action: { default_popup: "popup.html", default_title: "Browser Foreman", default_icon: { 16: "icons/16.png", 32: "icons/32.png" } },
 };
@@ -30,7 +33,7 @@ const manifests = {
 for (const [target, manifest] of Object.entries(manifests)) {
   const out = join(root, "dist", "extension", target);
   mkdirSync(out, { recursive: true });
-  for (const entry of ["background", "popup"]) {
+  for (const entry of ["background", "popup", "bridge"]) {
     await build({ entryPoints: [join(src, `${entry}.ts`)], outfile: join(out, `${entry}.js`), bundle: true, format: "iife",
       target: "es2022", minify: false, legalComments: "eof", logLevel: "warning" });
   }

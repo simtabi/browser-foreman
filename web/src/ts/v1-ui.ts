@@ -10,6 +10,7 @@ import { DataTable, avatar, by, nameCell } from "./datatable";
 import { RangePicker } from "./rangepick";
 import { lookPicker, wsBadge } from "./wslook";
 import { busy } from "./busy";
+import { extensionConnect, extensionHello, type ExtensionHello } from "./bridge";
 import { type DGroup, startsTicked, trashOps } from "./dupes";
 import { version as EXT_VERSION } from "../../package.json";  // the extension's manifest takes the same version
 
@@ -672,6 +673,18 @@ function install(W: V1): void {
   async function extensions(): Promise<void> {
     const { body, foot } = modal("v1Extensions", "Browser extensions", "lg", "ti-puzzle");
     let connected: Ext[] = [], installed = new Set<string>(), waiting: Waiting[] = [];
+    // This browser's extension, asked directly (ts/bridge.ts) on every refresh: installed, its version, connected here.
+    let live: ExtensionHello | null = null;
+    // One click: the extension asks this server, and this page approves that very request (both are in this browser,
+    // and the bridge only answers this page's own origin), so there are no letters to compare.
+    const connectHere = (name: string) => async () => {
+      try {
+        const r = await busy(`Asking ${name}'s extension to connect…`, () => extensionConnect());
+        if (r.id) { answered.add(r.id); await W.call("POST", `extension/requests/${encodeURIComponent(r.id)}/approve`); }
+        toast(`${name}'s extension takes its key within a few seconds, then sends its tabs.`, "success", `${name} is connecting`);
+      } catch (e) { fail(e); }
+      await load();
+    };
     let guide: Guide = { browsers: [], seen: {} };
     const copy = (text: string) => async () => { try { await navigator.clipboard.writeText(text); toast("Copied.", "success"); } catch { toast("Copy it by hand.", "warning"); } };
     body.append(el("p", "text-secondary mb-0", "With the extension, a browser sends its tabs and tab groups, reads its bookmarks into a workspace, and can write a workspace back. Set it up once in each browser you use: it then asks to connect by itself, and you approve it here."));
@@ -718,6 +731,7 @@ function install(W: V1): void {
       const g = guide.browsers.find(b => b.browser === name), seen = guide.seen[name];
       const here = installed.has(name), old = !!c && !!seen && olderThan(seen.version, EXT_VERSION);
       const asking = waiting.find(q => q.browser === name);
+      const lv = live && live.browser === name ? live : null, elsewhere = !!lv && lv.paired && !lv.here;
       const r = el("div", "ext-row" + (c ? " is-connected" : ""));
       const main = el("div", "ext-row-main"), who = el("div", "ext-who");
       who.append(el("div", "fw-medium text-truncate", name));
@@ -727,6 +741,8 @@ function install(W: V1): void {
       if (c) meta.append(pill(old ? "is-warn" : "is-ok", old ? `Connected · update to ${EXT_VERSION}` : "Connected"),
         ...[seen?.version ? `version ${seen.version}` : "", heard].filter(Boolean).map(t => el("span", "ext-meta-text", t)));
       else if (asking) meta.append(pill("is-ask", "Asking to connect"));
+      else if (elsewhere) meta.append(pill("is-warn", `Extension ${lv!.version} · connected to ${lv!.server}`));
+      else if (lv) meta.append(pill("is-idle", `Extension ${lv.version} installed · ready to connect`));
       else meta.append(pill(here ? "is-idle" : "is-off", here ? "Installed on this computer · not connected" : "Not on this computer"));
       who.append(meta);
       main.append(icon("browser:" + name, "ext-ico"), who);
@@ -737,7 +753,12 @@ function install(W: V1): void {
         b.dataset.tip = "The extension reloads itself and reads the new build";
         b.onclick = async () => { try { await W.call("POST", "extension/commands", { browser: name, kind: "reload" }); toast(`${name}'s extension is reloading.`, "success"); setTimeout(() => void load(), 4000); } catch (e) { fail(e); } };
         act.append(b);
-      } else if (!c && !asking && g?.built) {
+      } else if (!c && !asking && lv && !elsewhere) {
+        const b = el("button", "btn btn-sm btn-primary"); b.type = "button"; b.append(icon("ti-plug-connected", "me-1"), "Connect");
+        b.dataset.tip = `Connect ${name}'s extension to this Browser Foreman: it asks, and this page approves it`;
+        b.onclick = connectHere(name);
+        act.append(b);
+      } else if (!c && !asking && !lv && g?.built) {
         const b = el("button", "btn btn-sm btn-primary"); b.type = "button"; b.append(icon("ti-player-play", "me-1"), "Set it up");
         b.dataset.tip = g.page ? `Opens ${g.page} in ${name} and shows the extension's folder in Finder` : "Shows the extension's folder in Finder";
         b.onclick = async () => {
@@ -763,13 +784,13 @@ function install(W: V1): void {
       // The setup guide: where this browser stands, step by step, with what to do now and what may be wrong.
       const steps = el("details", "ext-steps-box"); steps.open = openSteps.has(name) || (!c && (!!asking || started.has(name)));
       steps.addEventListener("toggle", () => { if (steps.open) openSteps.add(name); else openSteps.delete(name); });
-      steps.append(el("summary", null, c ? "Setup check" : "Setup guide"), guideFor(name, { c, g, seen, here, old, asking }));
+      steps.append(el("summary", null, c ? "Setup check" : "Setup guide"), guideFor(name, { c, g, seen, here, old, asking, live: lv ?? undefined }));
       r.append(main, steps);
       return r;
     };
     // The guide's checks, from what the server sees: the browser on this computer, the extension built, the extension
     // calling in (it asks to connect within a minute of being loaded), the owner's approval, its tab reports, its version.
-    type Facts = { c?: Ext; g?: Guide["browsers"][number]; seen?: { version: string; at: string }; here: boolean; old: boolean; asking?: Waiting };
+    type Facts = { c?: Ext; g?: Guide["browsers"][number]; seen?: { version: string; at: string }; here: boolean; old: boolean; asking?: Waiting; live?: ExtensionHello };
     // The letters, big, with a button that copies them (for `browser-foreman pair --approve --match`).
     const lettersWithCopy = (match: string, small = false): HTMLElement => {
       const w = el("span", "ext-letters-wrap");
@@ -781,7 +802,7 @@ function install(W: V1): void {
     const guideFor = (name: string, f: Facts): HTMLElement => {
       const since = started.get(name), waited = since ? Math.round((Date.now() - since) / 1000) : 0;
       const lastReport = f.seen?.at ? Date.parse(f.seen.at) : 0, quiet = lastReport ? Date.now() - lastReport : Infinity;
-      const loaded = !!(f.c || f.asking || f.seen);
+      const loaded = !!(f.c || f.asking || f.seen || f.live);
       type State = "done" | "now" | "problem" | "todo";
       type Step = { state: State; title: string; detail: (Node | string)[] };
       const note = (t: string) => el("div", "ext-check-note", t);
@@ -797,13 +818,19 @@ function install(W: V1): void {
 
       // 2. In the browser: loading it, with the steps until it calls in and the usual causes if it stays silent.
       const inBrowser: Step[] = [];
-      if (loaded) inBrowser.push({ state: "done", title: "The extension is loaded", detail: [] });
+      if (loaded) {
+        const v = f.live?.version ?? f.seen?.version;
+        inBrowser.push({ state: "done", title: v ? `The extension is loaded (version ${v})` : "The extension is loaded", detail: [] });
+      }
       else {
         const inner = el("ol", "ext-stepper");
         extSteps(f.g?.target ?? (name === "Firefox" ? "firefox" : name === "Safari" ? "safari" : "chromium"), f.g?.page ?? "").forEach(([t, val], k) => {
           const li = el("li"); li.append(el("span", "ext-step-n", String(k + 1)), el("span", "ext-step-t", t)); if (val) li.append(copyBtn(val)); inner.append(li);
         });
         const detail: (Node | string)[] = [inner];
+        // This page runs in that browser, so the extension would answer it directly once loaded; the bridge joins a
+        // page when the page loads, so one loaded after this page opened is found on a reload.
+        if (name === pageBrowser) detail.push(note("Loaded it after opening this page? Reload this page: they find each other when the page loads."));
         if (since) detail.push(note(`Waiting for it to call in · ${Math.floor(waited / 60)}:${String(waited % 60).padStart(2, "0")}. It asks to connect within a minute of being loaded, unless it is already connected to another Browser Foreman.`));
         if (waited > 75) { // it asks within a minute: past that, something is in the way
           const here = location.origin;
@@ -826,6 +853,12 @@ function install(W: V1): void {
         connection.push({ state: "problem", title: "Approve the connection", detail: [note(approvableHere(q)
           ? `Connect only if the extension's toolbar icon shows ${q.match.split("").join(" ")} too. It waits until ${expires}.`
           : `Open Browser Foreman in ${name} to approve it: approvals are strict (Settings › Browser extensions). It waits until ${expires}.`), row] });
+      } else if (f.live && f.live.paired && !f.live.here) {
+        connection.push({ state: "problem", title: `Connected to another Browser Foreman`, detail: [note(`The extension uses ${f.live.server}. To use this one instead, disconnect it there (or in its popup), then press Connect here.`)] });
+      } else if (f.live) {
+        const b = el("button", "btn btn-sm btn-primary"); b.type = "button"; b.append(icon("ti-plug-connected", "me-1"), "Connect"); b.onclick = connectHere(name);
+        const row = el("div", "ext-inline-ask"); row.append(b);
+        connection.push({ state: "now", title: "Ready to connect", detail: [note(f.live.declined ? "It was disconnected or denied before, so it does not ask by itself. One click connects it again." : "One click: it asks, and this page approves it, since both are in this browser."), row] });
       } else connection.push({ state: "todo", title: "Approve the connection", detail: [note("When it asks, its four letters show here and on its toolbar icon.")] });
 
       // 4. Working: its tab reports, and its version.
@@ -893,6 +926,7 @@ function install(W: V1): void {
     };
     body.append(codeBox);
     const load = async () => {
+      live = await extensionHello();
       const [ext, br, gd, rq] = await Promise.allSettled([W.call<{ extensions: Ext[] }>("GET", "extension/status"), W.call<{ installed?: { name: string }[] }>("GET", "browsers"),
         W.call<Guide>("GET", "extension/guide"), W.call<{ requests: Waiting[] }>("GET", "extension/requests")]);
       connected = ext.status === "fulfilled" ? ext.value.extensions : [];
@@ -919,7 +953,7 @@ function install(W: V1): void {
     list.append(el("div", "text-secondary small py-2", "Asking which browsers are connected…"));
     showModal("#v1Extensions"); await load();
     // While the dialog is open, a browser being set up or asking to connect shows up by itself.
-    const live = setInterval(() => { if (!document.getElementById("v1Extensions")?.classList.contains("show")) clearInterval(live); else void load(); }, 3000);
+    const refresh = setInterval(() => { if (!document.getElementById("v1Extensions")?.classList.contains("show")) clearInterval(refresh); else void load(); }, 3000);
   }
 
   function menu(): HTMLElement {

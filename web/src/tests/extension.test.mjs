@@ -100,6 +100,17 @@ for (const size of [16, 128]) {
   const png = iconPNG(size);
   eq([png.subarray(1, 4).toString(), png.readUInt32BE(16), png.readUInt32BE(20)], ["PNG", size, size], `icon ${size}`);
 }
+// The page bridge: only pages on this computer; a connected extension is never pulled to another server; a page can
+// use only the two bridge requests, and the popup never them.
+ok(C.isLoopback("http://127.0.0.1:8765") && C.isLoopback("http://localhost:9000") && C.isLoopback("http://[::1]:8765"), "loopback pages");
+ok(!C.isLoopback("https://example.com") && !C.isLoopback("http://192.168.1.4:8765") && !C.isLoopback("file:///x") && !C.isLoopback("nonsense"), "anything else");
+eq(C.connectRefusal("http://127.0.0.1:8765", "http://127.0.0.1:8765", true), "", "the server it uses, again");
+eq(C.connectRefusal("http://127.0.0.1:8768", "http://127.0.0.1:8765", false), "", "unconnected: the asking page's server, which must still approve it");
+ok(/disconnect it there/.test(C.connectRefusal("http://127.0.0.1:8768", "http://127.0.0.1:8765", true)), "connected: never taken by another port");
+ok(/on this computer/.test(C.connectRefusal("https://evil.example", "http://127.0.0.1:8765", false)), "not from the web");
+ok(C.messageAllowed(true, "page-hello") && C.messageAllowed(true, "page-connect"), "a page's two requests");
+ok(!C.messageAllowed(true, "pair") && !C.messageAllowed(true, "apply") && !C.messageAllowed(true, "unpair") && !C.messageAllowed(true, undefined), "nothing else from a page");
+ok(!C.messageAllowed(false, "page-connect") && C.messageAllowed(false, "status"), "the popup keeps its own, not the bridge's");
 // A stopped or replaced service worker is not an error to show (chrome://extensions › Errors listed "No SW").
 ok(C.workerGone("No SW"), "Chrome's own words");
 ok(C.workerGone("Error: Extension context invalidated."), "the context is gone");
