@@ -445,7 +445,7 @@ function install(W: V1): void {
           tx.append(el("h4", "alert-title", blockedAll ? "Your browsers' history cannot be read yet" : `${j.skipped.length} browser profile${j.skipped.length === 1 ? "" : "s"} left out`));
           for (const [why, names] of byWhy) tx.append(el("div", "text-secondary", `${[...new Set(names)].join(", ")}: ${why}.`));
           const acts = el("div", "btn-list mt-2");
-          const fda = el("button", "btn btn-sm btn-warning"); fda.type = "button"; fda.append(icon("ti-shield-lock", "me-1"), "Open Full Disk Access");
+          const fda = el("button", "btn btn-sm btn-primary"); fda.type = "button"; fda.append(icon("ti-shield-lock", "me-1"), "Open Full Disk Access");
           fda.onclick = async () => {
             try { const r = await W.call<{ ok: boolean; error?: string }>("POST", "history/access/open-settings");
               toast(r.ok ? "Add the app that runs Browser Foreman, quit and reopen it, then press Check again." : r.error ?? "System Settings did not open", r.ok ? "info" : "danger", r.ok ? "System Settings opened" : "");
@@ -748,7 +748,7 @@ function install(W: V1): void {
         act.append(el("span", "small text-secondary", "Build it first: make extension"));
       }
       if (c) {
-        const b = el("button", "btn btn-sm btn-ghost-danger"); b.type = "button"; b.append(icon("ti-plug-connected-x", "me-1"), "Disconnect…");
+        const b = el("button", "btn btn-sm btn-danger"); b.type = "button"; b.append(icon("ti-plug-connected-x", "me-1"), "Disconnect…");
         b.onclick = async () => {
           if (!(await askConfirm({ title: `Disconnect ${name}?`, ok: "Disconnect", no: "Keep connected",
             body: `${name}'s extension stops sending its tabs and can no longer read or write bookmarks here. Its key is revoked at once, and it does not ask to connect again until you press Connect in its popup.` }))) return;
@@ -940,7 +940,7 @@ function install(W: V1): void {
       item("ti-palette", "Appearance…", () => void appearance({ ...W.workspace, id: W.id })),
       item("ti-history", "History and progress…", () => void history()),
       item("ti-refresh-dot", "Update from source…", () => void updateWs()),
-      item("ti-copy", "Find duplicates…", () => void findDuplicates()),
+      item("ti-files", "Find duplicates…", () => void findDuplicates()),
       item("ti-folders", "Sort into folders…", () => void sortFolders()));
     if (W.locked) dm.append(item("ti-lock-open", "Unlock", () => void toggleLock(false)));
     else dm.append(item("ti-pencil", "Rename…", () => void rename()), item("ti-notes", "Notes…", () => void notes()),

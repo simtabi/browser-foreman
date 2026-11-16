@@ -195,7 +195,7 @@ export class DataTable<T> {
         const items = this.o.actions?.(r) ?? [];
         if (items.some(Boolean)) {
           const dd = el("div", "dropdown"), b = el("button", "btn btn-sm btn-icon btn-ghost-secondary"); b.type = "button"; b.dataset.dd = "";
-          b.setAttribute("aria-label", "More actions"); b.append(icon("ti-dots-vertical"));
+          b.setAttribute("aria-label", "More actions"); b.append(icon("ti-dots"));
           dd.append(b, buildMenu(items)); wrap.append(dd);
         }
         td.append(wrap); row.append(td);

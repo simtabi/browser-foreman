@@ -53,7 +53,7 @@ export class HistoryAccessPanel {
           + "then quit and reopen it and start the server again. Until then those browsers are left out of Browser history."));
     const acts = node("div", "d-flex gap-2 flex-wrap");
     if (!s.granted) acts.append(this.button("Open Full Disk Access", "ti-shield-lock", "open-fda", () => this.openSettings(), "btn-primary"));
-    acts.append(this.button("Check again", "ti-refresh", "recheck-access", () => void this.refresh(), "btn-outline-secondary"));
+    acts.append(this.button("Check again", "ti-refresh", "recheck-access", () => void this.refresh(), ""));
     head.append(txt, acts);
     const list = node("div", "set-help");
     list.textContent = present.map(b => `${b.browser}: ${LABEL[b.state]}`).join(" · ") || "No supported browser found.";

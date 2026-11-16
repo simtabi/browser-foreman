@@ -59,7 +59,7 @@ export const tabHistory = {
 
 /** Close tabs after one confirmation; the server snapshots first. One implementation for every place that closes. */
 export async function closeWithConfirm(list: OpenTab[]): Promise<CloseResult | null> {
-  if (!list.length) { toast("Tick the tabs to close first."); return null; }
+  if (!list.length) { toast("Tick the tabs to close first.", "info"); return null; }
   const inc = list.filter(t => t.mode === "incognito").length;
   if (!(await confirm({ title: `Close ${list.length} tab${list.length === 1 ? "" : "s"}?`, ok: `Close ${list.length}`, no: "Keep them",
     body: "A snapshot of every window is saved first, so you can reopen them from the timeline or with Undo." + (inc ? ` ${inc} of them are incognito.` : "") +
@@ -78,7 +78,7 @@ export async function closeWithConfirm(list: OpenTab[]): Promise<CloseResult | n
  *  close, so the timeline or Undo brings them back. A page cannot change a tab's mode in place, so this is the move. */
 export async function moveToMode(list: OpenTab[], to: "normal" | "incognito"): Promise<boolean> {
   const tabs = list.filter(t => isWeb(t.url) && t.mode !== to);
-  if (!tabs.length) { toast(to === "normal" ? "Those tabs are already in normal windows." : "Those tabs are already incognito."); return false; }
+  if (!tabs.length) { toast(to === "normal" ? "Those tabs are already in normal windows." : "Those tabs are already incognito.", "info"); return false; }
   const where = to === "normal" ? "a normal window" : "an incognito window";
   if (!(await confirm({ title: `Move ${tabs.length} tab${tabs.length === 1 ? "" : "s"} to ${where}?`, ok: "Move", no: "Keep them", danger: false,
     body: `They open in ${where} of the same browser, then close where they are now. A snapshot is saved first, so the timeline can bring them back.` +

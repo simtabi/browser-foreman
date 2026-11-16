@@ -59,7 +59,7 @@ const STATUS_ICON = {dead: "ti-alert-triangle", moved: "ti-arrow-forward-up", "m
   unverified: "ti-help-circle", "needs-login": "ti-lock", local: "ti-device-laptop", skipped: "ti-player-skip-forward", ok: "ti-circle-check"};
 const FILTERS = [["all", "All bookmarks", "ti-list"], ["prot", "Untouched folders", "ti-lock"], ["dead", "Dead links", "ti-alert-triangle"],
   ["moved", "Moved (update ready)", "ti-arrow-forward-up"], ["moved-elsewhere", "Redirects elsewhere", "ti-arrows-split"],
-  ["unverified", "Could not verify", "ti-help-circle"], ["needs-login", "Requires login", "ti-lock-open"], ["dupes", "Removed duplicates", "ti-copy"]];
+  ["unverified", "Could not verify", "ti-help-circle"], ["needs-login", "Requires login", "ti-lock-open"], ["dupes", "Removed duplicates", "ti-files"]];
 // The Show control's segment labels; the full names above stay in tooltips, the palette and the details pane.
 const FILTER_SHORT = {all: "All", prot: "Untouched", dead: "Dead", moved: "Moved", "moved-elsewhere": "Redirects", unverified: "Unverified", "needs-login": "Login", dupes: "Duplicates"};
 const STORE = "bm-preview-v2";  // TRASH and OLD_TRASH come from tree.ts
@@ -178,12 +178,12 @@ const pageState = () => { const s = st(); return JSON.stringify({root: plain(s.r
 function applyPageState(u) { const o = JSON.parse(u), s = st(); s.root = revive(o.root); s.titles = o.titles; s.notes = o.notes || {}; s.ratings = o.ratings || {}; s.tags = o.tags || {}; s.gone = new Set(o.gone); s.trashFrom = o.trashFrom; save(); build(); }
 function undo() {
   if (WS) return WS.undo();
-  const u = undoStack[mode].pop(); if (!u) return toast("Nothing to undo");
+  const u = undoStack[mode].pop(); if (!u) return toast("Nothing to undo: no changes in this view yet", "info");
   redoStack[mode].push(pageState()); applyPageState(u); toast("Undone", "success"); UNDO.refresh();
 }
 function redo() {
   if (WS) return WS.redo?.();
-  const u = redoStack[mode].pop(); if (!u) return toast("Nothing to redo");
+  const u = redoStack[mode].pop(); if (!u) return toast("Nothing to redo: undo something first", "info");
   undoStack[mode].push(pageState()); applyPageState(u); toast("Redone", "success"); UNDO.refresh();
 }
 // Undo and redo act on the view you are in: bookmark edits in Bookmarks, closed or moved tabs in Open tabs. The
@@ -317,7 +317,7 @@ function materialize() {
   if (view.sort === "manual") return;
   const w = f => { f.c = ordered(f); f.c.filter(isFolder).forEach(w); };
   w(st().root);
-  setView("sort", "manual"); toast("Sort is now Manual, starting from the order you saw");
+  setView("sort", "manual"); toast("Sort is now Manual, starting from the order you saw", "info");
 }
 function virtualTree() {
   const ids = descendants(st().root).filter(id => !inTrash(id)), root = mkFolder("");
@@ -444,7 +444,7 @@ function summary() {
     ["moved-elsewhere", "Redirect elsewhere", n("moved-elsewhere"), "check each one first", "ti-arrows-split", "purple"],
     ["dead", "Dead links", n("dead"), `${DATA.keep.filter(i => i.s === "dead" && i.dk === "host").length} whole site gone, ${DATA.keep.filter(i => i.s === "dead" && i.dk !== "host").length} page gone, ${DATA.keep.filter(i => i.s === "dead" && !i.dc).length} not confirmed yet`, "ti-alert-triangle", "danger"],
     ["unverified", "Could not verify", n("unverified"), "site blocked the check or timed out", "ti-help-circle", "secondary"],
-    ["dupes", "Duplicates removed", DATA.dupes.length, "merged, nothing lost", "ti-copy", "info"],
+    ["dupes", "Duplicates removed", DATA.dupes.length, "merged, nothing lost", "ti-files", "info"],
   ];
   $("#stats").replaceChildren(...cards.map(([f, t, v, sub, ic, col]) => {
     const col_ = el("div", "col-6 col-md-4 col-xl-2"), c = el("div", "card card-sm stat h-100 position-relative"); c.dataset.f = f;
@@ -496,7 +496,7 @@ function expandInside(r) {
 async function resetEdits() {
   if (!(await askConfirm({title: "Reset all your edits?", ok: "Reset everything",
     body: "Every move, rename, note, trash and permanent deletion made in this preview is thrown away, and the tree goes back to the generated one. This cannot be undone."}))) return;
-  store.del("tree-" + mode); S[mode] = loadState(mode); undoStack[mode] = []; setMode(mode); toast("Edits reset");
+  store.del("tree-" + mode); S[mode] = loadState(mode); undoStack[mode] = []; setMode(mode); toast("Edits reset", "success");
 }
 on("#download", downloadFile);
 on("#refreshAll", () => refresh(true));
@@ -607,7 +607,7 @@ const TABS = (() => {
   const tabsToBookmarks = async (items, {suggested, close}) => {
     if (!wsUI()?.addLinks) return needServer(close ? "Moving tabs to bookmarks" : "Saving tabs as bookmarks");
     const links = items.filter(i => isWeb(i.t.url)).map(i => ({url: i.t.url, title: i.t.title || ""}));
-    if (!links.length) return toast(close ? "No web links to move" : "No web links to save");
+    if (!links.length) return toast(close ? "No web links to move" : "No web links to save", "info");
     const n = `${links.length} tab${links.length === 1 ? "" : "s"}`;
     const where = await chooseFolder({title: `${close ? "Move" : "Save"} ${n} to bookmarks: where?`, extra: [["saved", "A new folder in “Saved tabs”", "ti-folder-plus"]]});
     if (!where) return;
@@ -640,8 +640,8 @@ const TABS = (() => {
     box.append(ul);
     const acts = el("div", "empty-action d-flex gap-2 justify-content-center flex-wrap");
     const withWindows = (d.browsers || []).filter(b => (b.windows || []).length && !inScope(b.browser)).map(b => b.browser);
-    if (withWindows.length) { const b = el("button", "btn btn-primary"); b.append(icon("ti-eye", "me-1"), `Show ${listNames(withWindows)}`); b.onclick = () => { for (const n of withWindows) SCOPE.toggle(n, true); }; acts.append(b); }
-    const all = el("button", "btn"); all.append(icon("ti-world", "me-1"), "Show all browsers"); all.onclick = () => SCOPE.setAll(true); acts.append(all);
+    if (withWindows.length) { const b = el("button", "btn btn-sm btn-primary"); b.append(icon("ti-eye", "me-1"), `Show ${listNames(withWindows)}`); b.onclick = () => { for (const n of withWindows) SCOPE.toggle(n, true); }; acts.append(b); }
+    const all = el("button", "btn btn-sm"); all.append(icon("ti-world", "me-1"), "Show all browsers"); all.onclick = () => SCOPE.setAll(true); acts.append(all);
     box.append(acts);
     return box;
   }
@@ -740,7 +740,7 @@ const TABS = (() => {
   // crossMode: the caller asked for this exact mode, so incognito tabs may open in a normal window (Open in a normal
   // window). Without it, incognito tabs never land in a normal window by accident.
   async function openSet(items, how, grouped, {crossMode = false} = {}) {
-    if (!items.some(i => isWeb(i.t.url))) return toast("No web links to open");
+    if (!items.some(i => isWeb(i.t.url))) return toast("No web links to open", "info");
     // Which windows and modes: planOpen in src/web/ts/tabs.ts (typed, tested).
     const {batches: real, total, skipped} = planOpen(items, how, grouped, crossMode);
     if (!real.length) return toast("Incognito tabs are not opened as tabs in a normal window.", "warning", "Nothing opened");
@@ -824,7 +824,7 @@ const TABS = (() => {
       const n = wins.reduce((k, x) => k + tabsIn(x).filter(i => match(i.t)).length, 0);
       if (n) chip("ti-search", "Matching", `${n.toLocaleString()} tab${n === 1 ? "" : "s"}`);
       else {
-        const e = el("div", "empty py-5"), clear = el("button", "btn btn-primary"); clear.type = "button";
+        const e = el("div", "empty py-5"), clear = el("button", "btn btn-sm btn-primary"); clear.type = "button";
         clear.append(icon("ti-filter-off", "me-1"), "Clear the search"); clear.onclick = () => { const box = $("#hq"); box.value = ""; box.dispatchEvent(new Event("input", {bubbles: true})); box.focus(); };
         const ic = el("div", "empty-icon"); ic.append(icon("ti-search-off"));
         const act = el("div", "empty-action"); act.append(clear);
@@ -862,7 +862,7 @@ const TABS = (() => {
       rs.onclick = () => openSet(wins.flatMap(tabsIn), "window", true); acts.append(rs);
     }
     acts.append(viewMenu());
-    const rf = el("button", "btn btn-sm btn-icon"); rf.append(icon("ti-refresh")); rf.dataset.tip = "Read again"; rf.onclick = () => select(cur); acts.append(rf);
+    const rf = el("button", "btn btn-sm btn-ghost-secondary btn-icon"); rf.append(icon("ti-refresh")); rf.dataset.tip = "Read again"; rf.onclick = () => select(cur); acts.append(rf);
   }
   function viewMenu() {
     return menuButtonEl("View", "ti-adjustments-horizontal", viewMenuItems(V, (k, v) => { V[k] = v; setPref(k, v); paint(); },
@@ -1380,7 +1380,7 @@ function draw() {
   // Nothing found: say what was searched for and offer the way back (the Trash row alone, at 0, is not a result).
   if (!rows.length || (filtering() && rows.every(r => r.trash))) {
     const q = $("#q").value.trim(), e = el("div", "empty py-5");
-    const clear = el("button", "btn btn-primary"); clear.type = "button"; clear.append(icon("ti-filter-off", "me-1"), q ? "Clear the search and filters" : "Clear the filters");
+    const clear = el("button", "btn btn-sm btn-primary"); clear.type = "button"; clear.append(icon("ti-filter-off", "me-1"), q ? "Clear the search and filters" : "Clear the filters");
     clear.onclick = () => { clearFilters(); list.focus(); };
     e.append(el("div", "empty-icon"), el("p", "empty-title", q ? `Nothing matches “${q.length > 40 ? q.slice(0, 40) + "…" : q}”` : "Nothing matches these filters"),
       el("p", "empty-subtitle text-secondary", "Try fewer words, another filter, or a wider date range."), el("div", "empty-action"));
@@ -1437,7 +1437,7 @@ function selectNode(x) { const k = rows.findIndex(r => r.node === x); if (k >= 0
 // moveToTabs(true/false) is the older form (incognito or not) and still works.
 async function moveToTabs(how = "window") {
   if (how === true) how = "incognito"; else if (how === false) how = "window";
-  const ids = targetIds().filter(id => isWeb(ITEM.get(id).u)); if (!ids.length) return toast("No web links here");
+  const ids = targetIds().filter(id => isWeb(ITEM.get(id).u)); if (!ids.length) return toast("No web links here", "info");
   const where = OPEN_WHERE()[how];
   if (!(await askConfirm({title: `Move ${ids.length} bookmark${ids.length === 1 ? "" : "s"} to tabs?`, ok: "Open, then move to Trash", danger: false,
     body: `They open in ${where}, then the bookmarks go to the Trash. Put back or ⌘Z brings them back; emptying the Trash is what removes them.`}))) return;
@@ -1449,7 +1449,7 @@ const OPEN_WHERE = () => ({browser: "new tabs in this browser", tabs: `the curre
 async function openLinks(how, ids = targetIds(), confirmed = false, browser = null) {
   // Returns true when everything opened, so "move to tabs" only trashes bookmarks whose tabs really opened.
   const urls = ids.map(id => ITEM.get(id).u).filter(isWeb);
-  if (!urls.length) { toast("No web links here"); return false; }
+  if (!urls.length) { toast("No web links here", "info"); return false; }
   const where = OPEN_WHERE()[how];
   if (!confirmed && urls.length > SET.openWarn && !(await askConfirm({title: `Open ${urls.length} links?`, ok: `Open ${urls.length}`, danger: false,
     body: `They open in ${where}. That is a lot of tabs at once.`}))) return false;
@@ -1475,7 +1475,7 @@ async function openLinks(how, ids = targetIds(), confirmed = false, browser = nu
 }
 function copyLinks(ids = targetIds()) {
   const urls = ids.map(id => ITEM.get(id).u);
-  navigator.clipboard?.writeText(urls.join("\n")).then(() => toast(`Copied ${urls.length} link${urls.length === 1 ? "" : "s"}`));
+  navigator.clipboard?.writeText(urls.join("\n")).then(() => toast(`Copied ${urls.length} link${urls.length === 1 ? "" : "s"}`, "success"));
 }
 
 // ---------- edits ----------
@@ -1486,7 +1486,7 @@ function moveNodes(nodes, target, before = null, quiet = false) {
   if (readOnly()) return;
   const tf = trashFolder();
   nodes = nodes.filter(x => x !== tf && !(isFolder(x) && contains(x, target)) && x !== before);
-  if (!nodes.length) return toast("A folder can't go inside itself");
+  if (!nodes.length) return toast("A folder can't go inside itself or one of its own subfolders", "info");
   if (!quiet) snapshot();
   if (target !== tf && !contains(tf, target)) for (const x of nodes) forgetFrom(x);
   detachNodes(nodes, PARENT);  // one pass per folder: moving thousands stays quick
@@ -1495,11 +1495,11 @@ function moveNodes(nodes, target, before = null, quiet = false) {
   indexParents();
   if (target !== tf) setOpen(target, true);
   marked.clear(); save(); build(); selectNode(nodes[0]);
-  if (!quiet) toast(`Moved ${nodes.length} to ${nice(pathOf(target)) || "top level"}`);
+  if (!quiet) toast(`Moved ${nodes.length} to ${nice(pathOf(target)) || "top level"}`, "success");
 }
 function reorder(delta) {
   if (readOnly()) return;
-  if (grouped()) return toast("Reordering works when grouped by folders");
+  if (grouped()) return toast("Reordering works when grouped by folders: change Group by to Folders first", "info");
   const x = rows[sel]?.node, p = x && PARENT.get(x); if (!p || x === trashFolder()) return;
   snapshot(); materialize();
   const k = p.c.indexOf(x), j = k + delta; if (j < 0 || j >= p.c.length) { undoStack[mode].pop(); return; }
@@ -1507,7 +1507,7 @@ function reorder(delta) {
 }
 async function newFolder(groupNodes) {
   if (readOnly()) return;
-  if (grouped() && !groupNodes) return toast("New folders are made when grouped by folders");
+  if (grouped() && !groupNodes) return toast("New folders are made when grouped by folders: change Group by to Folders first", "info");
   const r = rows[sel];
   const parent = r ? (r.kind === "folder" && r.open && !groupNodes && !r.trash ? r.node : r.parent) : st().root;
   const name = await askText({title: groupNodes ? "Group into a new folder" : "New folder",
@@ -1520,12 +1520,12 @@ async function newFolder(groupNodes) {
   if (groupNodes) for (const x of groupNodes) { detach(x); f.c.push(x); }
   holder.c.splice(Math.min(at, holder.c.length), 0, f);
   indexParents(); setOpen(f, true); marked.clear(); save(); build(); selectNode(f);
-  toast(groupNodes ? `Grouped ${groupNodes.length} into “${f.n}”` : `Created “${f.n}”`);
+  toast(groupNodes ? `Grouped ${groupNodes.length} into “${f.n}”` : `Created “${f.n}”`, "success");
 }
 async function rename() {
   if (readOnly()) return;
   const r = rows[sel]; if (!r || r.trash) return;
-  if (r.node.virtual) return toast("That is a group, not a folder");
+  if (r.node.virtual) return toast("That is a group made by the current grouping, not a folder: it cannot be renamed or moved", "info");
   const cur = r.kind === "folder" ? nice(r.node.n) : titleOf(r.node);
   const name = await askText({title: r.kind === "folder" ? "Rename folder" : "Rename bookmark", label: "Name", value: cur});
   if (name == null || !name.trim() || name.trim() === cur) return;
@@ -1557,7 +1557,7 @@ function sortFolder() {
   snapshot();
   const links = f.c.filter(x => !isFolder(x)).sort((a, b) => titleOf(a).localeCompare(titleOf(b)));
   const subs = f.c.filter(isFolder).sort((a, b) => byName(a.n, b.n));
-  f.c = [...subs, ...links]; save(); build(); toast(`Sorted “${nice(pathOf(f)) || "top level"}”`);
+  f.c = [...subs, ...links]; save(); build(); toast(`Sorted “${nice(pathOf(f)) || "top level"}”`, "success");
 }
 
 // ---------- trash ----------
@@ -1606,7 +1606,7 @@ function folderAtPath(path) {
 function putBack() {
   if (readOnly()) return;
   const xs = targets().filter(x => inTrash(x) && PARENT.get(x) === trashFolder());
-  if (!xs.length) return toast("Select something directly inside the Trash to put back");
+  if (!xs.length) return toast("Select something directly inside the Trash to put back", "info");
   putBackNodes(xs);
 }
 // Put back explicit items (the Trash window passes the ones ticked there); putBack() above uses the selection.
@@ -1622,7 +1622,7 @@ function putBackNodes(xs, {select = true} = {}) {
     indexParents(); setOpen(dest, true);
   }
   marked.clear(); save(); build(); if (select) selectNode(xs[0]);
-  toast(`Put back ${xs.length} item${xs.length > 1 ? "s" : ""}`);
+  toast(`Put back ${xs.length} item${xs.length > 1 ? "s" : ""}`, "success");
 }
 async function deleteForever(xs) {
   const ids = xs.flatMap(x => isFolder(x) ? descendants(x) : [x]);
@@ -1632,10 +1632,10 @@ async function deleteForever(xs) {
   for (const x of xs) { detach(x); forgetFrom(x); }
   for (const id of ids) { st().gone.add(id); delete st().trashFrom[id]; }
   indexParents(); marked.clear(); save(); build();
-  toast(`${ids.length} bookmark${ids.length === 1 ? "" : "s"} deleted from the import`);
+  toast(`${ids.length} bookmark${ids.length === 1 ? "" : "s"} deleted from the import`, "success");
 }
 function emptyTrash() {
-  const bin = trashFolder(); if (!bin || !bin.c.length) return toast("The trash is already empty");
+  const bin = trashFolder(); if (!bin || !bin.c.length) return toast("The trash is already empty", "info");
   deleteForever([...bin.c]);
 }
 // The Trash window (views/trash.ts): every item directly inside the Trash, where it came from, and how many
@@ -1670,7 +1670,7 @@ const TRASH_WIN = new TrashDialog({
   open: u => openTab(u),
   pageSize: () => listSize("trash"), setPageSize: n => setListSize("trash", n),
 });
-function openTrash() { if (readOnly()) return toast("Switch to the Bookmarks tree to see the Trash"); TRASH_WIN.open(); }
+function openTrash() { if (readOnly()) return toast("Switch to the Bookmarks tree to see the Trash", "info"); TRASH_WIN.open(); }
 on("#trashBtn", openTrash);
 // Bookmarks in the Trash (folders count what they hold).
 function trashCount() { const bin = trashFolder(); return bin ? descendants(bin).length : 0; }
@@ -1683,9 +1683,9 @@ function paintTrashBadge() {
 let jobRunning = false;
 async function refresh(all = false) {
   const xs = all ? [st().root] : targets(); if (!xs.length) return;
-  if (jobRunning) return toast("A refresh is already running");
+  if (jobRunning) return toast("A refresh is already running: see its progress bottom right", "info");
   const ids = [...new Set(xs.flatMap(x => isFolder(x) ? descendants(x) : [x]))].filter(id => /^https?:/i.test(ITEM.get(id).u));
-  if (!ids.length) return toast("Nothing to refresh here");
+  if (!ids.length) return toast("Nothing to refresh here", "info");
   if (all && !(await askConfirm({title: `Refresh all ${ids.length.toLocaleString()} links?`, ok: "Start refreshing", danger: false,
     body: "Every link is checked again and every snapshot retaken. Sites are visited politely, a few at a time, so this takes a while. You can pause or cancel it, and keep working meanwhile."}))) return;
   let job, total;
@@ -1773,12 +1773,12 @@ function applyUpdates(ids, quiet) {
     i.prev = i.u; i.u = i.nu; i.applied = true; URLS[id] = i.u; n++;
   }
   store.set("urls", URLS); updateAllLabel(); build();
-  if (!quiet) n ? toast(`Updated ${n} link${n === 1 ? "" : "s"} to the new address`, "success") : toast("Nothing to update here");
+  if (!quiet) n ? toast(`Updated ${n} link${n === 1 ? "" : "s"} to the new address`, "success") : toast("Nothing to update here: no moved link has a new address ready", "info");
   return n;
 }
 function revertUpdate(id) {
   const i = ITEM.get(id); if (!i || !i.applied) return;
-  i.u = i.prev; delete i.prev; i.applied = false; delete URLS[id]; store.set("urls", URLS); updateAllLabel(); build(); toast("Back to the old address");
+  i.u = i.prev; delete i.prev; i.applied = false; delete URLS[id]; store.set("urls", URLS); updateAllLabel(); build(); toast("Back to the old address", "success");
 }
 // The bookmarks in the tree now, outside the Trash: what counts and bulk actions use (not the original set, which
 // still holds deleted and trashed ones).
@@ -1796,7 +1796,7 @@ async function updateAllMoved() {
   const live = liveItems();
   const ids = live.filter(i => pendingUpdate(i) && i.nk === "same").map(i => i.id);
   const other = live.filter(i => pendingUpdate(i) && i.nk === "other").length;
-  if (!ids.length) return toast("No moved links left to update");
+  if (!ids.length) return toast("No moved links left to update", "info");
   if (!(await askConfirm({title: `Update ${ids.length} moved links?`, ok: "Update links", danger: false,
     body: `Each one switches to the address it now redirects to on the same site. You can revert any of them.` +
       (other ? ` The ${other} links that now go to a different site are left for you to check one by one.` : "")}))) return;
@@ -1908,7 +1908,7 @@ function commands() {
     ["mcp-access", "MCP access (Claude): connect, disconnect, allow changes…", "ti-plug-connected", "", () => !!wsUI()?.mcpAccess, () => wsUI().mcpAccess(), "Workspace"],
     ["ws-update", "Update this workspace from its source…", "ti-refresh-dot", "", () => !!wsUI()?.updateWs, () => wsUI().updateWs(), "Workspace"],
     ["sort-folders", "Sort into folders… (by your filing rules)", "ti-folders", "", () => !!wsUI()?.sortFolders, () => wsUI().sortFolders(), "Workspace"],
-    ["find-dupes", "Find duplicates… (same page, redirects, canonical address)", "ti-copy", "", () => !!wsUI()?.findDuplicates, () => wsUI().findDuplicates(), "Workspace"],
+    ["find-dupes", "Find duplicates… (same page, redirects, canonical address)", "ti-files", "", () => !!wsUI()?.findDuplicates, () => wsUI().findDuplicates(), "Workspace"],
     ["ws-reset", "Reset this workspace to its start…", "ti-restore", "", () => !!wsUI()?.resetWs, () => wsUI().resetWs(), "Workspace", true],
     ["reset-edits", "Reset edits…", "ti-restore", "", () => !readOnly(), resetEdits, "General", true],
     ["factory-reset", "Factory reset…", "ti-alert-triangle", "", () => true, factoryReset, "General", true],
@@ -1944,7 +1944,7 @@ function noneChosen(where) {
   n.append(el("div", "empty-icon"), el("p", "empty-title", "No browsers chosen"),
     el("p", "empty-subtitle text-secondary", where === "tabs" ? "Tabs and snapshots are shown for the browsers ticked in the Browsers menu." : "Tab snapshots in the timeline follow the Browsers menu. Edits and bookmarks added are still listed when their kinds are on."));
   n.firstChild.append(icon("ti-world-off"));
-  const b = el("button", "btn btn-primary"); b.append(icon("ti-world", "me-1"), "Show all browsers"); b.onclick = () => SCOPE.setAll(true);
+  const b = el("button", "btn btn-sm btn-primary"); b.append(icon("ti-world", "me-1"), "Show all browsers"); b.onclick = () => SCOPE.setAll(true);
   const a = el("div", "empty-action"); a.append(b); n.append(a);
   return n;
 }

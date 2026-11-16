@@ -877,7 +877,7 @@ body { overflow-wrap: break-word; }
 /* Confirm dialogs: both choices share the row, each as wide as its words need (a long one takes more), and they
    stack, full width, when the two do not fit side by side. Labels never touch their edges. */
 .confirm-acts { display: flex; flex-wrap: wrap; gap: .5rem; width: 100%; }
-.confirm-acts > .btn { flex: 1 1 auto; min-width: 6rem; padding-inline: 1rem; white-space: normal; line-height: 1.25; min-height: 2.5rem; }
+.confirm-acts > .btn { flex: 1 1 auto; min-width: 6rem; padding-inline: 1rem; white-space: normal; line-height: 1.25; }
 /* The loading screen: covers the whole page from its first paint until everything is ready (ts/boot.ts lifts it),
    so nothing is seen half built. Settings › Startup › Loading screen turns it off (theme-early.ts sets data-boot). */
 .boot-loader { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center;
@@ -939,7 +939,7 @@ html.booting body { overflow: hidden; }
     <!-- Browsers: installed, tracked, and which ones open links (Alpine: browserPicker) -->
       <div id="bkBrowsers" x-data="browserPicker" @keydown.escape.window="open && hide()">
         <!-- The visible control is the Browsers menu (page.ts paintScope); this button stays for the dialog's own use. -->
-        <button type="button" class="btn btn-sm nav-browsers d-none" @click="show()" :data-tip="'Tracking: ' + ([...tracked].join(', ') || 'none') + ' · links open in ' + (openWith || 'the default browser')">
+        <button type="button" class="btn nav-browsers d-none" @click="show()" :data-tip="'Tracking: ' + ([...tracked].join(', ') || 'none') + ' · links open in ' + (openWith || 'the default browser')">
           <i class="ti ti-world me-1"></i><span x-text="tracked.size ? [...tracked].length + ' browser' + (tracked.size === 1 ? '' : 's') : 'Browsers'"></span>
           <span class="text-secondary ms-1" x-show="openWith" x-text="'· opens in ' + openWith"></span><i class="ti ti-chevron-down ms-1"></i></button>
         <div class="modal modal-blur show bf-modal" x-show="open" x-cloak role="dialog" aria-labelledby="bkBrowsersTitle" @mousedown.self="hide()">
@@ -1269,7 +1269,7 @@ html.booting body { overflow: hidden; }
     <div class="cl-foot">
       <button type="button" class="btn" x-show="lastClosed.length" @click="undo()" x-cloak><i class="ti ti-arrow-back-up me-1"></i>Undo · reopen <span x-text="lastClosed.length"></span></button>
       <span class="ms-auto"></span>
-      <button type="button" class="btn btn-danger" :disabled="!picked.size" @click="closePicked()"><i class="ti ti-x me-1"></i>Close <span x-text="picked.size"></span></button>
+      <button type="button" class="btn btn-danger" :disabled="!picked.size" @click="closePicked()"><i class="ti ti-square-x me-1"></i>Close <span x-text="picked.size"></span></button>
     </div>
   </div>
   <div class="offcanvas-backdrop fade show" x-show="open" @click="hide()" x-cloak></div>
@@ -1297,7 +1297,7 @@ html.booting body { overflow: hidden; }
         <div class="text-danger small mt-2" x-show="error" x-text="error"></div>
       </div>
       <div class="modal-footer"><button type="button" class="btn" @click="hide()">Keep everything</button>
-        <button type="button" class="btn btn-danger" :disabled="!canDelete || busy" @click="run()"><i class="ti ti-trash me-1"></i>Delete for good</button></div>
+        <button type="button" class="btn btn-danger" :disabled="!canDelete || busy" @click="run()"><i class="ti ti-trash-x me-1"></i>Delete for good</button></div>
     </div></div>
   </div>
   <div class="modal-backdrop fade show" x-show="open" x-cloak></div>
@@ -1358,11 +1358,11 @@ html.booting body { overflow: hidden; }
     <div class="modal-dock" id="trashPager"></div>
     <div class="modal-footer">
       <span class="text-secondary small me-auto" id="trashSel"></span>
-      <button type="button" class="btn" id="trashRestore"><i class="ti ti-restore me-1"></i>Put back</button>
+      <button type="button" class="btn" id="trashRestore"><i class="ti ti-arrow-back-up me-1"></i>Put back</button>
       <button type="button" class="btn btn-danger" id="trashPurge"><i class="ti ti-trash-x me-1"></i>Delete permanently</button>
       <div class="vr mx-1"></div>
       <button type="button" class="btn" id="trashRestoreAll">Put back all</button>
-      <button type="button" class="btn btn-danger" id="trashEmpty"><i class="ti ti-alert-triangle me-1"></i>Empty Trash…</button>
+      <button type="button" class="btn btn-danger" id="trashEmpty"><i class="ti ti-trash-x me-1"></i>Empty Trash…</button>
     </div>
   </div></div>
 </div>
@@ -1402,7 +1402,7 @@ html.booting body { overflow: hidden; }
       <div class="text-secondary" id="confirmBody"></div>
     </div>
     <div class="modal-footer"><div class="confirm-acts">
-      <button class="btn btn-link link-secondary w-100 order-last" id="confirmLater" hidden></button>
+      <button class="btn btn-ghost-secondary w-100 order-last" id="confirmLater" hidden></button>
       <button class="btn" id="confirmNo">Cancel</button>
       <button class="btn" id="confirmYes"></button>
     </div></div>
@@ -1423,7 +1423,7 @@ html.booting body { overflow: hidden; }
     <div class="d-flex align-items-center gap-2">
       <span class="text-secondary small flex-fill" id="jobDetail"></span>
       <button class="btn btn-sm" id="jobPause"><i class="ti ti-player-pause me-1"></i>Pause</button>
-      <button class="btn btn-sm btn-danger" id="jobCancel"><i class="ti ti-player-stop me-1"></i>Cancel</button>
+      <button class="btn btn-sm" id="jobCancel"><i class="ti ti-x me-1"></i>Cancel</button>
     </div>
   </div>
 </div>
