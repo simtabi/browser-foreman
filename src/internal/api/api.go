@@ -16,6 +16,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +40,8 @@ type Server struct {
 	Hooks    *webhooks.Store
 	Dispatch *webhooks.Dispatcher
 	Data     store.Store
+	// Listener, when set, is where Run serves (the caller bound it); otherwise Run listens on Cfg.Server.Addr.
+	Listener net.Listener
 	Limit    *auth.Limiter // failed sign-ins
 	Now      func() time.Time
 	UI       fs.FS // the web interface's files; nil: the ones embedded in the binary
@@ -236,8 +239,14 @@ func localHost(hostport string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// health answers whether the server is up. In local mode (loopback only) it also says what it is, so a second
+// `serve` or a client can tell a running Browser Foreman from another program on the port: its version and process.
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, 200, map[string]any{"ok": true})
+	out := map[string]any{"ok": true}
+	if s.Cfg.Server.Mode == config.ModeLocal {
+		out["service"], out["version"], out["pid"] = "browser-foreman", version.Version, os.Getpid()
+	}
+	writeJSON(w, 200, out)
 }
 
 func (s *Server) versionInfo(w http.ResponseWriter, _ *http.Request) {
@@ -409,7 +418,11 @@ func (s *Server) Run(ctx context.Context) error {
 	}()
 	srv := &http.Server{Addr: s.Cfg.Server.Addr, Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	errc := make(chan error, 1)
-	go func() { errc <- srv.ListenAndServe() }()
+	if s.Listener != nil { // bound by the caller, which handles a port already in use
+		go func() { errc <- srv.Serve(s.Listener) }()
+	} else {
+		go func() { errc <- srv.ListenAndServe() }()
+	}
 	_, _ = s.Bus.Publish("server.started", map[string]string{"addr": s.Cfg.Server.Addr, "version": version.Version})
 	select {
 	case <-ctx.Done():

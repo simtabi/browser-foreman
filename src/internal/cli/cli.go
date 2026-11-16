@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -46,7 +47,7 @@ func Root() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd(), userCmd(), tokenCmd(), backupCmd(), restoreCmd(), pairCmd(), mcpCmd(), mergeCmd(), sortCmd(), applyCmd())
+	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd(), userCmd(), tokenCmd(), backupCmd(), restoreCmd(), pairCmd(), mcpCmd(), mergeCmd(), sortCmd(), applyCmd(), stopCmd())
 	return root
 }
 
@@ -60,22 +61,40 @@ func load() (config.Paths, config.Config, error) {
 }
 
 func serveCmd() *cobra.Command {
-	return &cobra.Command{
+	var replace bool
+	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the server (API, events, webhooks)",
+		Long: "Runs the server on server.addr. If Browser Foreman already runs there it says so and exits (--replace restarts it,\n" +
+			"as `browser-foreman stop` stops it); if another program holds the port, it names it and uses the next free one,\n" +
+			"which it records so the other commands find it.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			p, c, err := load()
 			if err != nil {
 				return err
 			}
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			l, err := bind(ctx, c, replace, cmd.OutOrStdout())
+			if errors.Is(err, errAlreadyRunning) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			defer l.Close()
+			c.Server.Addr = l.Addr().String()
 			data, err := store.Open(c.Storage.Driver, c.Storage.Path)
 			if err != nil {
 				return err
 			}
 			defer data.Close()
 			srv := newServer(c, data, time.Now)
-			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-			defer stop()
+			srv.Listener = l
+			if err := writeRuntime(c, c.Server.Addr, time.Now()); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "recording the address: %v\n", err)
+			}
+			defer removeRuntime(c)
 			fmt.Fprintf(cmd.OutOrStdout(), "Browser Foreman %s on http://%s (config %s, state %s)\n", version.Version, c.Server.Addr, p.Config, c.Storage.Path)
 			if c.Server.Mode == config.ModeLocal && c.APIToken == "" {
 				fmt.Fprintln(cmd.OutOrStdout(), "No API token: the API is closed until you run `browser-foreman config init`.")
@@ -87,6 +106,24 @@ func serveCmd() *cobra.Command {
 			}
 			srv.Background(ctx)
 			return srv.Run(ctx)
+		},
+	}
+	cmd.Flags().BoolVar(&replace, "replace", false, "stop the Browser Foreman already running on the address and take its place")
+	return cmd
+}
+
+func stopCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stop",
+		Short: "Stop the running server (as Ctrl-C in its terminal would)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			_, c, err := load()
+			if err != nil {
+				return err
+			}
+			ctx := context.Background()
+			return stopServer(ctx, serverAddr(ctx, c), cmd.OutOrStdout())
 		},
 	}
 }

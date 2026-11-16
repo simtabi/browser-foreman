@@ -241,3 +241,11 @@ func TestPasswordChangeEndsOtherSessions(t *testing.T) {
 		t.Fatal("the new password does not work")
 	}
 }
+
+func TestHealthSaysNothingAboutItselfInAccountsMode(t *testing.T) {
+	h := accountsServer(t).Handler()
+	w := do(h, "GET", "/api/v1/health", "", "127.0.0.1:8765", "", "")
+	if w.Code != 200 || strings.Contains(w.Body.String(), "pid") || strings.Contains(w.Body.String(), "version") {
+		t.Fatalf("health in accounts mode: %d %s", w.Code, w.Body)
+	}
+}

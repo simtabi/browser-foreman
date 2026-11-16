@@ -37,6 +37,25 @@ Check it answers:
 curl -s http://127.0.0.1:8765/api/v1/health
 ```
 
+In local mode the answer also names the service, its version and its process.
+
+### When the port is already in use
+
+`serve` checks what holds its address before giving up:
+
+| What holds it | What `serve` does |
+|---|---|
+| This same Browser Foreman | Says it is already running there, with its process, and exits without an error. |
+| Another build of Browser Foreman, such as one started before a rebuild | Stops with how to replace it. `browser-foreman serve --replace` stops it and takes its place. |
+| Another program | Names the program and uses the next free port, up to 20 higher. |
+
+`browser-foreman stop` stops the running server, as Ctrl-C in its terminal would. Both `stop` and `--replace` signal
+only a process that answers as Browser Foreman and whose program is `browser-foreman`.
+
+A server on a fallback port records its address in `server.json` in the state folder. `mcp`, `pair`, `apply` and
+`stop` read it, so they find the server there. A browser extension paired with the usual address needs pairing again.
+To keep one port, set `server.addr`.
+
 ## Watch events
 
 Every change is an event. Follow them live:

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -42,7 +41,8 @@ func mcpCmd() *cobra.Command {
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			var a *mcpserver.API
-			if answers(ctx, c.Server.Addr) {
+			if addr := serverAddr(ctx, c); answers(ctx, addr) {
+				c.Server.Addr = addr
 				token := os.Getenv("BROFO_TOKEN")
 				if token == "" && c.Server.Mode == config.ModeLocal {
 					token = c.APIToken
@@ -71,20 +71,4 @@ func mcpCmd() *cobra.Command {
 			return s.Run(ctx, &mcp.StdioTransport{})
 		},
 	}
-}
-
-// answers says whether a Browser Foreman server answers at addr within a second.
-func answers(ctx context.Context, addr string) bool {
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/api/v1/health", nil)
-	if err != nil {
-		return false
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return false
-	}
-	resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
 }

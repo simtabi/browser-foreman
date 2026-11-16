@@ -313,8 +313,8 @@ func readThroughExtension(ctx context.Context, s store.Store, c config.Config, w
 	if token == "" {
 		token = c.APIToken
 	}
-	if answers(ctx, c.Server.Addr) {
-		if err := askExtensionToRead(ctx, "http://"+c.Server.Addr, token, browser, 60*time.Second); err != nil {
+	if addr := serverAddr(ctx, c); answers(ctx, addr) {
+		if err := askExtensionToRead(ctx, "http://"+addr, token, browser, 60*time.Second); err != nil {
 			return store.Tree{}, "", err
 		}
 	} else {

@@ -10,6 +10,11 @@ ships.
 
 ### Added
 
+- `serve` handles a port already in use. If the same Browser Foreman holds it, `serve` says so and exits without an
+  error; another build can be replaced with `--replace`. If another program holds it, `serve` names that program and
+  uses the next free port, recorded in `server.json` so `mcp`, `pair`, `apply` and `stop` follow it.
+  `browser-foreman stop` stops the running server. In local mode, health names the service, its version and its
+  process.
 - The write-back's dry run reads the profile through the extension (the server asks it to read now, or uses its last
   read when Browser Foreman is not running) or from the profile's file, as `--read` or `writeback.read` says.
   `writeback.mode`, `writeback.route` and `writeback.read` set the choices, each `ask` by default. The extension

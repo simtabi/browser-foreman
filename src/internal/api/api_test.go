@@ -3,8 +3,10 @@ package api
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -57,6 +59,10 @@ func TestHealthAndHostOriginGuard(t *testing.T) {
 	h := newServer(t, "tok").Handler()
 	if w := do(h, "GET", "/api/v1/health", "", "127.0.0.1:8765", "", ""); w.Code != 200 || w.Header().Get("X-Frame-Options") != "DENY" {
 		t.Fatalf("health %d", w.Code)
+	}
+	// In local mode it says what it is, so a second serve can tell it from another program on the port.
+	if w := do(h, "GET", "/api/v1/health", "", "127.0.0.1:8765", "", ""); !strings.Contains(w.Body.String(), `"service":"browser-foreman"`) || !strings.Contains(w.Body.String(), fmt.Sprintf(`"pid":%d`, os.Getpid())) {
+		t.Fatalf("health does not say what it is: %s", w.Body)
 	}
 	if w := do(h, "GET", "/api/v1/health", "", "evil.example:8765", "", ""); w.Code != 403 {
 		t.Fatalf("rebinding host allowed: %d", w.Code)

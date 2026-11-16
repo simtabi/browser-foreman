@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,6 +26,7 @@ func pairCmd() *cobra.Command {
 			if c.Server.Mode != config.ModeLocal || c.APIToken == "" {
 				return errors.New("in accounts mode, make the code in the web interface (Settings › Browser extension), signed in as an owner")
 			}
+			c.Server.Addr = serverAddr(context.Background(), c) // a fallback port, when serve had to use one
 			req, _ := http.NewRequest(http.MethodPost, "http://"+c.Server.Addr+"/api/v1/extension/pairings", nil)
 			req.Header.Set("Authorization", "Bearer "+c.APIToken)
 			resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
