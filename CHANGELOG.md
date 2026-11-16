@@ -10,6 +10,9 @@ ships.
 
 ### Added
 
+- Smart folders: saved searches on a new *Saved* row under Show. Save the current Show filter and search with a name,
+  open it in one click (with its live count), forget it from there. Kept in the server's preferences
+  (`smart_folders`), so they appear in every browser; MCP lists and opens them (`smart_folders`, `open_smart_folder`).
 - `ai.provider: openai` answers AI jobs through OpenAI's Chat Completions API (`OPENAI_API_KEY`, `ai.model`
   required, `ai.openai_url` for another server speaking it), with answers held to the job's schema in strict mode.
 - AI jobs are kept in `ai-jobs.json` in the state folder, so a restart loses none; jobs still waiting are answered
@@ -235,6 +238,9 @@ ships.
 
 ### Fixed
 
+- A long bookmark list no longer freezes the page. Measured with 50,000 bookmarks: a broad search showing 10,917 rows
+  blocked the page for 2.1 s and a click on a row for 6.1 s; the list now builds in chunks and a click repaints only
+  the rows it changes (longest block 257 ms and 99 ms). `search_bookmarks` over MCP also searches tags.
 - A page whose server stopped, or moved to another address, says so in words and names what to do, in place of the
   browser's "Failed to fetch"; *Browser extensions* shows one notice and recovers by itself when the server is back,
   instead of a new error every three seconds, and the same message never stacks as several toasts.

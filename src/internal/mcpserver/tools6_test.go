@@ -216,3 +216,45 @@ func TestAFolderScopedClientCannotAnswerADedupeJob(t *testing.T) {
 		t.Fatalf("%v", out)
 	}
 }
+
+func TestSmartFoldersOpenAsThePageMatches(t *testing.T) {
+	cs, a := setup(t, true)
+	ctx := context.Background()
+	if out, ok := call(t, cs, "label_bookmarks", map[string]any{"workspace": "main", "ids": []string{"b1"}, "add_tags": []string{"later"}}); !ok {
+		t.Fatal(out)
+	}
+	smart := []map[string]any{
+		{"id": "sf_tag", "name": "Later", "q": "#later"},
+		{"id": "sf_text", "name": "Go stuff", "workspace": "main", "q": "go docs"},
+		{"id": "sf_other", "name": "Elsewhere", "workspace": "other", "q": "x"},
+		{"id": "sf_dupes", "name": "Merged", "workspace": "main", "filter": "dupes"},
+	}
+	if err := a.do(ctx, "PUT", "preferences", map[string]any{"smart_folders": smart}, nil); err != nil {
+		t.Fatal(err)
+	}
+	out, ok := call(t, cs, "smart_folders", map[string]any{"workspace": "main"})
+	if !ok {
+		t.Fatal(out)
+	}
+	list := out["untrusted_data"].(map[string]any)["smart_folders"].([]any)
+	if len(list) != 3 { // sf_other belongs to another workspace
+		t.Fatalf("%v", list)
+	}
+	if c := list[0].(map[string]any)["count"]; c != float64(1) {
+		t.Fatalf("Later holds b1: %v", list[0])
+	}
+	if _, has := list[2].(map[string]any)["count"]; has {
+		t.Fatalf("a page-only filter got a count: %v", list[2])
+	}
+	out, ok = call(t, cs, "open_smart_folder", map[string]any{"workspace": "main", "id": "sf_text"})
+	res := out["untrusted_data"].(map[string]any)["results"].([]any)
+	if !ok || len(res) != 1 || res[0].(map[string]any)["id"] != "b1" {
+		t.Fatalf("the phrase matches as typed: %v", out)
+	}
+	if out, ok := call(t, cs, "open_smart_folder", map[string]any{"workspace": "main", "id": "sf_dupes"}); ok || !strings.Contains(out["error"].(string), "only the web page") {
+		t.Fatalf("%v", out)
+	}
+	if out, ok := call(t, cs, "search_bookmarks", map[string]any{"workspace": "main", "query": "later"}); !ok || out["untrusted_data"].(map[string]any)["total"] != float64(1) {
+		t.Fatalf("search reads tags: %v", out)
+	}
+}

@@ -18,6 +18,7 @@ import { Poller } from "../poller";
 import { BrowserScope } from "../scope";
 import { tabHistory } from "../components";
 import { $, badge, el, fmtDate, fmtDay, icon, kbd } from "../ui";
+import { addSmart, describeSmart, smartFor, smartMatching } from "../smart";
 import { looseLabel, pendingUpdate, rowElement } from "../views/tree-rows";
 import { LINK_FIELDS } from "../v1";
 import { redactedNote, tabRowElement, windowCard as windowCardOf } from "../views/tab-cards";
@@ -71,6 +72,7 @@ const DUPE = new Set(DATA.dupes.map(d => d.id));
 const newMine = new Set(DATA.newMine);
 const thumbVer = new Map();
 let mode = "g", filter = "all", rows = [], sel = 0, anchor = null;
+let drawGen = 0, drawn = 0;  // the list's draw, and how many of its rows are built so far (draw builds long lists in chunks)
 const marked = new Set();
 
 // ---------- storage (a per-viewer convenience; the page works without it) ----------
@@ -339,8 +341,10 @@ function virtualTree() {
 }
 // Date range: datetime-local values, compared with each bookmark's date added.
 const toEpoch = v => v ? new Date(v).getTime() / 1000 : null;
-function matcher() {
-  const q = $("#q").value.trim().toLowerCase(), from = toEpoch(view.from), to = toEpoch(view.to);
+// matcher tests a bookmark against the Show filter, the search and the dates; a smart folder's count passes its own
+// filter and search, and no dates (it ignores the date range).
+function matcher(filter_ = filter, query = $("#q").value, dates = true) {
+  const filter = filter_, q = query.trim().toLowerCase(), from = dates ? toEpoch(view.from) : null, to = dates ? toEpoch(view.to) : null;
   return id => {
     const i = ITEM.get(id);
     if (filter === "prot" && !(i.p || i.m)) return false;
@@ -355,6 +359,66 @@ function matcher() {
   };
 }
 const filtering = () => filter !== "all" || $("#q").value.trim() || view.from || view.to;
+
+// ---------- smart folders: saved searches, kept in the server's preferences (ts/smart.ts) ----------
+let SMART = [];  // every smart folder; the row shows those for this workspace
+const smartWs = () => (window.BM_WS ? window.BM_WS.id : null);
+async function loadSmart() {
+  if (!window.BM_WS?.call) return;
+  try { SMART = (await window.BM_WS.call("GET", "preferences")).smart_folders || []; } catch { SMART = []; }
+  paintSmart();
+}
+async function saveSmart(next, done) {
+  try { SMART = (await window.BM_WS.call("PUT", "preferences", {smart_folders: next})).smart_folders || []; paintSmart(); toast(done, "success"); }
+  catch (e) { toast(`${e instanceof Error ? e.message : e} Smart folders are saved by the owner.`, "danger", "Not saved"); }
+}
+let smartTimer;
+function paintSmart() {
+  clearTimeout(smartTimer);
+  smartTimer = setTimeout(() => {  // after the build that changed the view, and once for several changes
+    const row = $("#smartRow"), box = $("#smart");
+    if (!row || !box || !window.BM_WS?.call) return;
+    const mine = smartFor(SMART, smartWs()), q = $("#q").value.trim(), active = smartMatching(mine, filter, q);
+    const items = liveItems(), nameOf = k => (FILTERS.find(f => f[0] === k) || [])[1] || k;
+    const out = [];
+    for (const s of mine) {
+      const b = el("button", "btn btn-sm" + (s === active ? " active" : "")); b.type = "button";
+      const m = matcher(s.filter || "all", s.q || "", false);
+      b.append(icon("ti-folder-search", "me-1"), s.name, el("span", "badge bg-secondary-lt ms-1", items.filter(i => m(i.id)).length.toLocaleString()));
+      b.dataset.tip = describeSmart(s, nameOf); b.setAttribute("aria-pressed", String(s === active));
+      b.onclick = () => openSmart(s);
+      out.push(b);
+    }
+    const act = el("button", "btn btn-sm btn-ghost-primary"); act.type = "button";
+    if (active) {
+      act.append(icon("ti-folder-x", "me-1"), "Forget it…");
+      act.dataset.tip = `Remove the smart folder “${active.name}”. Your bookmarks are not touched.`;
+      act.onclick = async () => {
+        if (!await askConfirm({title: `Forget “${active.name}”?`, body: "Only the saved search goes; every bookmark stays where it is.", ok: "Forget it", danger: false})) return;
+        await saveSmart(SMART.filter(x => x.id !== active.id), `“${active.name}” is forgotten.`);
+      };
+    } else {
+      act.append(icon("ti-folder-plus", "me-1"), "Save this view…");
+      act.disabled = filter === "all" && !q;
+      act.dataset.tip = act.disabled ? "Search for something or pick a Show filter, then save it as a smart folder." : "Save this search and Show filter as a smart folder, in every browser.";
+      act.onclick = async () => {
+        const name = await askText({title: "Save as a smart folder", label: "Name", value: q.startsWith("#") ? q.slice(1) : (q || nameOf(filter)),
+          hint: describeSmart({id: "", name: "", q, filter: filter === "all" ? "" : filter, workspace: smartWs() || undefined}, nameOf) + ". It updates as your bookmarks change."});
+        if (name == null) return;
+        try { await saveSmart(addSmart(SMART, {name, q, filter}, smartWs()), `Saved “${name.trim()}”.`); }
+        catch (e) { toast(e instanceof Error ? e.message : String(e), "warning", "Not saved"); }
+      };
+    }
+    out.push(act);
+    box.replaceChildren(...out);
+    row.hidden = false;
+  }, 0);
+}
+// Opening one restores its view: back and forward step through it like any other.
+function openSmart(s) {
+  PLACE.update({filter: s.filter && s.filter !== "all" ? s.filter : "", q: s.q || ""}, {push: true});
+  restorePlace(PLACE.place);
+}
 
 function buildToolbar() {
   // Each chip carries its count (these were the stat cards above the bar; one control now, not two).
@@ -1305,6 +1369,7 @@ function dupesTree() {
 
 function build(keepView = false) {
   indexParents(st().root);
+  paintSmart();
   try { paintTrashBadge(); paintChipCounts(); updateAllLabel(); $("#navBmCount").textContent = liveItems().length.toLocaleString(); } catch (e) { console.error("header counts", e); }
   const root = readOnly() ? dupesTree() : grouped() ? virtualTree() : st().root;
   if (readOnly()) indexParents(root);
@@ -1358,7 +1423,7 @@ function build(keepView = false) {
 }
 
 // A row's element by its index in `rows` (separators sit between rows, so position in the list is not the index).
-const rowEl = k => Dom.one("row", String(k), list);
+const rowEl = k => { if (k >= drawn && k < rows.length) appendRows(Math.min(rows.length, k + 50)); return Dom.one("row", String(k), list); };
 // List or grid layout of the tree (the grid shows each folder's bookmarks as thumbnail cards).
 let LAYOUT = store.get("layout") === "grid" ? "grid" : "list";
 // Switching is a class on the page and a new face on the toggle: nothing is rebuilt, and the panes keep their widths.
@@ -1381,6 +1446,7 @@ const ROW_DEPS = {readOnly: () => readOnly(), titleOf, descOf, ratingOf, tagsOf,
 function draw() {
   hideTip();
   list.replaceChildren();
+  drawGen++; drawn = 0;  // stops the chunks of the list drawn before
   // Nothing found: say what was searched for and offer the way back (the Trash row alone, at 0, is not a result).
   if (!rows.length || (filtering() && rows.every(r => r.trash))) {
     const q = $("#q").value.trim(), e = el("div", "empty py-5");
@@ -1393,11 +1459,41 @@ function draw() {
     list.append(e); return;
   }
   // The grid layout is CSS alone (#list.grid): the rows are the same either way, so switching is instant.
-  rows.forEach((r, idx) => {
+  // A long list (a broad search over 50,000 bookmarks opens ~11,000 rows) is built in chunks: the first rows at once,
+  // the rest a chunk at a time between other work, so the page never freezes; a row needed sooner is built on demand.
+  appendRows(Math.min(rows.length, Math.max(FIRST_ROWS, sel + 50)));
+  if (drawn < rows.length) drawRest(drawGen);
+  rowEl(sel)?.scrollIntoView({block: "nearest"});
+}
+const FIRST_ROWS = 300, ROW_CHUNK = 400;
+function drawRest(gen) {
+  setTimeout(() => {
+    if (gen !== drawGen) return;  // a newer draw replaced this list
+    appendRows(Math.min(rows.length, drawn + ROW_CHUNK));
+    if (drawn < rows.length) drawRest(gen);
+  }, 0);
+}
+function appendRows(upto) {
+  const frag = document.createDocumentFragment();
+  for (; drawn < upto; drawn++) for (const n of rowNodes(rows[drawn], drawn)) frag.append(n);
+  list.append(frag);
+}
+// Moving the selection repaints the two rows involved, not the whole list (a click used to rebuild every row: 6 s
+// with 11,000 rows open). Marks spread over many rows, so changing them still redraws.
+function paintSel(old) {
+  for (const k of [old, sel]) {
+    const e = rowEl(k); if (!e || !rows[k]) continue;
+    e.classList.toggle("sel", k === sel); e.setAttribute("aria-selected", String(k === sel || marked.has(rows[k].node)));
+  }
+  rowEl(sel)?.scrollIntoView({block: "nearest"});
+}
+function rowNodes(r, idx) {
+    const out = [];
     // The row's element is built by src/web/ts/views/tree-rows.ts; selection, clicks, menus and drag are wired here.
     const {row: d, twisty} = rowElement(r, idx, {selected: idx === sel, marked: marked.has(r.node), draggable: !readOnly() && !r.trash && !grouped()}, ROW_DEPS);
     if (twisty) twisty.onclick = e => { e.stopPropagation(); sel = idx; toggle(r, !r.open); };
     d.onclick = e => {
+      if (!(e.metaKey || e.ctrlKey || e.shiftKey) && !marked.size) { const old = sel; anchor = idx; sel = idx; paintSel(old); show(); list.focus(); return; }
       if (e.metaKey || e.ctrlKey) toggleMark(r.node);
       else if (e.shiftKey && anchor != null) markRange(anchor, idx);
       else { marked.clear(); anchor = idx; }
@@ -1409,10 +1505,9 @@ function draw() {
     // A folder holding both subfolders and bookmarks: its loose bookmarks get their own labelled group after the
     // subfolders, so they do not read as part of the last subfolder.
     const group = looseGroupAt(rows, idx);
-    if (group) list.append(looseLabel(r.depth, group.parent === st().root ? "this folder" : nice(group.parent.n), group.count));
-    list.append(d);
-  });
-  rowEl(sel)?.scrollIntoView({block: "nearest"});
+    if (group) out.push(looseLabel(r.depth, group.parent === st().root ? "this folder" : nice(group.parent.n), group.count));
+    out.push(d);
+    return out;
 }
 
 // Folders closed by hand while a filter, search or the duplicates view forces matching folders open (see build).
@@ -2439,6 +2534,7 @@ function downloadFile() {
 // ---------- keyboard ----------
 function move(to, extend) {
   const from = sel; sel = Math.max(0, Math.min(rows.length - 1, to));
+  if (!extend && !marked.size) { anchor = sel; paintSel(from); show(); return; }
   if (extend) { if (anchor == null) anchor = from; markRange(anchor, sel); } else { anchor = sel; marked.clear(); }
   draw(); show();
 }
@@ -2554,6 +2650,7 @@ function restorePlace(p) {
 }
 paintScope();
 restorePlace(PLACE.read());
+void loadSmart();
 PLACE.onNavigate(restorePlace);
 
 // ---------- names other scripts call directly (src/web/ts/ws_client.js, src/web/ts/legacy.ts) ----------

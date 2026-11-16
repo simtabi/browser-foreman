@@ -109,7 +109,7 @@ func (s *Server) getPrefs(w http.ResponseWriter, r *http.Request) {
 
 // putPrefs replaces the preferences; fields left out keep their current values.
 func (s *Server) putPrefs(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 16<<10)) // read before the lock: a slow client holds nothing
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10)) // read before the lock: a slow client holds nothing; 50 smart folders fit
 	if err != nil {
 		writeErr(w, 400, "bad JSON body: "+err.Error())
 		return

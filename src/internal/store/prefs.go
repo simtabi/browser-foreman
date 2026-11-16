@@ -47,7 +47,22 @@ type Prefs struct {
 	// ActiveWorkspace is the workspace last opened, which background snapshots are saved for.
 	TabsOwn         []string `json:"tabs_own,omitempty"`
 	ActiveWorkspace string   `json:"active_workspace,omitempty"`
+	// SmartFolders are saved searches: a name over a Show filter and search text.
+	SmartFolders []SmartFolder `json:"smart_folders,omitempty"`
 }
+
+// SmartFolder is one saved search. Workspace limits it to one workspace; empty shows it in every one.
+type SmartFolder struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Workspace string `json:"workspace,omitempty"`
+	Q         string `json:"q,omitempty"`
+	Filter    string `json:"filter,omitempty"`
+}
+
+// smartFilters are the Show filters a smart folder may name: the page's own.
+var smartFilters = map[string]bool{"": true, "all": true, "prot": true, "dead": true, "moved": true, "moved-elsewhere": true,
+	"unverified": true, "needs-login": true, "dupes": true}
 
 // Defaults are what a new store reads.
 func Defaults() Prefs {
@@ -85,6 +100,23 @@ func (p Prefs) Validate() error {
 		return errors.New("snapshot_wait_seconds: 1 to 30")
 	case p.SnapshotDir != "" && (!filepath.IsAbs(p.SnapshotDir) || len(p.SnapshotDir) > 1024 || filepath.Clean(p.SnapshotDir) != p.SnapshotDir):
 		return errors.New("snapshot_dir: a full path to a folder (or empty for the default)")
+	}
+	if len(p.SmartFolders) > 50 {
+		return errors.New("smart_folders: at most 50")
+	}
+	ids := map[string]bool{}
+	for _, s := range p.SmartFolders {
+		switch {
+		case s.ID == "" || len(s.ID) > 40 || ids[s.ID]:
+			return fmt.Errorf("smart folder %q: needs an id of its own, up to 40 characters", s.Name)
+		case s.Name == "" || len(s.Name) > 60:
+			return fmt.Errorf("smart folder %q: a name of 1 to 60 characters", s.Name)
+		case len(s.Q) > 200 || len(s.Workspace) > 100:
+			return fmt.Errorf("smart folder %q: its search is at most 200 characters", s.Name)
+		case !smartFilters[s.Filter]:
+			return fmt.Errorf("smart folder %q: filter %q is not one of the Show filters", s.Name, s.Filter)
+		}
+		ids[s.ID] = true
 	}
 	for _, n := range append(append([]string{}, p.OpenWith...), p.Tracked...) {
 		if n == "" || len(n) > 60 {

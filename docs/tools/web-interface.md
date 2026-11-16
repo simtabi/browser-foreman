@@ -31,8 +31,8 @@ Redo for the view you are in, *Expand / Collapse all* for that view (folders in 
 theme toggle (a moon in light mode, a sun in dark), and the ⋮ menu (workspace, help, settings).
 Each view then has its own bar. Bookmarks has *Update moved*, *Refresh all*, *Trash* and *Download*, then two rows:
 **Show** (one segmented control: All, Untouched, Dead, Moved, Redirects, Unverified, Login, Duplicates, each with its
-count) and **View** (Group by, Sort, Folders, and *Added*, a period picker with quick ranges and a custom date and
-time range; *Clear filters* at the end). The footer shows whether the server is running and when tabs were last saved.
+count), **Saved** (your smart folders; see below) and **View** (Group by, Sort, Folders, and *Added*, a period picker
+with quick ranges and a custom date and time range; *Clear filters* at the end). The footer shows whether the server is running and when tabs were last saved.
 
 ## The three views
 
@@ -112,10 +112,29 @@ incognito, and *Another browser* with the system default and each browser on thi
 *Organise* and *View*. A group appears only when something in it applies here; a group with a single action shows
 that action directly. Keyboard: ↑ ↓ move, → opens a submenu, ← or Esc goes back, Esc closes, Enter runs.
 
+## Smart folders
+
+A smart folder is a saved search: a name over a Show filter and search text, such as *Dead links to triage* (Show:
+Dead) or *Later* (search `#later`, which matches that tag exactly). It holds whatever matches now, so it changes as
+your bookmarks do; nothing is copied or moved.
+
+- **Save one:** pick a Show filter or type a search, then *Saved › Save this view…* and name it. It belongs to the
+  workspace you are in.
+- **Open one:** click it on the Saved row. Its button shows how many bookmarks it holds, and lights up while the view
+  is that smart folder. Back and forward step through it like any other view.
+- **Forget one:** open it, then *Forget it…*. Only the saved search goes.
+
+Smart folders are kept in the server's preferences (`smart_folders`), so they appear in every browser, and an
+assistant can list and open them over [MCP](mcp.md). Saving them is the owner's: in accounts mode, other roles see
+them but cannot change them. At most 50.
+
 ## List and grid
 
 One toggle in the Folders pane's header switches between a **list** (rows under their folders) and a **grid** (each
-folder's bookmarks as cards with their page snapshot, stars and tags); its icon shows the layout it switches to. The choice is kept in this browser. In the grid the
+folder's bookmarks as cards with their page snapshot, stars and tags); its icon shows the layout it switches to. The choice is kept in this browser.
+A long list (a broad search, or every folder expanded) shows its first rows at once and fills in the rest a few
+hundred at a time, so the page stays usable with tens of thousands of bookmarks open; moving the selection repaints
+only the rows it leaves and reaches. In the grid the
 details pane is narrower and its folder summary stacks its columns.
 
 ## Your labels: rating, tags and last opened

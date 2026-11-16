@@ -43,7 +43,7 @@ type Options struct {
 
 // ReadTools and WriteTools are the tools' names, in the order they are added; a test pins them.
 var (
-	ReadTools  = []string{"list_workspaces", "search_bookmarks", "read_folder", "get_history", "export_workspace", "list_tab_snapshots", "read_tab_snapshot", "open_tabs_now", "get_preview", "health_report", "find_duplicates", "stats"}
+	ReadTools  = []string{"list_workspaces", "search_bookmarks", "read_folder", "get_history", "export_workspace", "list_tab_snapshots", "read_tab_snapshot", "open_tabs_now", "get_preview", "health_report", "find_duplicates", "stats", "smart_folders", "open_smart_folder"}
 	WriteTools = []string{"move_bookmarks", "rename", "trash", "put_back", "undo", "rollback", "save_tabs_as_bookmarks", "refresh_links", "label_bookmarks", "add_bookmark", "next_ai_jobs", "submit_ai_results", "run_ai_jobs"}
 )
 
@@ -81,6 +81,8 @@ func New(api *API, o Options) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{Name: "health_report", Description: "How a workspace's links stand (or one folder's): counts by status, and the bookmarks that are confirmed dead, suspected dead, moved, unverified or need a sign-in. A link is confirmed dead after two dead checks at least a day apart.", Annotations: readOnly("Link health")}, t.healthReport)
 	mcp.AddTool(s, &mcp.Tool{Name: "find_duplicates", Description: "Groups of bookmarks that lead to the same page (same final address, same canonical page, or similar titles), each with the copy to keep and why the others match.", Annotations: readOnly("Find duplicates")}, t.findDuplicates)
 	mcp.AddTool(s, &mcp.Tool{Name: "stats", Description: "A workspace in numbers: bookmarks, folders, trash, rated, tagged and noted bookmarks, the top folders, tags and sites, link status counts, and the oldest and newest bookmark.", Annotations: readOnly("Workspace stats")}, t.stats)
+	mcp.AddTool(s, &mcp.Tool{Name: "smart_folders", Description: "The workspace's smart folders (saved searches made in the web page): name, search, Show filter, and how many bookmarks each holds now.", Annotations: readOnly("Smart folders")}, t.listSmart)
+	mcp.AddTool(s, &mcp.Tool{Name: "open_smart_folder", Description: "The bookmarks one smart folder holds now (by id from smart_folders), matched as the web page matches them.", Annotations: readOnly("Open a smart folder")}, t.openSmart)
 	s.AddResource(&mcp.Resource{URI: "bookmarks://workspaces", Name: "workspaces", Description: "Every bookmark workspace, as list_workspaces gives them.", MIMEType: "application/json"}, t.workspacesResource)
 	s.AddResourceTemplate(&mcp.ResourceTemplate{URITemplate: "bookmarks://workspaces/{id}/health", Name: "workspace-health", Description: "A workspace's link health, as health_report gives it.", MIMEType: "application/json"}, t.healthResource)
 	s.AddPrompt(&mcp.Prompt{Name: "triage-dead-links", Description: "Go through the links that stopped working, and decide what to keep.", Arguments: []*mcp.PromptArgument{arg("workspace", "the workspace id", true), arg("folder", "only this folder (a path)", false)}}, t.triagePrompt)
@@ -233,7 +235,7 @@ func (t *tools) listWorkspaces(ctx context.Context, _ *mcp.CallToolRequest, in l
 
 type searchIn struct {
 	Workspace    string `json:"workspace" jsonschema:"the workspace id"`
-	Query        string `json:"query,omitempty" jsonschema:"words that must all appear; empty lists everything"`
+	Query        string `json:"query,omitempty" jsonschema:"words that must all appear (in the title, address, note, description, folder or tags); empty lists everything"`
 	Folder       string `json:"folder,omitempty" jsonschema:"only under this folder path"`
 	Status       string `json:"status,omitempty" jsonschema:"ok, moved, moved-elsewhere, needs-login, unverified, dead, local, skipped, unchecked"`
 	IncludeTrash bool   `json:"include_trash,omitempty"`
@@ -261,7 +263,7 @@ func (t *tools) search(ctx context.Context, _ *mcp.CallToolRequest, in searchIn)
 		if in.Status != "" && status != in.Status {
 			return
 		}
-		hay := strings.ToLower(strings.Join([]string{it.Title, it.URL, it.Note, it.Description, it.Folder}, " "))
+		hay := strings.ToLower(strings.Join(append([]string{it.Title, it.URL, it.Note, it.Description, it.Folder}, b.Tags...), " "))
 		for _, w := range words {
 			if !strings.Contains(hay, w) {
 				return

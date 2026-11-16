@@ -1,6 +1,6 @@
 # MCP server
 
-`browser-foreman mcp` gives an AI assistant 12 tools to read your bookmark workspaces and tab snapshots, and 13 more
+`browser-foreman mcp` gives an AI assistant 14 tools to read your bookmark workspaces and tab snapshots, and 13 more
 to change bookmarks when you turn writes on, held to the folders you allow. It speaks the Model Context Protocol on stdio, through the official Go SDK,
 so only the assistant that started it can reach it.
 
@@ -86,6 +86,8 @@ program that lies about its name. Only programs you start reach the server, on s
 | `health_report` | link health for a workspace or one folder: counts by status, and the confirmed dead, suspected dead, moved, unverified and sign-in bookmarks |
 | `find_duplicates` | groups of bookmarks leading to the same page, each with the copy to keep and why the others match |
 | `stats` | the workspace in numbers: bookmarks, folders, trash, labels, top folders, tags and sites, link status, oldest and newest |
+| `smart_folders` | the workspace's [smart folders](web-interface.md#smart-folders), each with how many bookmarks it holds now |
+| `open_smart_folder` | the bookmarks one smart folder holds, matched as the web page matches them |
 
 ### Write (only with `mcp.writes`)
 

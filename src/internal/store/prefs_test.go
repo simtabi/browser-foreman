@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -63,4 +64,31 @@ func TestConcurrentPrefUpdatesAllLand(t *testing.T) {
 			t.Fatal("a change that failed was saved")
 		}
 	})
+}
+
+func TestSmartFoldersAreChecked(t *testing.T) {
+	ok := Defaults()
+	ok.SmartFolders = []SmartFolder{{ID: "sf_a", Name: "Dead", Filter: "dead"}, {ID: "sf_b", Name: "Later", Q: "#later", Workspace: "main"}}
+	if err := ok.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for name, bad := range map[string][]SmartFolder{
+		"same id":        {{ID: "x", Name: "a", Q: "a"}, {ID: "x", Name: "b", Q: "b"}},
+		"no name":        {{ID: "x", Q: "a"}},
+		"unknown filter": {{ID: "x", Name: "a", Filter: "spicy"}},
+		"long search":    {{ID: "x", Name: "a", Q: strings.Repeat("q", 201)}},
+	} {
+		p := Defaults()
+		p.SmartFolders = bad
+		if p.Validate() == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+	many := Defaults()
+	for i := range 51 {
+		many.SmartFolders = append(many.SmartFolders, SmartFolder{ID: fmt.Sprint("x", i), Name: "n", Q: "q"})
+	}
+	if many.Validate() == nil {
+		t.Error("51 smart folders were accepted")
+	}
 }
