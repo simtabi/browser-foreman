@@ -268,3 +268,25 @@ func TestTheExtensionsNameForABrowserIsUsedForItsWorkspaces(t *testing.T) {
 		t.Errorf("unknown: %q %q", p, e)
 	}
 }
+
+func TestAWriteSendsItsPlanAndReturnsTheExtensionsCounts(t *testing.T) {
+	var posted map[string]any
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/extension/commands", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&posted)
+		_, _ = w.Write([]byte(`{"command":{"id":"cmd_9","state":"queued"}}`))
+	})
+	mux.HandleFunc("GET /api/v1/extension/commands/cmd_9", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"command":{"id":"cmd_9","state":"done","result":{"created":3,"moved":2}}}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	res, err := runExtensionCommand(context.Background(), srv.URL, "tok", "Google Chrome",
+		map[string]any{"kind": "write-bookmarks", "workspace": "google-chrome-target", "expect": strings.Repeat("a", 64)}, "write the plan", 5*time.Second)
+	if err != nil || string(res) != `{"created":3,"moved":2}` {
+		t.Fatalf("%s %v", res, err)
+	}
+	if posted["kind"] != "write-bookmarks" || posted["browser"] != "Google Chrome" || posted["workspace"] != "google-chrome-target" || len(posted["expect"].(string)) != 64 {
+		t.Fatalf("posted %v", posted)
+	}
+}

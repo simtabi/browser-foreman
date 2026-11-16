@@ -17,6 +17,11 @@ eq(C.browserName("Mozilla/5.0 … Chrome/131.0 Safari/537.36", ["Chromium", "Goo
 eq(C.browserName("Mozilla/5.0 … Chrome/131.0 Safari/537.36 Edg/131.0", ["Microsoft Edge"], false), "Microsoft Edge");
 eq(C.browserName("Mozilla/5.0 (Macintosh) AppleWebKit/605 Version/18.1 Safari/605.1.15", [], false), "Safari");
 eq(C.checkServer("http://127.0.0.1:8765/x"), "http://127.0.0.1:8765");
+// The fingerprint a write checks: the same fixture and value as writeback/extprint_test.go, computed independently.
+const vector = [{ id: "0", title: "", children: [
+  { id: "1", title: "Bookmarks bar", children: [{ id: "5", title: "A  title ", url: " https://a.example/x " }, { id: "6", title: "Dev", children: [{ id: "7", title: "Café", url: "https://café.example/" }] }] },
+  { id: "2", title: "Other bookmarks", children: [] }, { id: "3", title: "Mobile bookmarks", children: [] }] }];
+eq(await C.extFingerprint(vector), "6c6d0bc98edc01336972cf52b62c45cecfbd5d86e77eede6c212738b9bb6a758", "the same fingerprint as the server's");
 // Connecting by itself: ask when nothing waits, wait while a request is live, rest after a no or three unanswered.
 const now = Date.parse("2026-11-16T10:00:00Z"), later = "2026-11-16T10:04:00Z", gone = "2026-11-16T09:59:00Z";
 eq(C.connectStep({ paired: true }, now), "none", "connected: nothing to do");

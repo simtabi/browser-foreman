@@ -2,7 +2,7 @@
 // waits for the server's commands (open links, open a tab group, read the bookmarks), and carries out what the popup asks.
 
 import { ext, type ExtBookmark } from "./ext";
-import { browserName, Client, connectStep, groupColor, tabReport, webOnly, type Command } from "./core";
+import { browserName, Client, connectStep, extFingerprint, groupColor, tabReport, webOnly, type Command } from "./core";
 import { plan, run, type WsNode } from "./apply";
 
 interface Settings { server?: string; token?: string; browser?: string }
@@ -60,6 +60,11 @@ async function poll(): Promise<void> {
       try { got = await c.commands(25); } catch (e) { await unpairedIf(e); return; }
       for (const cmd of got.commands) {
         if (cmd.kind === "reload") { await c.done(cmd.id, true).catch(() => {}); ext.runtime.reload(); return; } // read the folder again
+        if (cmd.kind === "write-bookmarks") { // apply a write-back planned by the server, if the browser still matches the plan
+          try { const r = await writeWorkspace(c, cmd.workspace ?? "", cmd.expect); await c.done(cmd.id, true, "", r); }
+          catch (e) { await c.done(cmd.id, false, String((e as Error).message)).catch(() => {}); }
+          continue;
+        }
         if (cmd.kind === "read-bookmarks") { // a write-back's dry run wants the bookmarks as they are now, in <browser>-live
           try { await readInto(c); await c.done(cmd.id, true); }
           catch (e) { await c.done(cmd.id, false, String((e as Error).message)).catch(() => {}); }
@@ -129,6 +134,33 @@ async function readInto(c: Client, workspace?: string): Promise<string> {
   const nodes = await ext.bookmarks.getTree();
   return (await c.sendBookmarks(nodes, workspace)).entry.summary;
 }
+/** Writes a workspace into this browser: refuses if the browser's bookmarks are no longer the ones the plan was made
+ *  against (expect, the server's ExtFingerprint; the popup passes none, as it plans right here); saves the bookmarks as
+ *  they are to the server first; writes; fixes any order a browser placed differently; reads the result back into the
+ *  workspace, so its ids are the browser's and a second write changes nothing. Returns the counts. */
+async function writeWorkspace(c: Client, workspace: string, expect?: string): Promise<Record<string, unknown>> {
+  if (expect) {
+    const now = await extFingerprint(await ext.bookmarks.getTree() as any);
+    if (now !== expect) throw new Error("this browser's bookmarks changed since the plan was made: nothing was written; plan again");
+  }
+  const ws = (await c.workspace(workspace)).tree.root as WsNode;
+  const p = plan(await ext.bookmarks.getTree() as ExtBookmark[], ws);
+  const counts = { created: p.created, updated: p.updated, moved: p.moved, removedBookmarks: p.removedBookmarks, removedFolders: p.removedFolders, steps: p.steps.length };
+  // The browser's bookmarks as they are now go to the server first, so this write can be undone from there.
+  const backup = await readInto(c, `${slug(thisBrowser())}-before-write`);
+  const made = await run(p, ext.bookmarks);
+  // Browsers differ on how a move's index counts within one folder: re-plan and fix any order left over.
+  for (let i = 0; i < 3; i++) {
+    const fix = plan(await ext.bookmarks.getTree() as ExtBookmark[], ws, made);
+    if (!fix.steps.length) break;
+    if (fix.steps.some(s => s.op === "create" || s.op === "remove")) throw new Error("the browser's bookmarks changed while writing; read them again and retry");
+    await run(fix, ext.bookmarks);
+  }
+  // Read the result back, so the workspace's ids are the browser's and the next write matches nothing twice.
+  const reread = await readInto(c, workspace);
+  return { ...counts, backup, reread };
+}
+
 async function handle(msg: any): Promise<unknown> {
   switch (msg.kind) {
     case "status": {
@@ -166,19 +198,7 @@ async function handle(msg: any): Promise<unknown> {
       const p = plan(await ext.bookmarks.getTree() as ExtBookmark[], ws);
       const counts = { created: p.created, updated: p.updated, moved: p.moved, removedBookmarks: p.removedBookmarks, removedFolders: p.removedFolders, steps: p.steps.length };
       if (msg.kind === "plan") return counts;
-      // The browser's bookmarks as they are now go to the server first, so this write can be undone from there.
-      const backup = await readInto(c, `${slug(thisBrowser())}-before-write`);
-      const made = await run(p, ext.bookmarks);
-      // Browsers differ on how a move's index counts within one folder: re-plan and fix any order left over.
-      for (let i = 0; i < 3; i++) {
-        const fix = plan(await ext.bookmarks.getTree() as ExtBookmark[], ws, made);
-        if (!fix.steps.length) break;
-        if (fix.steps.some(s => s.op === "create" || s.op === "remove")) throw new Error("the browser's bookmarks changed while writing; read them again and retry");
-        await run(fix, ext.bookmarks);
-      }
-      // Read the result back, so the workspace's ids are the browser's and the next write matches nothing twice.
-      const reread = await readInto(c, msg.workspace);
-      return { ...counts, backup, reread };
+      return writeWorkspace(c, msg.workspace);
     }
   }
   throw new Error("unknown request");

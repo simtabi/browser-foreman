@@ -48,16 +48,22 @@ type extState struct {
 
 // command is something the server asks an extension to do in its browser.
 type command struct {
-	ID        string    `json:"id"`
-	Browser   string    `json:"browser"`
-	Kind      string    `json:"kind"` // open, open-group, reload, read-bookmarks
-	URLs      []string  `json:"urls"`
-	Title     string    `json:"title,omitempty"`
-	Color     string    `json:"color,omitempty"`
-	Incognito bool      `json:"incognito,omitempty"`
-	State     string    `json:"state"` // queued, sent, done, failed
-	Error     string    `json:"error,omitempty"`
-	Created   time.Time `json:"created"`
+	ID        string   `json:"id"`
+	Browser   string   `json:"browser"`
+	Kind      string   `json:"kind"` // open, open-group, reload, read-bookmarks, write-bookmarks
+	URLs      []string `json:"urls"`
+	Title     string   `json:"title,omitempty"`
+	Color     string   `json:"color,omitempty"`
+	Incognito bool     `json:"incognito,omitempty"`
+	// write-bookmarks: the workspace to write into the browser, and the browser's fingerprint the plan was made
+	// against (writeback.ExtFingerprint): the extension refuses to write if its bookmarks no longer match.
+	Workspace string `json:"workspace,omitempty"`
+	Expect    string `json:"expect,omitempty"`
+	// What the extension reports when it is done: for a write, its counts.
+	Result  json.RawMessage `json:"result,omitempty"`
+	State   string          `json:"state"` // queued, sent, done, failed
+	Error   string          `json:"error,omitempty"`
+	Created time.Time       `json:"created"`
 }
 
 func (e *extState) init() {
@@ -240,7 +246,7 @@ func (s *Server) pushTabs(w http.ResponseWriter, r *http.Request, browser string
 	w.WriteHeader(http.StatusNoContent)
 }
 
-var errUnknownKind = errors.New(`kind must be "open", "open-group", "reload" or "read-bookmarks"`)
+var errUnknownKind = errors.New(`kind must be "open", "open-group", "reload", "read-bookmarks" or "write-bookmarks"`)
 
 // queueCommand asks a browser's extension to open links (as tabs, or as one named tab group), to reload itself, or to
 // read its browser's bookmarks into <browser>-live (for a write-back's dry run). Owner only.
@@ -259,6 +265,12 @@ func (s *Server) queueCommand(w http.ResponseWriter, r *http.Request) {
 		in.URLs = nil
 	case "read-bookmarks": // the extension sends its browser's bookmarks, as its popup's Read button does
 		in.URLs = nil
+	case "write-bookmarks": // the extension writes a workspace into its browser, as its popup's write does
+		in.URLs = nil
+		if strings.TrimSpace(in.Workspace) == "" || len(in.Expect) != 64 {
+			writeErr(w, 400, "write-bookmarks needs the workspace to write and the 64-character fingerprint the plan was made against")
+			return
+		}
 	default:
 		writeErr(w, 400, errUnknownKind.Error())
 		return
@@ -331,8 +343,9 @@ func (s *Server) nextCommands(w http.ResponseWriter, r *http.Request, browser st
 // commandDone records what the extension did with a command.
 func (s *Server) commandDone(w http.ResponseWriter, r *http.Request, browser string) {
 	var in struct {
-		OK    bool   `json:"ok"`
-		Error string `json:"error"`
+		OK     bool            `json:"ok"`
+		Error  string          `json:"error"`
+		Result json.RawMessage `json:"result"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -346,6 +359,9 @@ func (s *Server) commandDone(w http.ResponseWriter, r *http.Request, browser str
 		return
 	}
 	c.State, c.Error = "done", ""
+	if len(in.Result) > 0 && len(in.Result) <= 64<<10 {
+		c.Result = in.Result
+	}
 	if !in.OK {
 		c.State, c.Error = "failed", in.Error
 	}

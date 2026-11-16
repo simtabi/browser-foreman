@@ -204,7 +204,7 @@ func applyCmd() *cobra.Command {
 						return err
 					}
 				}
-				return applyThroughExtension(ctx, s, out, j, extName, theirs, from, yes, list, now)
+				return applyThroughExtension(ctx, s, c, out, j, extName, theirs, from, yes, list, now)
 			}
 			if r != "file" {
 				return fmt.Errorf("--route %q: use file or extension", r)
@@ -351,6 +351,13 @@ func readThroughExtension(ctx context.Context, s store.Store, c config.Config, w
 
 // askExtensionToRead queues a read-bookmarks command for the browser's extension and waits until it is done.
 func askExtensionToRead(ctx context.Context, base, token, browser string, wait time.Duration) error {
+	_, err := runExtensionCommand(ctx, base, token, browser, map[string]any{"kind": "read-bookmarks"}, "read its bookmarks", wait)
+	return err
+}
+
+// runExtensionCommand queues a command for the browser's extension, waits until it is done, and returns what the
+// extension reported. what says what it was asked, for the errors.
+func runExtensionCommand(ctx context.Context, base, token, browser string, cmd map[string]any, what string, wait time.Duration) (json.RawMessage, error) {
 	call := func(method, path string, body any, out any) error {
 		var rd io.Reader
 		if body != nil {
@@ -377,34 +384,41 @@ func askExtensionToRead(ctx context.Context, base, token, browser string, wait t
 		return json.Unmarshal(raw, out)
 	}
 	var q struct {
-		Command struct{ ID, State, Error string }
+		Command struct {
+			ID, State, Error string
+			Result           json.RawMessage
+		}
 	}
-	if err := call("POST", "extension/commands", map[string]any{"browser": browser, "kind": "read-bookmarks"}, &q); err != nil {
-		return fmt.Errorf("asking %s's extension to read: %w", browser, err)
+	body := map[string]any{"browser": browser}
+	for k, v := range cmd {
+		body[k] = v
+	}
+	if err := call("POST", "extension/commands", body, &q); err != nil {
+		return nil, fmt.Errorf("asking %s's extension to %s: %w", browser, what, err)
 	}
 	deadline := time.Now().Add(wait)
 	for time.Now().Before(deadline) {
 		if err := call("GET", "extension/commands/"+url.PathEscape(q.Command.ID), nil, &q); err != nil {
-			return err
+			return nil, err
 		}
 		switch q.Command.State {
 		case "done":
-			return nil
+			return q.Command.Result, nil
 		case "failed":
-			return fmt.Errorf("%s's extension could not read its bookmarks: %s", browser, q.Command.Error)
+			return nil, fmt.Errorf("%s's extension could not %s: %s", browser, what, q.Command.Error)
 		}
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		case <-time.After(500 * time.Millisecond):
 		}
 	}
-	return fmt.Errorf("%s's extension did not answer within %s: is it installed, paired and is %s running?", browser, wait, browser)
+	return nil, fmt.Errorf("%s's extension did not answer within %s: is it installed, paired and is %s running?", browser, wait, browser)
 }
 
 // applyThroughExtension plans against theirs (read from where from says) and, with yes, saves the target as
 // <browser>-target for the extension's popup to write.
-func applyThroughExtension(ctx context.Context, s store.Store, out io.Writer, j writeback.Job, browser string, theirs store.Tree, from string, yes bool, list int, now time.Time) error {
+func applyThroughExtension(ctx context.Context, s store.Store, c config.Config, out io.Writer, j writeback.Job, browser string, theirs store.Tree, from string, yes bool, list int, now time.Time) error {
 	target := slug(browser) + "-target"
 	t, rep, err := writeback.PlanTree(ctx, s, j, theirs)
 	if err != nil {
@@ -423,8 +437,48 @@ func applyThroughExtension(ctx context.Context, s store.Store, out io.Writer, j 
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Saved as workspace %s (entry %d). In %s, open the extension, choose %s under Write a workspace back, check the counts, and confirm.\n", target, e.Seq, browser, target)
-	return nil
+	fmt.Fprintf(out, "Saved as workspace %s (entry %d).\n", target, e.Seq)
+	addr := serverAddr(ctx, c)
+	if !answers(ctx, addr) {
+		fmt.Fprintf(out, "Browser Foreman is not running, so the extension cannot be asked to write it: start `browser-foreman serve` and run this again, or in %s open the extension, choose %s under Write a workspace back, and confirm.\n", browser, target)
+		return nil
+	}
+	token := os.Getenv("BROFO_TOKEN")
+	if token == "" {
+		token = c.APIToken
+	}
+	base := "http://" + addr
+	fmt.Fprintf(out, "Writing it into %s through its extension (its bookmarks as they are go to %s-before-write first)…\n", browser, slug(browser))
+	res, err := runExtensionCommand(ctx, base, token, browser, map[string]any{"kind": "write-bookmarks", "workspace": target, "expect": writeback.ExtFingerprint(theirs)}, "write the plan", 20*time.Minute)
+	if err != nil {
+		return err
+	}
+	var counts struct {
+		Created, Updated, Moved, RemovedBookmarks, RemovedFolders, Steps int
+		Backup                                                           string
+	}
+	_ = json.Unmarshal(res, &counts)
+	fmt.Fprintf(out, "Written: %d created, %d renamed or readdressed, %d moved, %d bookmarks and %d folders removed (%d steps). Saved first: %s\n",
+		counts.Created, counts.Updated, counts.Moved, counts.RemovedBookmarks, counts.RemovedFolders, counts.Steps, counts.Backup)
+	// Verify: read the browser again and plan against it; a write that landed as planned leaves nothing to do.
+	if err := askExtensionToRead(ctx, base, token, browser, time.Minute); err != nil {
+		return fmt.Errorf("written, but reading it back failed: %w", err)
+	}
+	after, _, err := s.State(ctx, slug(browser)+"-live", 0)
+	if err != nil {
+		return err
+	}
+	_, drift, err := writeback.PlanTree(ctx, s, j, after)
+	if err != nil {
+		return err
+	}
+	if drift.Empty() {
+		fmt.Fprintf(out, "Verified: %s now holds the plan; planning again changes nothing.\n", browser)
+		return nil
+	}
+	fmt.Fprintln(out, "Read back, it differs from the plan:")
+	printReport(out, drift, list)
+	return errors.New("the browser's bookmarks differ from the plan after writing")
 }
 
 // printReport prints the report's counts and the first list items of each kind.

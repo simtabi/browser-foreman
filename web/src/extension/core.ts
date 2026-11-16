@@ -88,14 +88,14 @@ export class Client {
     return this.call("POST", "extension/bookmarks", workspace ? { nodes, workspace } : { nodes });
   }
   commands(wait: number): Promise<{ commands: Command[] }> { return this.call("GET", `extension/commands?wait=${wait}`); }
-  done(id: string, ok: boolean, error = ""): Promise<unknown> { return this.call("POST", `extension/commands/${encodeURIComponent(id)}/done`, { ok, error }); }
+  done(id: string, ok: boolean, error = "", result?: unknown): Promise<unknown> { return this.call("POST", `extension/commands/${encodeURIComponent(id)}/done`, { ok, error, ...(result === undefined ? {} : { result }) }); }
   workspaces(): Promise<{ workspaces: { id: string; name: string; bookmarks: number }[] }> { return this.call("GET", "workspaces"); }
   workspace(id: string): Promise<{ tree: any; workspace: { head: number } }> { return this.call("GET", `workspaces/${encodeURIComponent(id)}`); }
 }
 
 export interface PairRequest { id: string; poll: string; match: string; expires: string }
 
-export interface Command { id: string; kind: "open" | "open-group" | "reload" | "read-bookmarks"; urls: string[]; title?: string; color?: string; incognito?: boolean }
+export interface Command { id: string; kind: "open" | "open-group" | "reload" | "read-bookmarks" | "write-bookmarks"; urls: string[]; title?: string; color?: string; incognito?: boolean; workspace?: string; expect?: string }
 
 /** Tab group colours the browsers accept; anything else becomes grey. */
 export const GROUP_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
@@ -113,4 +113,23 @@ export function connectStep(s: { paired: boolean; asking?: { expires: string }; 
   if (s.asking && Date.parse(s.asking.expires) > now) return "wait";
   if (s.declined || (s.unanswered ?? 0) >= 3) return "rest";
   return "ask";
+}
+
+/** The browser's bookmarks as a fingerprint, computed as the server does (writeback.ExtFingerprint): every node below
+ *  the browser's own root, depth first, "id TAB title TAB url NEWLINE" with the title's spaces collapsed and the
+ *  address trimmed (separators left out), SHA-256 in hex. A write compares it with the plan's and refuses a change. */
+export async function extFingerprint(roots: { id: string; title?: string; url?: string; type?: string; children?: any[] }[]): Promise<string> {
+  let text = "";
+  const walk = (n: { children?: any[] }) => {
+    for (const c of n.children ?? []) {
+      if (c.type === "separator") continue;
+      text += `${c.id}\t${(c.title ?? "").split(/\s+/).filter(Boolean).join(" ")}\t${(c.url ?? "").trim()}\n`;
+      walk(c);
+    }
+  };
+  const only = roots.length === 1 ? roots[0] : undefined;
+  const tops = only && !only.url ? only : { children: roots }; // the browser's unnamed root, when it sent one
+  walk(tops);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
 }

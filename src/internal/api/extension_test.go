@@ -164,3 +164,32 @@ func TestReadBookmarksFromTheExtension(t *testing.T) {
 	}
 	_ = store.RoleViewer
 }
+
+func TestAWriteCommandCarriesItsPlanAndReportsItsResult(t *testing.T) {
+	s := newServer(t, "tok")
+	h := s.Handler()
+	chrome := paired(t, s, h, "Google Chrome")
+	print := strings.Repeat("a", 64)
+	for _, bad := range []string{
+		`{"browser":"Google Chrome","kind":"write-bookmarks","expect":"` + print + `"}`,           // no workspace
+		`{"browser":"Google Chrome","kind":"write-bookmarks","workspace":"google-chrome-target"}`, // no fingerprint
+		`{"browser":"Google Chrome","kind":"write-bookmarks","workspace":"x","expect":"short"}`,   // not a fingerprint
+	} {
+		if w := send(h, "POST", "/api/v1/extension/commands", bad); w.Code != 400 {
+			t.Errorf("%s: %d", bad, w.Code)
+		}
+	}
+	w := send(h, "POST", "/api/v1/extension/commands", `{"browser":"Google Chrome","kind":"write-bookmarks","workspace":"google-chrome-target","expect":"`+print+`"}`)
+	var q struct{ Command struct{ ID string } }
+	_ = json.Unmarshal(w.Body.Bytes(), &q)
+	if w.Code != 202 {
+		t.Fatalf("queue %d %s", w.Code, w.Body)
+	}
+	if b := fromExtension(h, "GET", "/api/v1/extension/commands", "", chrome).Body.String(); !strings.Contains(b, `"workspace":"google-chrome-target"`) || !strings.Contains(b, `"expect":"`+print+`"`) {
+		t.Fatalf("the extension did not get the plan: %s", b)
+	}
+	fromExtension(h, "POST", "/api/v1/extension/commands/"+q.Command.ID+"/done", `{"ok":true,"result":{"created":3,"moved":2}}`, chrome)
+	if b := send(h, "GET", "/api/v1/extension/commands/"+q.Command.ID, "").Body.String(); !strings.Contains(b, `"result":{"created":3,"moved":2}`) {
+		t.Fatalf("the result was not kept: %s", b)
+	}
+}
