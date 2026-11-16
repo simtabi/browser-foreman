@@ -159,6 +159,17 @@ func TestApplyingTheSamePlanTwiceChangesNothing(t *testing.T) {
 		if !again.Empty() || again.DropNew != 0 {
 			t.Errorf("%s: a second plan against the written result still changes %+v", mode, again)
 		}
+		// Nor does it report the cleanup's own changes as the profile's. What stays reported is what Chrome itself did
+		// after the export and the write kept: E deleted; in merge also N added and B renamed to Bee. No conflicts.
+		want := map[Mode][4][]string{Merge: {{"N"}, {"E"}, nil, {"Bee"}}, Replace: {nil, {"E"}, nil, nil}}[mode]
+		for i, got := range [][]Item{again.AddedSince, again.RemovedSince, again.MovedSince, again.RenamedSince} {
+			if g := titles(got); strings.Join(g, ",") != strings.Join(want[i], ",") {
+				t.Errorf("%s: since-export list %d is %v, want %v", mode, i, g, want[i])
+			}
+		}
+		if len(again.Conflicts) != 0 {
+			t.Errorf("%s: the cleanup and the profile agree, yet %d conflicts: %v", mode, len(again.Conflicts), titles(again.Conflicts))
+		}
 	}
 }
 

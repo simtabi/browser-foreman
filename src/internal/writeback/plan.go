@@ -197,18 +197,22 @@ func Plan(base, ours, theirs store.Tree, mode Mode) (store.Tree, Report, error) 
 
 	// What the profile did after the export.
 	for _, k := range keysOf(b.order) {
-		bx, tx := b.marks[k], th.marks[k]
+		bx, tx, ox := b.marks[k], th.marks[k], o.marks[k]
+		// A change counts as the profile's only where the profile differs from the cleanup as well as from the export:
+		// what the cleanup did and the profile already holds (after a write) is not the profile's own change.
 		if tx == nil {
-			rep.RemovedSince = append(rep.RemovedSince, item(bx))
+			if ox != nil {
+				rep.RemovedSince = append(rep.RemovedSince, item(bx))
+			}
 			if x := tl.marks[k]; x != nil {
 				detach(x) // deleted in the profile since the export: never brought back
 			}
 			continue
 		}
-		if place(tx) != place(bx) {
+		if place(tx) != place(bx) && (ox == nil || place(tx) != place(ox)) {
 			rep.MovedSince = append(rep.MovedSince, moved(bx, tx))
 		}
-		if clean(tx.n.Title) != clean(bx.n.Title) {
+		if clean(tx.n.Title) != clean(bx.n.Title) && (ox == nil || clean(tx.n.Title) != clean(ox.n.Title)) {
 			rep.RenamedSince = append(rep.RenamedSince, renamed(tx, bx.n.Title))
 		}
 		x := tl.marks[k]
@@ -218,7 +222,9 @@ func Plan(base, ours, theirs store.Tree, mode Mode) (store.Tree, Report, error) 
 		oursMoved := o.marks[k] != nil && place(o.marks[k]) != place(bx)
 		oursRenamed := o.marks[k] != nil && clean(o.marks[k].n.Title) != clean(bx.n.Title)
 		if place(tx) != place(bx) {
-			if oursMoved {
+			if oursMoved && place(tx) == place(o.marks[k]) {
+				// both moved it to the same folder: nothing to decide
+			} else if oursMoved {
 				rep.Conflicts = append(rep.Conflicts, item(x))
 			} else {
 				move(x, ensure(tl, tx.parent.path, th))
