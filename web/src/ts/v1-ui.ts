@@ -658,6 +658,8 @@ function install(W: V1): void {
     body.append(el("p", "text-secondary mb-3", "The extension sends a browser's tabs and tab groups, reads its bookmarks into a workspace, and can write a workspace back. Set it up in each browser you use, then press Connect in its popup and approve it here."));
     // Supported browsers: one card each.
     const grid = el("div", "ext-grid"), more = el("div", "text-secondary small mt-2");
+    // The cards are painted again every few seconds (load() below): an open "How to install" stays open across that.
+    const openHow = new Set<string>();
     const paintCards = () => {
       const byName = new Map(connected.map(x => [x.name.replace(/^extension:/, ""), x]));
       const byGuide = new Map(guide.browsers.map(b => [b.browser, b]));
@@ -706,6 +708,8 @@ function install(W: V1): void {
           ol.append(li);
         }
         how.append(sum, ol);
+        how.open = openHow.has(name);
+        how.addEventListener("toggle", () => { if (how.open) openHow.add(name); else openHow.delete(name); });
         card.append(head, ...(act.childElementCount ? [act] : []), how);
         return card;
       }));
