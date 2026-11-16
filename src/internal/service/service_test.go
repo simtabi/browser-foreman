@@ -20,12 +20,16 @@ func TestThePlistIsValidAndRunsServe(t *testing.T) {
 		RunAtLoad bool              `plist:"RunAtLoad"`
 		KeepAlive map[string]bool   `plist:"KeepAlive"`
 		Out       string            `plist:"StandardOutPath"`
+		Process   string            `plist:"ProcessType"`
 	}
 	if _, err := plist.Unmarshal(Plist(s), &got); err != nil {
 		t.Fatalf("not a property list: %v\n%s", err, Plist(s))
 	}
 	if got.Label != Label || strings.Join(got.Args, "|") != s.Exe+"|serve|--no-open" || !got.RunAtLoad || got.Out != s.Log {
 		t.Fatalf("%+v", got)
+	}
+	if got.Process != "Standard" {
+		t.Fatalf("ProcessType %q: Background throttles the server the page waits on", got.Process)
 	}
 	if ka, ok := got.KeepAlive["SuccessfulExit"]; !ok || ka {
 		t.Fatalf("restarts after a clean stop: %+v", got.KeepAlive)

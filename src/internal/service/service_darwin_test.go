@@ -12,25 +12,34 @@ import (
 
 // fakeLaunchd records the launchctl commands and answers print as loaded says.
 type fakeLaunchd struct {
-	calls  []string
-	loaded bool
+	calls    []string
+	loaded   bool
+	stopping int // prints left while a booted-out job is still stopping, as launchd's bootout returns before it has
 }
 
 func (f *fakeLaunchd) run(name string, args ...string) (string, error) {
 	f.calls = append(f.calls, name+" "+strings.Join(args, " "))
 	switch args[0] {
 	case "bootstrap":
+		if f.loaded || f.stopping > 0 {
+			return "Bootstrap failed: 5: Input/output error", errors.New("exit status 5")
+		}
 		f.loaded = true
 	case "bootout":
 		if !f.loaded {
 			return "Boot-out failed: 3: No such process", errors.New("exit status 3")
 		}
-		f.loaded = false
+		f.loaded, f.stopping = false, 2
 	case "print":
+		if f.stopping > 0 {
+			f.stopping--
+			return "gui/501/" + Label + " = {\n\tstate = running\n}", nil
+		}
 		if !f.loaded {
 			return "", errors.New("exit status 113")
 		}
-		return "gui/501/" + Label + " = {\n\tstate = running\n}", nil
+		// launchctl print lists the job's own state first, then nested blocks with states of their own
+		return "gui/501/" + Label + " = {\n\tactive count = 1\n\tstate = running\n\n\tendpoints = {\n\t\tstate = active\n\t}\n\tjob state = running\n}", nil
 	}
 	return "", nil
 }

@@ -42,6 +42,7 @@ func TestServiceStatusReadsPlainly(t *testing.T) {
 		"Not installed":                {},
 		"Installed and running (/p)":   {Installed: true, Running: true, Path: "/p"},
 		"not running: state = waiting": {Installed: true, Path: "/p", Detail: "state = waiting"},
+		"Installed and starting (/p)":  {Installed: true, Path: "/p", Detail: "starting"},
 	}
 	for want, st := range cases {
 		var out bytes.Buffer

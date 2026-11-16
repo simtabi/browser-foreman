@@ -106,7 +106,8 @@ func xmlEscape(v string) string {
 }
 
 // Plist is the launchd agent: started at login, restarted if it stops with an error, left stopped after a clean stop
-// (`browser-foreman stop`).
+// (`browser-foreman stop`). It runs as a Standard process: Background lets macOS throttle its CPU and disk, which
+// suits batch work, not a server the page waits on.
 func Plist(s Spec) []byte {
 	var b bytes.Buffer
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
@@ -137,7 +138,7 @@ func Plist(s Spec) []byte {
 		<false/>
 	</dict>
 	<key>ProcessType</key>
-	<string>Background</string>
+	<string>Standard</string>
 	<key>StandardOutPath</key>
 	<string>` + xmlEscape(s.Log) + `</string>
 	<key>StandardErrorPath</key>

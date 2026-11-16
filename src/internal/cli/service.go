@@ -130,6 +130,8 @@ func printServiceStatus(out io.Writer, st service.Status) {
 		return
 	case st.Running:
 		fmt.Fprintf(out, "Installed and running (%s).\n", st.Path)
+	case st.Detail == "starting":
+		fmt.Fprintf(out, "Installed and starting (%s): it answers in a few seconds.\n", st.Path)
 	default:
 		fmt.Fprintf(out, "Installed (%s), not running", st.Path)
 		if st.Detail != "" {
