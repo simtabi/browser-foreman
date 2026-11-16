@@ -22,8 +22,11 @@ function ensure(): void {
   bar = el("div", "busy-bar"); bar.setAttribute("aria-hidden", "true"); bar.append(el("div", "busy-bar-fill"));
   veil = el("div", "busy-veil");
   const card = el("div", "busy-card"); card.setAttribute("role", "status"); card.setAttribute("aria-live", "polite");
+  // The same pieces as the loading screen (template.html, .boot-*): the logo tile, what is happening, the sliding bar.
+  const logo = el("span", "boot-logo busy-logo"); logo.setAttribute("aria-hidden", "true"); logo.append(el("i", "ti ti-browser-check"));
+  const slide = el("div", "boot-bar busy-slide"); slide.setAttribute("aria-hidden", "true"); slide.append(el("span"));
   text = el("div", "busy-msg");
-  card.append(el("span", "spinner-border busy-spin"), text);
+  card.append(logo, text, slide);
   veil.append(card);
   // A slow save does not block the page: its note sits at the top, under the bar.
   note = el("div", "busy-note"); note.setAttribute("role", "status"); note.setAttribute("aria-live", "polite");
