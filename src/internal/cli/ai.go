@@ -123,8 +123,11 @@ func runAI(cmd *cobra.Command, body map[string]any) error {
 		return err
 	}
 	out := cmd.OutOrStdout()
-	if c.AI.Provider == "anthropic" {
+	switch c.AI.Provider {
+	case "anthropic":
 		fmt.Fprintf(out, "Sending these bookmarks' titles, addresses and page descriptions to Anthropic (%s).\n", modelOr(c.AI.Model, ai.DefaultAnthropicModel))
+	case "openai":
+		fmt.Fprintf(out, "Sending these bookmarks' titles, addresses and page descriptions to %s (%s).\n", c.AI.OpenAIURL, c.AI.Model)
 	}
 	var made struct {
 		Jobs       []aiJob `json:"jobs"`

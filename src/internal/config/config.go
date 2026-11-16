@@ -83,13 +83,16 @@ type Writeback struct {
 }
 
 // AI is who answers AI jobs (suggested tags, duplicate verdicts) as soon as they are made: nobody (none, the
-// default: an MCP client takes them), Anthropic's API (anthropic) or a local Ollama (ollama). Jobs are made only when
+// default: an MCP client takes them), Anthropic's API (anthropic), OpenAI's API (openai) or a local Ollama (ollama). Jobs are made only when
 // the owner asks, and only then does anything about the bookmarks leave this computer.
 type AI struct {
-	Provider  string `json:"provider"`             // none, anthropic or ollama
-	Model     string `json:"model,omitempty"`      // anthropic: claude-opus-5-5 when empty; ollama: required
+	Provider  string `json:"provider"`             // none, anthropic, openai or ollama
+	Model     string `json:"model,omitempty"`      // anthropic: claude-opus-5-5 when empty; openai and ollama: required
 	Effort    string `json:"effort,omitempty"`     // anthropic: low, medium or high; empty: low
 	OllamaURL string `json:"ollama_url,omitempty"` // http://127.0.0.1:11434 when empty
+	OpenAIURL string `json:"openai_url,omitempty"` // https://api.openai.com/v1 when empty; any server speaking the same API
+	// OpenAIKey is OPENAI_API_KEY, from .env or the environment only.
+	OpenAIKey string `json:"-"`
 	// AnthropicKey is ANTHROPIC_API_KEY, from .env or the environment only; empty lets the SDK use `ant auth login`.
 	AnthropicKey string `json:"-"`
 }
@@ -148,7 +151,7 @@ func Defaults() Config {
 		Auth:      Auth{SessionTTL: Duration{24 * time.Hour}},
 		Writeback: Writeback{Read: "ask", Route: "ask", Mode: "ask"},
 		Notify:    Notify{Desktop: true},
-		AI:        AI{Provider: "none", Effort: "low", OllamaURL: "http://127.0.0.1:11434"},
+		AI:        AI{Provider: "none", Effort: "low", OllamaURL: "http://127.0.0.1:11434", OpenAIURL: "https://api.openai.com/v1"},
 	}
 }
 
@@ -220,6 +223,7 @@ func apply(c *Config, get func(string) string) error {
 		"BROFO_AI_PROVIDER":      func(v string) error { c.AI.Provider = v; return nil },
 		"BROFO_AI_MODEL":         func(v string) error { c.AI.Model = v; return nil },
 		"ANTHROPIC_API_KEY":      func(v string) error { c.AI.AnthropicKey = v; return nil },
+		"OPENAI_API_KEY":         func(v string) error { c.AI.OpenAIKey = v; return nil },
 		"BROFO_WEBHOOK_ATTEMPTS": func(v string) error { n, err := strconv.Atoi(v); c.Webhooks.Attempts = n; return err },
 		"BROFO_MCP":              func(v string) error { b, err := strconv.ParseBool(v); c.MCP.Enabled = b; return err },
 		"BROFO_MCP_WRITES":       func(v string) error { b, err := strconv.ParseBool(v); c.MCP.Writes = b; return err },
@@ -289,8 +293,12 @@ func (c Config) Validate() error {
 		if c.AI.Model == "" {
 			return errors.New("ai.provider ollama needs ai.model: a model you have pulled (`ollama list` shows them)")
 		}
+	case "openai":
+		if c.AI.Model == "" {
+			return errors.New("ai.provider openai needs ai.model: an OpenAI model your key can use")
+		}
 	default:
-		return fmt.Errorf("ai.provider %q: use none, anthropic or ollama", c.AI.Provider)
+		return fmt.Errorf("ai.provider %q: use none, anthropic, openai or ollama", c.AI.Provider)
 	}
 	if e := c.AI.Effort; e != "" && e != "low" && e != "medium" && e != "high" {
 		return fmt.Errorf("ai.effort %q: use low, medium or high", e)

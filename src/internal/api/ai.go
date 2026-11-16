@@ -2,9 +2,12 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -16,12 +19,85 @@ import (
 	"github.com/simtabi/browser-foreman/src/internal/store"
 )
 
-// aiState is the queue of AI jobs. It lives in the server: a job is short work, and one lost to a restart is made
-// again in a moment.
+// aiState is the queue of AI jobs, kept in ai-jobs.json in the state folder so a restart loses none.
 type aiState struct {
-	mu    sync.Mutex
-	jobs  map[string]*ai.Job
-	order []string
+	mu     sync.Mutex
+	loaded bool
+	jobs   map[string]*ai.Job
+	order  []string
+}
+
+// aiLock takes the queue, reading it from ai-jobs.json the first time, so jobs outlive a restart.
+func (s *Server) aiLock() {
+	s.ai.mu.Lock()
+	if s.ai.loaded {
+		return
+	}
+	s.ai.loaded = true
+	if s.aiFile() == "" {
+		return
+	}
+	b, err := os.ReadFile(s.aiFile())
+	if err != nil {
+		return // none yet
+	}
+	var saved []*ai.Job
+	if json.Unmarshal(b, &saved) != nil {
+		return // unreadable: start afresh rather than refuse to run
+	}
+	for _, j := range saved {
+		if j != nil && j.ID != "" {
+			s.ai.add(j)
+		}
+	}
+}
+
+// aiSaveUnlock writes the queue to ai-jobs.json (only the owner can read it: it holds bookmark titles and addresses)
+// and lets it go.
+func (s *Server) aiSaveUnlock() {
+	defer s.ai.mu.Unlock()
+	jobs := make([]*ai.Job, 0, len(s.ai.order))
+	for _, id := range s.ai.order {
+		jobs = append(jobs, s.ai.jobs[id])
+	}
+	path := s.aiFile()
+	if path == "" {
+		return // no state folder (a test): kept in memory only
+	}
+	b, _ := json.Marshal(jobs)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return
+	}
+	tmp := path + ".tmp"
+	if os.WriteFile(tmp, b, 0o600) == nil {
+		_ = os.Rename(tmp, path)
+	}
+}
+
+func (s *Server) aiFile() string {
+	if s.Cfg.Storage.Path == "" {
+		return ""
+	}
+	return filepath.Join(s.Cfg.Storage.Path, "ai-jobs.json")
+}
+
+// resumeAIJobs answers the jobs a restart left waiting, when a provider is configured.
+func (s *Server) resumeAIJobs(ctx context.Context) {
+	if s.AI == nil {
+		return
+	}
+	s.aiLock()
+	var waiting []*ai.Job
+	for _, id := range s.ai.order {
+		if j := s.ai.jobs[id]; j.State == ai.Pending || (j.State == ai.Working && s.Now().After(j.Lease)) {
+			j.State = ai.Pending
+			waiting = append(waiting, j)
+		}
+	}
+	s.ai.mu.Unlock()
+	if len(waiting) > 0 {
+		go s.runJobs(ctx, waiting)
+	}
 }
 
 // jobLease is how long a claimed job stays with whoever claimed it before another may take it.
@@ -64,11 +140,11 @@ func (s *Server) createAIJobs(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, code, err.Error())
 		return
 	}
-	s.ai.mu.Lock()
+	s.aiLock()
 	for _, j := range jobs {
 		s.ai.add(j)
 	}
-	s.ai.mu.Unlock()
+	s.aiSaveUnlock()
 	answeredBy := "an MCP client: it calls next_ai_jobs, or use the process-queue prompt"
 	if s.AI != nil {
 		answeredBy = s.AI.Name()
@@ -205,14 +281,14 @@ func visitBookmarks(n *store.Node, path string, fn func(*store.Node, string)) {
 // runJobs answers jobs with the configured provider, one at a time.
 func (s *Server) runJobs(ctx context.Context, jobs []*ai.Job) {
 	for _, j := range jobs {
-		s.ai.mu.Lock()
+		s.aiLock()
 		if j.State != ai.Pending {
 			s.ai.mu.Unlock()
 			continue
 		}
 		j.State, j.Lease = ai.Working, s.Now().Add(jobLease)
 		snap := *j
-		s.ai.mu.Unlock()
+		s.aiSaveUnlock()
 		res, err := s.AI.Answer(ctx, snap)
 		if err != nil {
 			s.failJob(j, err)
@@ -223,15 +299,15 @@ func (s *Server) runJobs(ctx context.Context, jobs []*ai.Job) {
 }
 
 func (s *Server) failJob(j *ai.Job, err error) {
-	s.ai.mu.Lock()
+	s.aiLock()
 	j.State, j.Error, j.Finished = ai.Failed, err.Error(), s.Now().UTC()
-	s.ai.mu.Unlock()
+	s.aiSaveUnlock()
 	_, _ = s.Bus.Publish("ai.job.failed", map[string]any{"id": j.ID, "workspace": j.Workspace, "error": err.Error()})
 }
 
 // finishJob checks an answer, keeps it on the job and, when the job says so, writes it into the workspace.
 func (s *Server) finishJob(ctx context.Context, id string, res ai.Results, by string) error {
-	s.ai.mu.Lock()
+	s.aiLock()
 	j, ok := s.ai.jobs[id]
 	if !ok {
 		s.ai.mu.Unlock()
@@ -257,9 +333,9 @@ func (s *Server) finishJob(ctx context.Context, id string, res ai.Results, by st
 		}
 		applied = fmt.Sprintf("entry %d", e.Seq)
 	}
-	s.ai.mu.Lock()
+	s.aiLock()
 	j.State, j.Results, j.By, j.Error, j.Finished = ai.Done, &checked, by, "", s.Now().UTC()
-	s.ai.mu.Unlock()
+	s.aiSaveUnlock()
 	_, _ = s.Bus.Publish("ai.job.done", map[string]any{"id": id, "workspace": snap.Workspace, "kind": snap.Kind, "by": by, "applied": applied})
 	return nil
 }
@@ -356,7 +432,7 @@ func summaries(jobs []*ai.Job) []jobSummary {
 }
 
 func (s *Server) listAIJobs(w http.ResponseWriter, _ *http.Request) {
-	s.ai.mu.Lock()
+	s.aiLock()
 	defer s.ai.mu.Unlock()
 	var jobs []*ai.Job
 	for i := len(s.ai.order) - 1; i >= 0 && len(jobs) < 100; i-- {
@@ -379,7 +455,7 @@ func (s *Server) nextAIJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Max = min(in.Max, 5)
 	now := s.Now()
-	s.ai.mu.Lock()
+	s.aiLock()
 	var out []ai.Job
 	for _, id := range s.ai.order {
 		j := s.ai.jobs[id]
@@ -391,7 +467,7 @@ func (s *Server) nextAIJobs(w http.ResponseWriter, r *http.Request) {
 			out = append(out, *j)
 		}
 	}
-	s.ai.mu.Unlock()
+	s.aiSaveUnlock()
 	if out == nil {
 		out = []ai.Job{}
 	}
@@ -420,7 +496,7 @@ func (s *Server) submitAIResults(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	s.ai.mu.Lock()
+	s.aiLock()
 	j := *s.ai.jobs[r.PathValue("id")]
 	s.ai.mu.Unlock()
 	writeJSON(w, 200, map[string]any{"job": summaries([]*ai.Job{&j})[0]})

@@ -181,3 +181,41 @@ func TestAnthropicHaikuGetsNoFallbacks(t *testing.T) {
 		t.Fatal("Claude Haiku 5.5 takes no fallbacks: the API answers 400")
 	}
 }
+
+func TestOpenAIHoldsTheAnswerToTheSchema(t *testing.T) {
+	key := fakeKey(t)
+	var got map[string]any
+	var auth string
+	reply := `{"choices":[{"message":{"role":"assistant","content":"{\"tags\":[{\"id\":\"b1\",\"tags\":[\"go\"]}]}"},"finish_reason":"stop"}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			http.NotFound(w, r)
+			return
+		}
+		auth = r.Header.Get("Authorization")
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &got)
+		_, _ = io.WriteString(w, reply)
+	}))
+	defer srv.Close()
+	o := &OpenAI{URL: srv.URL + "/v1", Key: key, Model: "a-model"}
+	r, err := o.Answer(context.Background(), tagJob())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rf, _ := got["response_format"].(map[string]any)
+	js, _ := rf["json_schema"].(map[string]any)
+	if r.Tags[0].Tags[0] != "go" || auth != "Bearer "+key || got["model"] != "a-model" || rf["type"] != "json_schema" || js["strict"] != true || js["schema"] == nil {
+		t.Fatalf("%+v %q %v", r, auth, got)
+	}
+	reply = `{"choices":[{"message":{"role":"assistant","content":null,"refusal":"I can't help with that."},"finish_reason":"stop"}]}`
+	if _, err := o.Answer(context.Background(), tagJob()); err == nil || !strings.Contains(err.Error(), "declined") {
+		t.Fatalf("refusal: %v", err)
+	}
+	if _, err := (&OpenAI{URL: srv.URL, Key: key}).Answer(context.Background(), tagJob()); err == nil || !strings.Contains(err.Error(), "ai.model") {
+		t.Fatalf("no model: %v", err)
+	}
+	if _, err := (&OpenAI{URL: srv.URL, Model: "m"}).Answer(context.Background(), tagJob()); err == nil || !strings.Contains(err.Error(), "OPENAI_API_KEY") {
+		t.Fatalf("no key: %v", err)
+	}
+}

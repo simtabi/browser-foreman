@@ -10,6 +10,10 @@ ships.
 
 ### Added
 
+- `ai.provider: openai` answers AI jobs through OpenAI's Chat Completions API (`OPENAI_API_KEY`, `ai.model`
+  required, `ai.openai_url` for another server speaking it), with answers held to the job's schema in strict mode.
+- AI jobs are kept in `ai-jobs.json` in the state folder, so a restart loses none; jobs still waiting are answered
+  again when the server starts with a provider.
 - AI jobs, off by default: `browser-foreman ai tag` suggests one to three tags per untagged bookmark, and
   `ai dedupe` asks whether look-alike bookmarks are the same page (only the groups Find duplicates is unsure of).
   `ai.provider` chooses who answers: Anthropic's API (structured JSON answers, refusal fallbacks), a local Ollama, or

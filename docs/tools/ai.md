@@ -9,19 +9,26 @@ default. Nothing about your bookmarks leaves this computer until you choose a pr
 |---|---|---|
 | `none` (the default) | an assistant connected over [MCP](mcp.md), with its own model | whatever that assistant's own model receives |
 | `anthropic` | Anthropic's Messages API, the moment the job is made | the job's titles, addresses, folders and page descriptions |
+| `openai` | OpenAI's Chat Completions API (or any server speaking it), the moment the job is made | the same |
 | `ollama` | a model in a local [Ollama](https://ollama.com), the moment the job is made | nothing, when Ollama runs on this computer |
 
 | Key | Variable | Default | What it does |
 |---|---|---|---|
-| `ai.provider` | `BROFO_AI_PROVIDER` | `none` | `none`, `anthropic` or `ollama` |
-| `ai.model` | `BROFO_AI_MODEL` | `claude-opus-5-5` for `anthropic` | the model; with `ollama`, required: one you have pulled (`ollama list`) |
+| `ai.provider` | `BROFO_AI_PROVIDER` | `none` | `none`, `anthropic`, `openai` or `ollama` |
+| `ai.model` | `BROFO_AI_MODEL` | `claude-opus-5-5` for `anthropic` | the model; required for `openai` (one your key can use) and `ollama` (one you have pulled, `ollama list`) |
 | `ai.effort` | — | `low` | with `anthropic`: `low`, `medium` or `high`; how much the model thinks before answering |
 | `ai.ollama_url` | — | `http://127.0.0.1:11434` | where Ollama listens |
+| `ai.openai_url` | — | `https://api.openai.com/v1` | where the OpenAI API is; another server speaking the same API works too |
 | — | `ANTHROPIC_API_KEY` | none | the key, in `.env` or the environment only; without it, a profile from `ant auth login` is used |
+| — | `OPENAI_API_KEY` | none | OpenAI's key, in `.env` or the environment only |
 
 With `anthropic`, every answer is held to a JSON schema, so it comes back as data rather than prose. A request the
 model declines is reported as failed, and Claude Opus 5.5 is asked with refusal fallbacks on (the API retries a declined
 request on another model). Tagging is short classification work, so `ai.effort` starts at `low`.
+
+With `openai`, answers are held to the same schema in strict mode, and a declined request is reported as failed.
+A ChatGPT subscription does not include API access: the key comes from platform.openai.com, and use is billed there.
+`ai.model` has no default, because OpenAI's model names change often: name one your key can use.
 
 ## Making jobs
 
@@ -82,8 +89,9 @@ All owner only:
 | `POST /api/v1/ai/jobs/next` | takes waiting jobs: `{max?, by?}` |
 | `POST /api/v1/ai/jobs/{id}/results` | answers one: `{results: {tags?, verdicts?}, by?}` |
 
-Events: `ai.jobs.created`, `ai.job.done` and `ai.job.failed`. Jobs are kept in memory, the newest 500; a restart
-forgets them, and making them again takes a moment.
+Events: `ai.jobs.created`, `ai.job.done` and `ai.job.failed`. The newest 500 jobs are kept in `ai-jobs.json` in the
+state folder, readable only by you since it holds bookmark titles and addresses. After a restart, jobs still waiting
+are answered again when a provider is configured, and a job claimed by an assistant is free again after 15 minutes.
 
 ---
 [← Docs index](../../README.md#documentation)

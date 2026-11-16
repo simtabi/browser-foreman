@@ -211,10 +211,12 @@ func (s *Server) closeTabs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, out)
 }
 
-// Background runs the server's own schedules until ctx ends: tab autosave, and re-checking links whose last check
+// Background runs the server's own schedules until ctx ends: tab autosave, AI jobs a restart left waiting, and
+// re-checking links whose last check
 // is older than recheck_days (links never checked wait for a check someone starts).
 func (s *Server) Background(ctx context.Context) {
 	go s.Tabs.Autosave(ctx, func(saved tabs.Saved) { s.publishSaved(saved, "auto") })
+	s.resumeAIJobs(ctx)
 	go func() {
 		for {
 			select {

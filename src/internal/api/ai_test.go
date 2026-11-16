@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -144,4 +146,41 @@ func TestAIJobsRefuseWhatTheyCannotDo(t *testing.T) {
 			t.Errorf("%s: %d %s", body, w.Code, w.Body)
 		}
 	}
+}
+
+func TestAIJobsOutliveARestart(t *testing.T) {
+	s := newServer(t, "tok")
+	aiWorkspace(t, s)
+	if w := send(s.Handler(), "POST", "/api/v1/ai/jobs", `{"kind":"tag","workspace":"w"}`); w.Code != 201 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if st, err := os.Stat(filepath.Join(s.Cfg.Storage.Path, "ai-jobs.json")); err != nil || st.Mode().Perm() != 0o600 {
+		t.Fatalf("the queue file: %v %v", st, err)
+	}
+	// A new server on the same state folder, with a provider: it takes the waiting job and answers it.
+	again := newServer(t, "tok")
+	again.Cfg.Storage.Path, again.Data = s.Cfg.Storage.Path, s.Data
+	f := &tagger{}
+	again.AI = f
+	again.resumeAIJobs(context.Background())
+	for range 100 {
+		if w := send(again.Handler(), "GET", "/api/v1/ai/jobs", ""); strings.Contains(w.Body.String(), `"state":"done"`) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("the job did not survive the restart: calls %d", f.calls)
+}
+
+// tagger tags every bookmark of a job "x".
+type tagger struct{ calls int }
+
+func (*tagger) Name() string { return "tagger" }
+func (f *tagger) Answer(_ context.Context, j ai.Job) (ai.Results, error) {
+	f.calls++
+	var r ai.Results
+	for _, it := range j.Items {
+		r.Tags = append(r.Tags, ai.TagResult{ID: it.ID, Tags: []string{"x"}})
+	}
+	return r, nil
 }

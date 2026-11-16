@@ -91,7 +91,7 @@ Hosted at <https://opensource.simtabi.com/documentation/simtabi/browser-foreman/
 - [Write-back](docs/tools/write-back.md) — a cleaned workspace back into a Chromium profile, as a dry run first
 - [Labels](docs/tools/labels.md) — ratings, tags and when each bookmark was last opened
 - [Page snapshots](docs/tools/page-snapshots.md) — how pictures of pages are taken, window size, wait and folder
-- [AI: tags and duplicates](docs/tools/ai.md) — tags suggested and look-alike bookmarks judged by Anthropic's API, a local Ollama, or your assistant
+- [AI: tags and duplicates](docs/tools/ai.md) — tags suggested and look-alike bookmarks judged by Anthropic's or OpenAI's API, a local Ollama, or your assistant
 - [Running at login and notifications](docs/tools/service.md) — the login service, and a notification when links stop working
 
 ### Recipes

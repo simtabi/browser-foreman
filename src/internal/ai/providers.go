@@ -151,3 +151,83 @@ func (o *Ollama) Answer(ctx context.Context, j Job) (Results, error) {
 	}
 	return Parse(j, out.Message.Content)
 }
+
+// ---- OpenAI ----
+
+// OpenAI answers jobs through OpenAI's Chat Completions API, with the answer held to the job's JSON schema in strict
+// mode. URL may name any server that speaks the same API.
+type OpenAI struct {
+	URL    string // https://api.openai.com/v1 by default
+	Key    string // OPENAI_API_KEY
+	Model  string // required: OpenAI's models change often, so it is never guessed
+	Client *http.Client
+}
+
+func (*OpenAI) Name() string { return "openai" }
+
+func (o *OpenAI) Answer(ctx context.Context, j Job) (Results, error) {
+	if o.Model == "" {
+		return Results{}, errors.New("set ai.model to an OpenAI model your key can use")
+	}
+	if o.Key == "" {
+		return Results{}, errors.New("set OPENAI_API_KEY in Browser Foreman's .env (an API key from platform.openai.com: a ChatGPT subscription does not include one)")
+	}
+	system, user, err := Prompt(j)
+	if err != nil {
+		return Results{}, err
+	}
+	body, _ := json.Marshal(map[string]any{
+		"model":    o.Model,
+		"messages": []map[string]string{{"role": "system", "content": system}, {"role": "user", "content": user}},
+		"response_format": map[string]any{"type": "json_schema", "json_schema": map[string]any{
+			"name": "browser_foreman_" + j.Kind, "strict": true, "schema": Schema(j.Kind)}},
+	})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(o.URL, "/")+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return Results{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+o.Key)
+	c := o.Client
+	if c == nil {
+		c = &http.Client{Timeout: 5 * time.Minute}
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		return Results{}, fmt.Errorf("OpenAI did not answer at %s: %w", o.URL, err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	var out struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+				Refusal string `json:"refusal"`
+			} `json:"message"`
+			FinishReason string `json:"finish_reason"`
+		} `json:"choices"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(raw, &out)
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized:
+		return Results{}, errors.New("OpenAI refused the key: check OPENAI_API_KEY")
+	case resp.StatusCode == http.StatusTooManyRequests:
+		return Results{}, errors.New("OpenAI's rate limit or quota was reached: the job can be made again later")
+	case resp.StatusCode != http.StatusOK:
+		msg := resp.Status
+		if out.Error != nil && out.Error.Message != "" {
+			msg = out.Error.Message
+		}
+		return Results{}, fmt.Errorf("OpenAI (ai.model %q): %s", o.Model, msg)
+	case len(out.Choices) == 0:
+		return Results{}, errors.New("OpenAI answered with nothing")
+	case out.Choices[0].Message.Refusal != "":
+		return Results{}, fmt.Errorf("the model declined this job: %s", out.Choices[0].Message.Refusal)
+	case out.Choices[0].FinishReason == "length":
+		return Results{}, errors.New("the answer was cut off before it finished")
+	}
+	return Parse(j, out.Choices[0].Message.Content)
+}

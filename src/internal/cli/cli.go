@@ -188,6 +188,8 @@ func newServer(c config.Config, data store.Store, now func() time.Time) *api.Ser
 		srv.AI = ai.NewAnthropic(c.AI.AnthropicKey, c.AI.Model, c.AI.Effort)
 	case "ollama":
 		srv.AI = &ai.Ollama{URL: c.AI.OllamaURL, Model: c.AI.Model}
+	case "openai":
+		srv.AI = &ai.OpenAI{URL: c.AI.OpenAIURL, Key: c.AI.OpenAIKey, Model: c.AI.Model}
 	}
 	return srv
 }
