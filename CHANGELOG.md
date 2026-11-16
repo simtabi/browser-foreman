@@ -10,6 +10,8 @@ ships.
 
 ### Added
 
+- Settings › Browser extensions: strict approvals (the default; a browser is approved only from a page open in that
+  browser) or loose (from any). The connect prompt has Not now, which leaves the request waiting.
 - `serve` prints the page's link on a line of its own and, started from a terminal, opens it in the default browser,
   also when Browser Foreman is already running (`server.open`: auto, always or never; `--open`, `--no-open`).
 - The extension (0.1.2) asks to connect by itself once it is loaded and finds Browser Foreman, showing its four
@@ -208,6 +210,14 @@ ships.
 
 ### Fixed
 
+- Disconnect… in *Browser extensions…* did nothing visible: its confirmation opened behind the dialog. Dialogs now
+  stack, each above the one it was opened from.
+- The folder list's count read as a number of folders; it now says "6,158 bookmarks". The footer and About called
+  the workspace's last change "Built"; they now say "Changed". An empty folder's tile says Empty.
+- One look across the page: one button size per context, one icon per action, one colour per status, title icons
+  and labelled close buttons on every dialog with the dismiss button on the left, one spinner colour and loading
+  placeholder, the theme's corner radii and a four-step type scale. Every notification says its kind. A web test
+  (ui-rules) enforces it.
 - In *Browser extensions…*, an opened *How to install* no longer closes by itself when the dialog refreshes its
   status every three seconds.
 - A site that kept rate-limiting made each of its deferred links wait out the pause again at the end of a run, a few at

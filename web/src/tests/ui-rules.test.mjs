@@ -47,6 +47,20 @@ for (const f of files) {
 }
 assert.ok(toasts >= 40, `only ${toasts} notifications found: the scan no longer matches how they are written`);
 assert.deepEqual(kindless, [], "notifications that do not say their kind:\n" + kindless.join("\n"));
+// Rule 2: every dialog's close X has a label, and every dialog built in v1-ui.ts has a title icon (as the page's own).
+const tpl = readFileSync(join(src, "template.html"), "utf8");
+const closes = [...tpl.matchAll(/<button[^>]*class="btn-close"[^>]*>/g)].map(m => m[0]);
+assert.ok(closes.length >= 5, `only ${closes.length} close buttons found in template.html`);
+assert.deepEqual(closes.filter(c => !c.includes("aria-label")), [], "close buttons without an aria-label");
+const v1 = readFileSync(join(src, "ts", "v1-ui.ts"), "utf8");
+const built = [...v1.matchAll(/\bmodal\("([A-Za-z0-9]+)",[^;]*/g)];
+assert.ok(built.length >= 6, `only ${built.length} built dialogs found`);
+assert.deepEqual(built.filter(m => !/"ti-[a-z0-9-]+"\)\s*$|"ti-[a-z0-9-]+"\);?/.test(m[0])).map(m => m[1]), [], "dialogs built without a title icon");
+// Rule 6: corners come from the theme: its two radius tokens, a pill (999px), a circle (50%), none or inherited.
+const style = tpl.slice(tpl.indexOf("<style>"), tpl.indexOf("</style>"));
+const radii = [...style.matchAll(/border-radius:\s*([^;}]+)/g)].map(m => m[1].trim());
+assert.ok(radii.length >= 40, `only ${radii.length} border-radius rules found in the page's styles`);
+assert.deepEqual(radii.filter(v => !/^(var\(--tblr-[a-z-]*radius[a-z-]*(, *var\(--tblr-[a-z-]*radius[a-z-]*\))?\)|999px|50%|0|inherit)$/.test(v)), [], "corner radii off the theme's scale");
 assert.ok(classes >= 100, `only ${classes} button classes found: the pattern no longer matches how buttons are written`);
 assert.deepEqual(bad, [], "buttons off the one look:\n" + bad.join("\n"));
 console.log(`ui-rules: ${classes} buttons and ${toasts} notifications in ${files.length} files follow the one look`);

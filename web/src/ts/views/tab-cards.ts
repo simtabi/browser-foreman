@@ -29,7 +29,7 @@ export function tabRowElement(i: TabItem, o: { live: boolean; picked: boolean; c
     if (o.note.note) { const ni = icon("ti-notes", "text-secondary"); ni.dataset.tip = o.note.note; tg.append(ni); }
     r.append(tg);
   }
-  if (x.w.active === pos + 1) r.append(badge("active", "bg-blue-lt"));
+  if (x.w.active === pos + 1) r.append(badge("active", "bg-primary-lt")); // the current item: primary, as "open" in Workspaces
   if (o.extra) r.append(el("span", "badge bg-secondary-lt", o.extra));
   if (/^https?:/i.test(t.url)) {
     const b = el("button", "btn btn-sm btn-ghost-secondary btn-icon"); b.append(icon("ti-external-link"));

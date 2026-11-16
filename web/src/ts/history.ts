@@ -7,6 +7,7 @@
 import { api } from "./api";
 import { Dom } from "./dom";
 import { toast } from "./legacy";
+import { skeleton } from "./busy";
 
 export type AccessState = "readable" | "blocked" | "missing";
 export interface AccessStatus {
@@ -31,7 +32,7 @@ export class HistoryAccessPanel {
   constructor(private readonly root: HTMLElement) {}
 
   async refresh(): Promise<this> {
-    this.root.replaceChildren(node("div", "set-title", "Browser history"), node("div", "set-help", "Checking…"));
+    this.root.replaceChildren(node("div", "set-title", "Browser history"), skeleton("Checking which browsers' history can be read…", 2));
     try {
       this.render(await api.path("history", "access").get<AccessStatus>());
     } catch {

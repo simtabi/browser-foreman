@@ -37,13 +37,15 @@ function install(W: V1): void {
     try { await W.call("PATCH", ws(), body); if (reload) location.reload(); } catch (e) { fail(e); }
   };
 
-  function modal(id: string, title: string, size: "lg" | "xl" = "lg"): { body: HTMLElement; foot: HTMLElement; dock: HTMLElement } {
+  /** A dialog: its title carries an icon, as every dialog in the page does (template.html). */
+  function modal(id: string, title: string, size: "lg" | "xl" = "lg", ic = ""): { body: HTMLElement; foot: HTMLElement; dock: HTMLElement } {
     document.getElementById(id)?.remove();
     const m = el("div", "modal modal-blur"); m.id = id; m.tabIndex = -1; m.setAttribute("role", "dialog"); m.setAttribute("aria-label", title);
     const dlg = el("div", `modal-dialog modal-dialog-top modal-dialog-scrollable modal-${size}`), box = el("div", "modal-content");
     const head = el("div", "modal-header"), close = el("button", "btn-close");
     close.type = "button"; close.setAttribute("aria-label", "Close"); close.onclick = () => hideModal("#" + id);
-    head.append(el("h5", "modal-title", title), close);
+    const h = el("h5", "modal-title"); if (ic) h.append(icon(ic, "me-2")); h.append(title);
+    head.append(h, close);
     // dock: a strip between the scrolling body and the footer buttons, for a list's pager, so it is always in view.
     const body = el("div", "modal-body"), dock = el("div", "modal-dock"), foot = el("div", "modal-footer");
     box.append(head, body, dock, foot); dlg.append(box); m.append(dlg);
@@ -54,7 +56,7 @@ function install(W: V1): void {
   }
 
   async function history(): Promise<void> {
-    const { body, dock } = modal("v1History", `History of “${W.workspace.name}”`, "xl");
+    const { body, dock } = modal("v1History", `History of “${W.workspace.name}”`, "xl", "ti-history");
     body.classList.add("p-0");
     const OPS: Record<string, [string, string]> = { import: ["imported", "bg-blue-lt"], merge: ["merged", "bg-blue-lt"], update: ["updated", "bg-blue-lt"],
       trash: ["to the Trash", "bg-orange-lt"], restore: ["put back", "bg-green-lt"], purge: ["deleted", "bg-red-lt"], undo: ["undo", "bg-secondary-lt"],
@@ -98,7 +100,7 @@ function install(W: V1): void {
   // Workspaces: the ones in use, and the workspace Trash (deleted ones, kept whole until it is emptied), as a Tabler
   // data table with tabs, search, sorting and pages.
   function manage(tab: "use" | "trash" = "use"): void {
-    const { body, foot, dock } = modal("v1Workspaces", "Workspaces", "xl");
+    const { body, foot, dock } = modal("v1Workspaces", "Workspaces", "xl", "ti-stack-2");
     body.classList.add("p-0");
     let inUse: Info[] = W.workspaces, trash: Info[] = [];
     const badge = (text: string, cls: string, ic?: string) => { const b = el("span", `badge ${cls}`); if (ic) b.append(icon(ic, "me-1")); b.append(text); return b; };
@@ -213,7 +215,7 @@ function install(W: V1): void {
 
   // Appearance: a workspace's colour and icon, saved as you pick them (they apply even to a locked workspace).
   async function appearance(w: Info, after?: () => Promise<void>): Promise<void> {
-    const { body, foot } = modal("v1Look", `Appearance of “${w.name}”`);
+    const { body, foot } = modal("v1Look", `Appearance of “${w.name}”`, "lg", "ti-palette");
     body.append(el("p", "text-secondary", "A colour and an icon tell workspaces apart in the top bar, its menu and All workspaces. The top bar takes the colour of the workspace you are in."));
     let saving: Promise<unknown> = Promise.resolve();
     body.append(lookPicker(w, look => {
@@ -273,7 +275,7 @@ function install(W: V1): void {
   // Adding bookmarks: files (and optionally another workspace) merged into a new workspace (importer) or this one
   // (addFiles), through /sources: copies of the same page are folded into one, each copy going to the Trash.
   function sourcesDialog(into: "new" | "this"): void {
-    const { body, foot } = modal("v1Sources", into === "new" ? "Import bookmarks as a new workspace" : `Add bookmarks to “${W.workspace.name}”`);
+    const { body, foot } = modal("v1Sources", into === "new" ? "Import bookmarks as a new workspace" : `Add bookmarks to “${W.workspace.name}”`, "lg", "ti-file-import");
     body.append(el("p", "text-secondary", "Choose one or more bookmarks files: an HTML export from any browser, Chrome's Bookmarks file, Firefox's places.sqlite or Safari's Bookmarks.plist. Copies of the same page are kept once; every other copy goes to the Trash, where it can be put back, and the Merged duplicates list names them."));
     const file = el("input", "form-control mb-3"); file.type = "file"; file.multiple = true; file.accept = ".html,.htm,.json,.sqlite,.plist,application/json,text/html";
     let nameIn: HTMLInputElement | null = null;
@@ -395,7 +397,7 @@ function install(W: V1): void {
   // can be saved, as a new folder in Saved tabs.
   type Visit = { url: string; title: string; last: string; visits: number; browser: string; profile?: string; bookmarked?: boolean };
   function browserHistory(): void {
-    const { body, foot, dock } = modal("v1History2", "Browser history", "xl");
+    const { body, foot, dock } = modal("v1History2", "Browser history", "xl", "ti-world-search");
     body.classList.add("p-0");
     const days = new RangePicker({ label: "Visited", heading: "Pages visited in…", value: "30", defaultKey: "30",
       options: [{ key: "1", label: "Today" }, { key: "7", label: "Last 7 days" }, { key: "30", label: "Last 30 days" },
@@ -494,7 +496,7 @@ function install(W: V1): void {
     let res: { groups: DGroup[]; copies: number };
     try { res = await busy("Looking for duplicates…", () => W.call("GET", ws("/duplicates"))); } catch (e) { fail(e); return; }
     if (!res.groups.length) { toast("No two bookmarks here lead to the same page.", "success", "No duplicates"); return; }
-    const { body, foot } = modal("wsDupes", "Find duplicates", "xl");
+    const { body, foot } = modal("wsDupes", "Find duplicates", "xl", "ti-files");
     const keepOf = new Map<DGroup, string>(), on = new Set<DGroup>(res.groups.filter(startsTicked));
     const go = el("button", "btn btn-danger"); go.type = "button";
     const count = () => [...on].reduce((n, g) => n + g.members.length - 1, 0);
@@ -528,7 +530,7 @@ function install(W: V1): void {
       }
       card.append(head, list); body.append(card);
     });
-    const cancel = el("button", "btn"); cancel.type = "button"; cancel.textContent = "Close"; cancel.onclick = () => hideModal("#wsDupes");
+    const cancel = el("button", "btn me-auto"); cancel.type = "button"; cancel.textContent = "Close"; cancel.onclick = () => hideModal("#wsDupes");
     go.onclick = async () => {
       const ops = trashOps([...on], keepOf);
       const n = count();
@@ -558,7 +560,7 @@ function install(W: V1): void {
     const into = new Map<string, SMove[]>();
     for (const m of plan.moves) { const l = into.get(m.to); if (l) l.push(m); else into.set(m.to, [m]); }
     const order = [...into.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
-    const { body, foot } = modal("wsSort", "Sort into folders", "xl");
+    const { body, foot } = modal("wsSort", "Sort into folders", "xl", "ti-sort-ascending-letters");
     body.append(el("p", "text-secondary", `${plan.moves.length.toLocaleString()} bookmark${plan.moves.length === 1 ? "" : "s"} would move into ` +
       `${order.length.toLocaleString()} folder${order.length === 1 ? "" : "s"}, ${fresh.size.toLocaleString()} of them new. ` +
       "Untick a folder to leave its bookmarks where they are. Nothing changes until you apply, and applying is one entry in the history, so Undo puts everything back."));
@@ -588,7 +590,7 @@ function install(W: V1): void {
       if (ms.length > 50) list.append(el("div", "list-group-item small text-secondary", `… and ${(ms.length - 50).toLocaleString()} more`));
       d.append(s, list); body.append(d);
     }
-    const close = el("button", "btn"); close.type = "button"; close.textContent = "Close"; close.onclick = () => hideModal("#wsSort");
+    const close = el("button", "btn me-auto"); close.type = "button"; close.textContent = "Close"; close.onclick = () => hideModal("#wsSort");
     go.onclick = async () => {
       try {
         const folders = [...ticked];
@@ -668,7 +670,7 @@ function install(W: V1): void {
   }
 
   async function extensions(): Promise<void> {
-    const { body, foot } = modal("v1Extensions", "Browser extensions", "lg");
+    const { body, foot } = modal("v1Extensions", "Browser extensions", "lg", "ti-puzzle");
     let connected: Ext[] = [], installed = new Set<string>(), waiting: Waiting[] = [];
     let guide: Guide = { browsers: [], seen: {} };
     const copy = (text: string) => async () => { try { await navigator.clipboard.writeText(text); toast("Copied.", "success"); } catch { toast("Copy it by hand.", "warning"); } };

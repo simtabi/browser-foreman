@@ -7,6 +7,7 @@
 import { api } from "./api";
 import { toast } from "./legacy";
 import { el, icon } from "./ui";
+import { skeleton } from "./busy";
 
 export interface SnapshotSettings { snapshot_width: number; snapshot_height: number; snapshot_wait_seconds: number; snapshot_dir: string }
 
@@ -22,7 +23,7 @@ export class SnapshotSettingsPanel {
 
   constructor() {
     this.element = el("div", "set-group");
-    this.element.append(el("div", "set-title", "Page snapshots"), el("div", "set-help px-1", "Loading…"));
+    this.element.append(el("div", "set-title", "Page snapshots"), skeleton("Loading the page snapshot settings…", 2));
     void this.load();
   }
 

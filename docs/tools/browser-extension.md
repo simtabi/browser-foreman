@@ -36,6 +36,23 @@ requests nobody answered; **Connect** in its popup asks again at any time (and s
 request waits five minutes; at most five wait at once; only an extension can ask (a web page or another program
 cannot), and nothing connects unless the owner approves.
 
+The prompt offers **Connect**, **Deny** and **Not now**. Not now (or Escape) decides nothing: the request keeps
+waiting, the prompt does not come back for it, and you can still approve it in *Browser extensions…* or from a
+terminal until it expires.
+
+Which page may approve is a setting, Settings › Browser extensions › *Approve a connecting browser*:
+
+- **Strict** (the default): a browser is approved only from Browser Foreman open in that same browser, so Chrome
+  never asks you about Brave. In other browsers the request still shows in *Browser extensions…*, where it can be
+  denied but not approved.
+- **Loose**: from Browser Foreman open in any browser.
+
+The terminal (`browser-foreman pair --approve`) works in either mode.
+
+**Disconnect…** in a browser's row asks first, then revokes the extension's key at once. The extension stops
+sending its tabs, cannot read or write bookmarks, and does not ask to connect again until Connect is pressed in
+its popup.
+
 The request also shows in the terminal running `browser-foreman serve`, with its letters, so it is seen when no
 Browser Foreman page is open. Approve it from a terminal by typing the letters the popup shows:
 

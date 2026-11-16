@@ -11,14 +11,15 @@ import { $, el, icon, plural } from "../ui";
 /** Why a bookmark is in the Trash. */
 export type ReasonKey = "duplicate" | "dead" | "redirect" | "unverified" | "login" | "search" | "local" | "not-web" | "session" | "yours";
 export interface Reason { key: ReasonKey; label: string; cls: string }
+// Colours follow the details pane's STATUS_BG (views/details.ts), the one status-to-colour table, as tints.
 export const REASONS: Record<ReasonKey, Reason> = {
   duplicate: { key: "duplicate", label: "Duplicate", cls: "bg-azure-lt" },
   dead: { key: "dead", label: "Dead link", cls: "bg-red-lt" },
-  redirect: { key: "redirect", label: "Redirects elsewhere", cls: "bg-orange-lt" },
+  redirect: { key: "redirect", label: "Redirects elsewhere", cls: "bg-purple-lt" },  // as STATUS_BG "moved-elsewhere"
   unverified: { key: "unverified", label: "Could not verify", cls: "bg-secondary-lt" },
-  login: { key: "login", label: "Needs login", cls: "bg-secondary-lt" },
-  search: { key: "search", label: "Google search", cls: "bg-purple-lt" },
-  local: { key: "local", label: "Local or staging", cls: "bg-secondary-lt" },
+  login: { key: "login", label: "Needs login", cls: "bg-info-lt" },  // as STATUS_BG "needs-login"
+  search: { key: "search", label: "Google search", cls: "bg-indigo-lt" },  // its own hue: purple means "redirects"
+  local: { key: "local", label: "Local or staging", cls: "bg-cyan-lt" },  // as STATUS_BG "local"
   "not-web": { key: "not-web", label: "Not a web link", cls: "bg-secondary-lt" },
   session: { key: "session", label: "Session page", cls: "bg-secondary-lt" },
   yours: { key: "yours", label: "Trashed by you", cls: "bg-green-lt" },

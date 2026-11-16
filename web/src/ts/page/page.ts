@@ -1068,7 +1068,9 @@ function paintFooter() {
   $("#navBmCount").textContent = liveItems().length.toLocaleString();  // the Trash is counted on its own button
   $("#footName").textContent = APP.name; $("#footVer").textContent = "v" + APP.version;
   $("#footCopy").textContent = `© ${APP.year} ${APP.org} · MIT`;
-  $("#footBuilt").textContent = DATA.built ? `Built ${fmtDate(Date.parse(DATA.built) / 1000)}` : "";
+  // DATA.built is when this workspace last changed (its newest history entry), not when the program was built.
+  $("#footBuilt").textContent = DATA.built ? `Changed ${fmtDate(Date.parse(DATA.built) / 1000)}` : "";
+  $("#footBuilt").dataset.tip = "When this workspace last changed";
   $("#footBuilt").dataset.tip = `${DATA.keep.length.toLocaleString()} bookmarks in this build, from ${DATA.total.toLocaleString()}`;
 
 }
@@ -1134,7 +1136,7 @@ function openAbout(tab = "about") {
       const tile = (label, value, sub) => { const d = el("div", "about-tile"); d.append(el("div", "about-tile-label", label), el("div", "about-tile-value", value)); if (sub) d.append(el("div", "about-tile-sub", sub)); tiles.append(d); };
       tile("Version", APP.version, "first release");
       tile("Bookmarks", DATA.keep.length.toLocaleString(), `from ${DATA.total.toLocaleString()} before cleanup`);
-      tile("Built", DATA.built ? fmtDay(Date.parse(DATA.built) / 1000) : "—", DATA.built ? new Date(DATA.built).toLocaleTimeString(undefined, {hour: "numeric", minute: "2-digit"}) : "");
+      tile("Last changed", DATA.built ? fmtDay(Date.parse(DATA.built) / 1000) : "—", DATA.built ? new Date(DATA.built).toLocaleTimeString(undefined, {hour: "numeric", minute: "2-digit"}) : "");
       b.append(tiles);
       // Who makes it.
       const maker = el("div", "about-card");
@@ -1347,8 +1349,10 @@ function build(keepView = false) {
     hint.replaceChildren(...parts);
   }
   const tt = $("#treeTitle");
-  tt.replaceChildren(readOnly() ? "Removed duplicates" : grouped() ? "Grouped by " + $("#v-group").selectedOptions[0].text.toLowerCase() : "Folders",
-    el("span", "badge bg-secondary-lt ms-2", total.toLocaleString()));
+  // The badge counts bookmarks (what the list shows), so it says so: it read as a count of folders.
+  const shown = el("span", "badge bg-secondary-lt ms-2", `${total.toLocaleString()} bookmark${total === 1 ? "" : "s"}`);
+  shown.dataset.tip = "Bookmarks this list shows, with the filters and search applied";
+  tt.replaceChildren(readOnly() ? "Removed duplicates" : grouped() ? "Grouped by " + $("#v-group").selectedOptions[0].text.toLowerCase() : "Folders", shown);
   sel = Math.min(sel, Math.max(rows.length - 1, 0));
   draw(); if (!keepView) show(); FOLD?.refresh();
 }
@@ -2316,7 +2320,7 @@ function showFolder(r) {
     const fg = el("div", "folder-grid"); grid.append(fg);
     for (const s of subs) {
       const sub = descendants(s), t = el("div", "card folder-card"), b = el("div", "card-body");
-      const txt = el("div", "min-w-0 flex-fill"); txt.append(el("div", "name", nice(s.n)), el("div", "text-secondary small", `${sub.length.toLocaleString()} bookmark${sub.length === 1 ? "" : "s"}`));
+      const txt = el("div", "min-w-0 flex-fill"); txt.append(el("div", "name", nice(s.n)), el("div", "text-secondary small", sub.length ? `${sub.length.toLocaleString()} bookmark${sub.length === 1 ? "" : "s"}` : "Empty"));
       b.append(el("span", "avatar avatar-sm bg-primary-lt flex-none"), txt); b.firstChild.append(icon(s.n === TRASH ? "ti-trash" : "ti-folder"));
       if (s.d) b.dataset.tip = s.d;
       t.append(b);
