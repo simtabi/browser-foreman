@@ -10,6 +10,9 @@ ships.
 
 ### Added
 
+- `apply --route extension --yes` writes through the extension by itself while Browser Foreman runs, refusing a
+  browser that changed since the plan (a fingerprint both sides compute alike), then reads the browser back and
+  plans again to verify. Extension 0.1.4 takes waiting commands as soon as it reloads.
 - Settings › Browser extensions: strict approvals (the default; a browser is approved only from a page open in that
   browser) or loose (from any). The connect prompt has Not now, which leaves the request waiting.
 - `serve` prints the page's link on a line of its own and, started from a terminal, opens it in the default browser,
@@ -210,6 +213,10 @@ ships.
 
 ### Fixed
 
+- An address with a default port (`https://site:443/`) matched no copy of itself without the port, so a write-back
+  planned it as new every time (duplicating it) and the duplicate finder missed it. The port is now ignored when
+  comparing and left out when writing.
+- After writing, the extension could not read the browser back into the plan it had written (403).
 - Disconnect… in *Browser extensions…* did nothing visible: its confirmation opened behind the dialog. Dialogs now
   stack, each above the one it was opened from.
 - The folder list's count read as a number of folders; it now says "6,158 bookmarks". The footer and About called

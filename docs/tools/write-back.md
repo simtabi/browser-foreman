@@ -30,7 +30,7 @@ Browser Foreman; the report counts them.
 | Route | When | What it does |
 |---|---|---|
 | `file` | the browser is quit | Writes the profile's `Bookmarks` file with Chromium's checksum. It refuses while the browser runs (its `SingletonLock`), and for a profile that syncs its bookmarks unless you add `--sync-risk-ok`: Sync can overwrite the file, or pass it on to every device. |
-| `extension` | the browser runs, or the profile syncs | Plans against `<browser>-live`, the workspace the [extension](browser-extension.md) read, and with `--yes` saves the result as `<browser>-target`. In the extension's popup you then write `<browser>-target` back, after it shows the counts. If the profile syncs, the change reaches every device signed in to it. |
+| `extension` | the browser runs, or the profile syncs | Plans against `<browser>-live`, the workspace the [extension](browser-extension.md) read. With `--yes` it saves the result as `<browser>-target` and, while Browser Foreman runs, has the extension write it: the extension first checks the browser still matches the plan (a fingerprint of its bookmarks) and refuses if not, saves the bookmarks as they are to `<browser>-before-write`, writes, and reads the result back. `apply` then reads the browser again and plans against it: an empty plan is the verification. If the profile syncs, the change reaches every device signed in to it. Without a running server, write `<browser>-target` from the extension's popup. |
 
 The route that is safe for the profile is offered first, and the file route is not offered when the profile's file
 cannot be read.
@@ -73,6 +73,9 @@ Before the file is written, the profile's bookmarks are saved to the workspace `
 file is kept beside the new one as `Bookmarks.before-browser-foreman-<time>`. Afterwards the file is read back and
 planned against again. The plan must come out empty, and anything left over is reported as drift. Writing the same
 plan twice changes nothing the second time.
+
+Addresses are written the way browsers store them: a default port (`https://site:443/`) is left out, so a
+write never sets an address the browser then changes back.
 
 ## On macOS
 

@@ -251,3 +251,26 @@ func TestAMovedFolderIsFoundByItsBookmarksWhenItsNameIsNotUnique(t *testing.T) {
 		t.Fatalf("Dev is %+v, want Chrome's folder 15, which holds its bookmark", got)
 	}
 }
+
+func TestADefaultPortIsWrittenAsTheBrowserKeepsIt(t *testing.T) {
+	// The cleanup kept D with :443; Chrome keeps it without. One bookmark, matched, and nothing to write.
+	o := ours()
+	o.Root.Children[0].Children[0].Children[0].URL = "https://d.example:443/"
+	target, rep, err := Plan(base(), o, theirs(), Merge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := flatten(target)["https://d.example/"]; got.id != "16" {
+		t.Fatalf("D is %+v, want Chrome's 16 at Chrome's address", got)
+	}
+	for _, r := range rep.Renamed {
+		if r.URL == "https://d.example/" || r.WasURL != "" && r.Title == "D" {
+			t.Fatalf("a default port is planned as a new address: %+v", r)
+		}
+	}
+	for _, a := range rep.Added {
+		if a.Title == "D" {
+			t.Fatalf("D is planned as added again: %+v", a)
+		}
+	}
+}

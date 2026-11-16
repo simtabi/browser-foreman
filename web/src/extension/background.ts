@@ -126,7 +126,7 @@ async function autoConnect(): Promise<void> {
 ext.alarms.create("tick", { periodInMinutes: 1 });
 ext.alarms.onAlarm.addListener(a => { if (a.name === "tick") { void report(); void poll(); void autoConnect(); } });
 ext.runtime.onStartup.addListener(() => { void report(); void poll(); void autoConnect(); });
-ext.runtime.onInstalled.addListener(() => { void report(); void autoConnect(); });
+ext.runtime.onInstalled.addListener(() => { void report(); void poll(); void autoConnect(); }); // after an install, update or reload too: commands waiting are taken at once, not at the next minute
 
 // ---- the popup's requests ----
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

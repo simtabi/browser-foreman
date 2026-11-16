@@ -332,7 +332,7 @@ func readThroughExtension(ctx context.Context, s store.Store, c config.Config, w
 		token = c.APIToken
 	}
 	if addr := serverAddr(ctx, c); answers(ctx, addr) {
-		if err := askExtensionToRead(ctx, "http://"+addr, token, browser, 60*time.Second); err != nil {
+		if err := askExtensionToRead(ctx, "http://"+addr, token, browser, 2*time.Minute); err != nil { // the extension takes commands at least once a minute
 			return store.Tree{}, "", err
 		}
 	} else {
@@ -461,7 +461,7 @@ func applyThroughExtension(ctx context.Context, s store.Store, c config.Config, 
 	fmt.Fprintf(out, "Written: %d created, %d renamed or readdressed, %d moved, %d bookmarks and %d folders removed (%d steps). Saved first: %s\n",
 		counts.Created, counts.Updated, counts.Moved, counts.RemovedBookmarks, counts.RemovedFolders, counts.Steps, counts.Backup)
 	// Verify: read the browser again and plan against it; a write that landed as planned leaves nothing to do.
-	if err := askExtensionToRead(ctx, base, token, browser, time.Minute); err != nil {
+	if err := askExtensionToRead(ctx, base, token, browser, 2*time.Minute); err != nil {
 		return fmt.Errorf("written, but reading it back failed: %w", err)
 	}
 	after, _, err := s.State(ctx, slug(browser)+"-live", 0)

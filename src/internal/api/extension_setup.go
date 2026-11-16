@@ -252,10 +252,11 @@ func extensionTokenMay(r *http.Request) bool {
 }
 
 // extensionWritable reports whether an extension may read its browser's bookmarks into workspace id: its own
-// "<browser>-live" and "<browser>-before-write", or a workspace already read from this browser by its extension
-// (writing one back re-reads it there). Any other workspace stays out of its reach.
+// "<browser>-live", "<browser>-before-write" and "<browser>-target" (the write-back plan it was asked to write, which
+// it reads back after writing), or a workspace already read from this browser by its extension (writing one back
+// re-reads it there). Any other workspace stays out of its reach.
 func (s *Server) extensionWritable(ctx context.Context, browser, id string) (bool, error) {
-	if id == slug(browser)+"-live" || id == slug(browser)+"-before-write" {
+	if id == slug(browser)+"-live" || id == slug(browser)+"-before-write" || id == slug(browser)+"-target" {
 		return true, nil
 	}
 	hist, err := s.Data.History(ctx, id)

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -191,5 +192,13 @@ func TestAWriteCommandCarriesItsPlanAndReportsItsResult(t *testing.T) {
 	fromExtension(h, "POST", "/api/v1/extension/commands/"+q.Command.ID+"/done", `{"ok":true,"result":{"created":3,"moved":2}}`, chrome)
 	if b := send(h, "GET", "/api/v1/extension/commands/"+q.Command.ID, "").Body.String(); !strings.Contains(b, `"result":{"created":3,"moved":2}`) {
 		t.Fatalf("the result was not kept: %s", b)
+	}
+	// After writing, the extension reads the browser back into the plan it wrote; any other workspace stays closed.
+	nodes := `{"nodes":[{"id":"0","title":"","children":[{"id":"1","title":"Bookmarks bar","children":[]}]}],"workspace":"%s"}`
+	if w := fromExtension(h, "POST", "/api/v1/extension/bookmarks", fmt.Sprintf(nodes, "google-chrome-target"), chrome); w.Code >= 300 {
+		t.Fatalf("reading back into its write target: %d %s", w.Code, w.Body)
+	}
+	if w := fromExtension(h, "POST", "/api/v1/extension/bookmarks", fmt.Sprintf(nodes, "main-ws"), chrome); w.Code != 403 {
+		t.Fatalf("reading into a workspace that is not its own: %d", w.Code)
 	}
 }

@@ -14,6 +14,11 @@ func TestKeyFoldsWhatOpensTheSamePage(t *testing.T) {
 		{"https://example.com/a?ref=hn", "https://example.com/a"},
 		{"http://example.com/a#:~:text=hello", "http://example.com/a"},
 		{"https://example.com", "https://example.com/"},
+		{"https://mailtrap.io:443/blog/x/", "https://mailtrap.io/blog/x"}, // a default port is no port: browsers drop it
+		{"http://example.com:80/a", "http://example.com/a"},
+	}
+	if Key("https://example.com:8443/a") == Key("https://example.com/a") {
+		t.Error("a port that is not the default was folded away")
 	}
 	for _, p := range same {
 		if Key(p[0]) != Key(p[1]) {

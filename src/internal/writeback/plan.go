@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -315,9 +316,23 @@ func Plan(base, ours, theirs store.Tree, mode Mode) (store.Tree, Report, error) 
 	return target, rep, nil
 }
 
+// browserURL is an address as a browser stores it: a default port (443 for https, 80 for http) dropped, so a write
+// never sets an address the browser then changes back (which would read as a change on every later plan).
+func browserURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Port() == "" || !((u.Scheme == "https" && u.Port() == "443") || (u.Scheme == "http" && u.Port() == "80")) {
+		return raw
+	}
+	u.Host = u.Hostname()
+	if strings.Contains(u.Host, ":") { // an IPv6 address keeps its brackets
+		u.Host = "[" + u.Host + "]"
+	}
+	return u.String()
+}
+
 // copyNode copies a subtree, counting what a browser cannot hold. Ids are kept for now; Plan replaces them.
 func copyNode(n *store.Node, rep *Report, count bool) *store.Node {
-	c := &store.Node{ID: n.ID, Kind: n.Kind, Title: n.Title, URL: n.URL, Added: n.Added}
+	c := &store.Node{ID: n.ID, Kind: n.Kind, Title: n.Title, URL: browserURL(n.URL), Added: n.Added}
 	if c.Kind == "" {
 		c.Kind = store.KindFolder
 	}

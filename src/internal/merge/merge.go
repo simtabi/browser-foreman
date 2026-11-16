@@ -23,7 +23,8 @@ const DuplicateOf = "duplicate of "
 // tracking are query parameters that never change which page a link opens.
 var tracking = []string{"utm_", "fbclid", "gclid", "mc_", "ref_src", "igshid"}
 
-// Key is what two links share when they open the same page: for web links the host in lower case without "www.",
+// Key is what two links share when they open the same page: for web links the host in lower case without "www." or
+// a default port,
 // the path without a trailing slash, the query without tracking parameters, and the fragment unless it only
 // highlights text. Anything else is compared as written.
 func Key(raw string) string {
@@ -32,6 +33,10 @@ func Key(raw string) string {
 		return raw
 	}
 	host := strings.TrimPrefix(strings.ToLower(u.Host), "www.")
+	// A default port is no port: browsers drop it when they store the address (https://a:443/ is kept as https://a/).
+	if (u.Scheme == "https" && strings.HasSuffix(host, ":443")) || (u.Scheme == "http" && strings.HasSuffix(host, ":80")) {
+		host = host[:strings.LastIndex(host, ":")]
+	}
 	path := strings.TrimRight(u.EscapedPath(), "/")
 	if path == "" {
 		path = "/"
