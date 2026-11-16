@@ -804,10 +804,12 @@ function install(W: V1): void {
           const li = el("li"); li.append(el("span", "ext-step-n", String(k + 1)), el("span", "ext-step-t", t)); if (val) li.append(copyBtn(val)); inner.append(li);
         });
         const detail: (Node | string)[] = [inner];
-        if (since) detail.push(note(`Waiting for it to call in · ${Math.floor(waited / 60)}:${String(waited % 60).padStart(2, "0")}. It asks to connect within a minute of being loaded.`));
-        if (waited > 120) {
+        if (since) detail.push(note(`Waiting for it to call in · ${Math.floor(waited / 60)}:${String(waited % 60).padStart(2, "0")}. It asks to connect within a minute of being loaded, unless it is already connected to another Browser Foreman.`));
+        if (waited > 75) { // it asks within a minute: past that, something is in the way
+          const here = location.origin;
           const tips = el("ul", "ext-hints");
-          for (const t of ["Developer mode must be on before Load unpacked appears.", "Choose the chromium folder itself: the one holding manifest.json.",
+          for (const t of [`Already connected to another Browser Foreman? An extension talks to one at a time, and a connected one never asks again. Its popup says where ("is connected to …"); if that is not ${here}, press Disconnect there, enter ${here} and press Connect.`,
+            "Developer mode must be on before Load unpacked appears.", "Choose the chromium folder itself: the one holding manifest.json.",
             `If the extension's card in ${name} shows an Errors button, open it: the message says what went wrong.`, "Open the extension's popup and press Connect: it asks at once, and says why if it cannot."]) tips.append(el("li", null, t));
           detail.push(el("div", "ext-check-note fw-medium", "Still nothing? The usual causes:"), tips);
         }
@@ -901,6 +903,14 @@ function install(W: V1): void {
       for (const q of rq.status === "fulfilled" ? rq.value.requests : []) { const o = newest.get(q.browser); if (!o || q.expires > o.expires) newest.set(q.browser, q); }
       waiting = [...newest.values()];
       for (const q of waiting) answered.add(q.id); // answered here, so the page-wide prompt does not ask as well
+      // Not answering: one notice in place of the rows, not a toast every refresh; it clears once the server is back.
+      if (ext.status === "rejected" && (ext.reason as { offline?: boolean })?.offline) {
+        asks.hidden = true; others.hidden = true;
+        const e = el("div", "empty py-4"), ic = el("div", "empty-icon"); ic.append(icon("ti-plug-connected-x"));
+        e.append(ic, el("p", "empty-title", "Browser Foreman is not answering"), el("p", "empty-subtitle text-secondary", (ext.reason as Error).message));
+        list.replaceChildren(e);
+        return;
+      }
       if (ext.status === "rejected") fail(ext.reason);
       paintAsks(); paintRows();
     };

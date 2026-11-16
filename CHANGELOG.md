@@ -221,6 +221,11 @@ ships.
 
 ### Fixed
 
+- A page whose server stopped, or moved to another address, says so in words and names what to do, in place of the
+  browser's "Failed to fetch"; *Browser extensions* shows one notice and recovers by itself when the server is back,
+  instead of a new error every three seconds, and the same message never stacks as several toasts.
+- The extension setup guide names the likeliest reason a browser never asks to connect: its extension is already
+  connected to another Browser Foreman, and an extension talks to one at a time.
 - An address with a default port (`https://site:443/`) matched no copy of itself without the port, so a write-back
   planned it as new every time (duplicating it) and the duplicate finder missed it. The port is now ignored when
   comparing and left out when writing.

@@ -91,7 +91,7 @@ if (boot) {
   const flush = (): void => {
     clearTimeout(timer);
     if (sending) { dirty = true; return; }
-    sending = send().catch(e => banner("Not saved", `The server could not be reached (${e}). Your edit is still on this page.`, "danger", [{ label: "Try again", run: () => flush(), primary: true }])).finally(() => { sending = null; if (dirty) flush(); });
+    sending = send().catch(e => banner("Not saved", `${unreachable(e).message} Your edit is still on this page.`, "danger", [{ label: "Try again", run: () => flush(), primary: true }])).finally(() => { sending = null; if (dirty) flush(); });
   };
   const schedule = (): void => { clearTimeout(timer); timer = setTimeout(flush, 400); };
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && timer) flush(); });
@@ -104,8 +104,13 @@ if (boot) {
     banner(verb === "undo" ? "Nothing undone" : "Nothing redone", j.error ?? `The server answered ${r.status}.`, "danger");
   };
 
+  // A request that gets no answer at all (the server stopped, or moved to another address) says so in words: the
+  // browser's own "Failed to fetch" names neither the server nor what to do.
+  const unreachable = (e: unknown): Error => e instanceof TypeError
+    ? Object.assign(new Error(`Browser Foreman is not answering at ${location.origin}: it has stopped, or now runs on another address. Start it (browser-foreman serve, or service install) and this page carries on.`), { status: 0, offline: true })
+    : e as Error;
   const call = async <T>(method: string, path: string, body?: unknown): Promise<T> => {
-    const r = await fetch(`api/v1/${path}`, { method, headers: headers(), body: body === undefined ? undefined : JSON.stringify(body) });
+    const r = await fetch(`api/v1/${path}`, { method, headers: headers(), body: body === undefined ? undefined : JSON.stringify(body) }).catch(e => { throw unreachable(e); });
     const j = await r.json().catch(() => ({})) as T & { error?: string };
     if (!r.ok) throw new Error(j.error ?? `the server answered ${r.status}`);
     return j;
@@ -113,7 +118,7 @@ if (boot) {
   // The page's older calls (api/tabs, api/open, api/rechecks…) are answered through /api/v1 (v1-compat.ts).
   const nativeFetch = window.fetch.bind(window);
   const callStatus = async (method: string, path: string, body?: unknown): Promise<any> => {
-    const r = await nativeFetch(`api/v1/${path}`, { method, headers: headers(), body: body === undefined ? undefined : JSON.stringify(body) });
+    const r = await nativeFetch(`api/v1/${path}`, { method, headers: headers(), body: body === undefined ? undefined : JSON.stringify(body) }).catch(e => { throw unreachable(e); });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw Object.assign(new Error(j.error ?? `the server answered ${r.status}`), { status: r.status });
     return j;

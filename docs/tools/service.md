@@ -17,7 +17,7 @@ installs it for you.
 
 | System | What it installs | Its output |
 |---|---|---|
-| macOS | a launchd agent, `~/Library/LaunchAgents/com.simtabi.browser-foreman.plist` | `service.log` in the state folder |
+| macOS | a launchd agent, `~/Library/LaunchAgents/com.simtabi.browser-foreman.plist`, run as a standard (not throttled) process | `service.log` in the state folder |
 | Linux | a systemd user unit, `~/.config/systemd/user/browser-foreman.service` | `journalctl --user -u browser-foreman` |
 | Windows | a logon task named *Browser Foreman* in Task Scheduler | none |
 
@@ -31,6 +31,8 @@ installs it for you.
 - **A server already running keeps its address.** If the same version already runs (in a terminal, say), the service
   leaves it be and takes over at the next login. If another version runs there, the service retries every few seconds
   until it stops (`browser-foreman stop`); on Windows it does not retry.
+- **`status` says where it stands**: not installed, installed and starting, running, or installed but not running.
+  Starting takes some seconds: it opens the store before it answers.
 - `uninstall` stops the service and removes its definition. Your bookmarks, tabs and settings stay.
 
 ## Desktop notifications
@@ -63,7 +65,10 @@ browser-foreman notify ping -title "Backup done"    # hand one to the running se
 ```
 
 `ping` reaches the server through a local socket only it and you can use, so a script or a scheduled job can report
-through Browser Foreman's name and icon.
+through Browser Foreman's name and icon. It waits 5 seconds for the server to answer. From the login service a
+delivery can take longer (measured 2026-11-16 on macOS: 5 to 9 seconds), so `ping` may say *no answer* while the
+notification still shows. The re-check's own notifications are sent by the server itself and are not limited this way.
+Output and any notification failure go to `service.log` in the state folder.
 
 ---
 [← Docs index](../../README.md#documentation)

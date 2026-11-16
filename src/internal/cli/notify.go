@@ -33,7 +33,7 @@ func notifyCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				n, err := notify.New(cfg)
+				n, err := notify.New(cfg, c.ErrOrStderr())
 				if err != nil {
 					return err
 				}

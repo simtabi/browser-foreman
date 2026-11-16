@@ -106,8 +106,11 @@ export function askDecide({ title, body, ok = "Continue", no = "Cancel", later, 
 const TOAST_KIND: Record<ToastKind, [string, string]> = { info: ["ti-info-circle", "primary"], success: ["ti-circle-check", "green"], warning: ["ti-alert-triangle", "yellow"], danger: ["ti-alert-octagon", "red"] };
 export function toast(text: string, kind: ToastKind = "info", title = ""): void {
   const box = $("#toastBox"); if (!box) return;
+  // The same message again (a refresh failing every few seconds) replaces its toast instead of stacking another.
+  const key = `${kind}\u0000${title}\u0000${text}`;
+  for (const old of [...box.children] as HTMLElement[]) if (old.dataset.key === key) old.remove();
   const [ic, col] = TOAST_KIND[kind] ?? TOAST_KIND.info;
-  const t = el("div", `toast show bm-toast bm-toast-${kind}`); t.setAttribute("role", kind === "danger" ? "alert" : "status");
+  const t = el("div", `toast show bm-toast bm-toast-${kind}`); t.setAttribute("role", kind === "danger" ? "alert" : "status"); t.dataset.key = key;
   const body = el("div", "toast-body d-flex gap-2 align-items-start"), txt = el("div", "flex-fill min-w-0");
   if (title) txt.append(el("div", "fw-bold", title));
   txt.append(el("div", title ? "text-secondary" : null, text));

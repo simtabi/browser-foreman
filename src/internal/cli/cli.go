@@ -111,7 +111,7 @@ func serveCmd() *cobra.Command {
 					fmt.Fprintln(cmd.OutOrStdout(), "Accounts mode with no users: nobody can sign in until you run `browser-foreman user add NAME --role owner`.")
 				}
 			}
-			if n, err := notify.New(c); err != nil {
+			if n, err := notify.New(c, cmd.ErrOrStderr()); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "desktop notifications are off: %v\n", err)
 			} else {
 				srv.Notifier = n

@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -21,8 +22,9 @@ import (
 const AppID = "com.simtabi.browser-foreman"
 
 // New is the notifier every part of Browser Foreman shares: the sweep's banner, `browser-foreman notify` and the
-// listener serve runs. notify.desktop: false turns it off; BROFO_NOTIFY_DESKTOP and NOTIFYKIT_DESKTOP do too.
-func New(c config.Config) (*notifykit.Notifier, error) {
+// listener serve runs. notify.desktop: false turns it off; BROFO_NOTIFY_DESKTOP and NOTIFYKIT_DESKTOP do too. log
+// receives one line per fallback or failure (serve's output, so a login service's log shows them); nil drops them.
+func New(c config.Config, log io.Writer) (*notifykit.Notifier, error) {
 	return notifykit.New(notifykit.Config{
 		AppName:     "browser-foreman",
 		AppID:       AppID,
@@ -30,6 +32,7 @@ func New(c config.Config) (*notifykit.Notifier, error) {
 		EnvPrefix:   "BROFO",
 		Disabled:    !c.Notify.Desktop,
 		MinInterval: 30 * time.Second,
+		Log:         log,
 	})
 }
 
