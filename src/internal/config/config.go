@@ -3,7 +3,7 @@
 // Files live in the config directory ($XDG_CONFIG_HOME/browser-foreman, else ~/.config/browser-foreman, on macOS
 // too): every *.json there, merged in name order (so 10-server.json overrides 00-defaults.json), then .env
 // (KEY=VALUE lines), then the process environment. Environment variables win. Every key has a BROFO_ variable:
-// BROFO_SERVER_ADDR, BROFO_SERVER_MODE, BROFO_STORAGE_DRIVER, BROFO_STORAGE_PATH, BROFO_WEBHOOK_TIMEOUT,
+// BROFO_SERVER_ADDR, BROFO_SERVER_MODE, BROFO_SERVER_OPEN, BROFO_STORAGE_DRIVER, BROFO_STORAGE_PATH, BROFO_WEBHOOK_TIMEOUT,
 // BROFO_WEBHOOK_ATTEMPTS, BROFO_SESSION_TTL, BROFO_MCP, BROFO_MCP_WRITES, BROFO_API_TOKEN.
 //
 // Mutable state (the database, tokens, logs) lives in the state directory: $XDG_STATE_HOME/browser-foreman, else
@@ -37,6 +37,9 @@ const (
 type Server struct {
 	Addr string `json:"addr"` // host:port; 127.0.0.1 unless you choose otherwise
 	Mode Mode   `json:"mode"`
+	// Open says whether serve opens its page in the default browser when it starts: auto (when started from a
+	// terminal), always or never.
+	Open string `json:"open"`
 }
 
 type Storage struct {
@@ -108,7 +111,7 @@ func (d Duration) MarshalJSON() ([]byte, error) { return json.Marshal(d.String()
 // Defaults is a working configuration with nothing set.
 func Defaults() Config {
 	return Config{
-		Server:    Server{Addr: "127.0.0.1:8765", Mode: ModeLocal},
+		Server:    Server{Addr: "127.0.0.1:8765", Mode: ModeLocal, Open: "auto"},
 		Storage:   Storage{Driver: "sqlite"},
 		Webhooks:  Webhooks{Timeout: Duration{10 * time.Second}, Attempts: 5},
 		Auth:      Auth{SessionTTL: Duration{24 * time.Hour}},
@@ -177,6 +180,7 @@ func apply(c *Config, get func(string) string) error {
 	set := map[string]func(string) error{
 		"BROFO_SERVER_ADDR":      func(v string) error { c.Server.Addr = v; return nil },
 		"BROFO_SERVER_MODE":      func(v string) error { c.Server.Mode = Mode(v); return nil },
+		"BROFO_SERVER_OPEN":      func(v string) error { c.Server.Open = v; return nil },
 		"BROFO_STORAGE_DRIVER":   func(v string) error { c.Storage.Driver = v; return nil },
 		"BROFO_STORAGE_PATH":     func(v string) error { c.Storage.Path = v; return nil },
 		"BROFO_API_TOKEN":        func(v string) error { c.APIToken = v; return nil },
@@ -227,6 +231,9 @@ func (c Config) Validate() error {
 	case ModeAccounts:
 	default:
 		return fmt.Errorf("server.mode %q: use local or accounts", c.Server.Mode)
+	}
+	if o := c.Server.Open; o != "auto" && o != "always" && o != "never" {
+		return fmt.Errorf("server.open %q: use auto, always or never", o)
 	}
 	if c.Storage.Driver != "sqlite" && c.Storage.Driver != "json" {
 		return fmt.Errorf("storage.driver %q: use sqlite or json", c.Storage.Driver)

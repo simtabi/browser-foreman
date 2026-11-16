@@ -77,6 +77,7 @@ func TestValidateRefusesUnsafeOrBrokenSettings(t *testing.T) {
 		"zero attempts":                  func(c *Config) { c.Webhooks.Attempts = 0 },
 		"tiny timeout":                   func(c *Config) { c.Webhooks.Timeout = Duration{time.Millisecond} },
 		"unknown write-back read":        func(c *Config) { c.Writeback.Read = "api" },
+		"unknown open setting":           func(c *Config) { c.Server.Open = "sometimes" },
 		"unknown write-back route":       func(c *Config) { c.Writeback.Route = "sync" },
 		"unknown write-back mode":        func(c *Config) { c.Writeback.Mode = "overwrite" },
 	}

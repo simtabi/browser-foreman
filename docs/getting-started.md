@@ -29,7 +29,11 @@ browser-foreman serve
 
 ```text
 Browser Foreman 0.1.0-dev on http://127.0.0.1:8765 (config …/.config/browser-foreman, state …/.local/state/browser-foreman)
+Open Browser Foreman: http://127.0.0.1:8765/
 ```
+
+Started from a terminal, it also opens that page in your default browser (`server.open`; `--no-open` skips it). If
+it is already running, `serve` says so, gives the same link, and opens it.
 
 Check it answers:
 

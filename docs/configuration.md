@@ -22,6 +22,7 @@ writes a starting `config.json` and a `.env` with a fresh token, both `0600`, an
 | JSON key | Variable | Default | Meaning |
 |---|---|---|---|
 | `server.addr` | `BROFO_SERVER_ADDR` | `127.0.0.1:8765` | where the server listens |
+| `server.open` | `BROFO_SERVER_OPEN` | `auto` | open the page in the default browser when `serve` starts: `auto` (when started from a terminal), `always` or `never`; `--open` and `--no-open` override it |
 | `server.mode` | `BROFO_SERVER_MODE` | `local` | `local`: one owner, loopback only, no sign-in; `accounts`: people sign in; see [security](security.md#accounts) |
 | `storage.driver` | `BROFO_STORAGE_DRIVER` | `sqlite` | `sqlite` or `json`; see [storage](tools/storage.md) |
 | `storage.path` | `BROFO_STORAGE_PATH` | the state folder | where data is kept |

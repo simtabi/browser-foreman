@@ -10,6 +10,8 @@ ships.
 
 ### Added
 
+- `serve` prints the page's link on a line of its own and, started from a terminal, opens it in the default browser,
+  also when Browser Foreman is already running (`server.open`: auto, always or never; `--open`, `--no-open`).
 - The extension (0.1.2) asks to connect by itself once it is loaded and finds Browser Foreman, showing its four
   letters on its toolbar icon; it stops after a deny, a disconnect or three unanswered requests, until Connect is
   pressed. Until now nothing happened after installing it unless its popup's Connect was pressed, and no step said so.

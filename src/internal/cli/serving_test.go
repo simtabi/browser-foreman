@@ -162,3 +162,29 @@ func TestStopSignalsOnlyBrowserForeman(t *testing.T) {
 		t.Fatalf("another program: %v", err)
 	}
 }
+
+func TestServeOpensThePageWhenItShould(t *testing.T) {
+	cases := []struct {
+		setting            string
+		open, noOpen, term bool
+		want               bool
+	}{
+		{"auto", false, false, true, true},   // started from a terminal
+		{"auto", false, false, false, false}, // a service or a script: never a browser popping up
+		{"never", false, false, true, false},
+		{"always", false, false, false, true},
+		{"never", true, false, false, true},  // --open wins
+		{"always", false, true, true, false}, // --no-open wins
+		{"auto", true, true, true, false},    // both: --no-open wins
+	}
+	for _, c := range cases {
+		if got := shouldOpen(c.setting, c.open, c.noOpen, c.term); got != c.want {
+			t.Errorf("%+v: %v", c, got)
+		}
+	}
+	var out bytes.Buffer
+	showPage(context.Background(), &out, "127.0.0.1:8765", false) // false: tests never open a browser
+	if out.String() != "Open Browser Foreman: http://127.0.0.1:8765/\n" {
+		t.Fatalf("%q", out.String())
+	}
+}

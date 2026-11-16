@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/simtabi/browser-foreman/src/internal/browsers"
 	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/version"
 )
@@ -199,7 +200,7 @@ func bind(ctx context.Context, c config.Config, replace bool, out io.Writer) (ne
 			}
 			return net.Listen("tcp", addr)
 		case o.Version == version.Version:
-			fmt.Fprintf(out, "%s is already running at http://%s: open it there. `browser-foreman serve --replace` restarts it.\n", who, addr)
+			fmt.Fprintf(out, "%s is already running at http://%s. `browser-foreman serve --replace` restarts it.\n", who, addr)
 			return nil, errAlreadyRunning
 		default:
 			return nil, fmt.Errorf("%s is running at http://%s; `browser-foreman serve --replace` replaces it with %s, or `browser-foreman stop` stops it", who, addr, version.Version)
@@ -219,4 +220,41 @@ func bind(ctx context.Context, c config.Config, replace bool, out io.Writer) (ne
 		}
 	}
 	return nil, fmt.Errorf("port %s is taken by %s, and so are the 20 after it: set server.addr (or BROFO_SERVER_ADDR)", port, holder)
+}
+
+// shouldOpen decides whether serve opens its page: --no-open and --open win, then server.open (auto: only when started
+// from a terminal, so a service or a script never pops a browser up).
+func shouldOpen(setting string, open, noOpen, terminal bool) bool {
+	switch {
+	case noOpen:
+		return false
+	case open:
+		return true
+	case setting == "always":
+		return true
+	case setting == "never":
+		return false
+	}
+	return terminal
+}
+
+// showPage prints the page's link on a line of its own and, when wanted, opens it in the default browser.
+func showPage(ctx context.Context, out io.Writer, addr string, open bool) {
+	link := "http://" + addr + "/"
+	fmt.Fprintf(out, "Open Browser Foreman: %s\n", link)
+	if !open {
+		return
+	}
+	s := &browsers.Service{Platform: browsers.NewPlatform()}
+	res, err := s.Open(ctx, []string{link}, browsers.AsTabs, []string{browsers.SystemDefault})
+	if err == nil {
+		for _, r := range res {
+			if r.Error != "" {
+				err = errors.New(r.Error)
+			}
+		}
+	}
+	if err != nil {
+		fmt.Fprintf(out, "Could not open it in the browser (%v): open the link above.\n", err)
+	}
 }

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/simtabi/browser-foreman/src/internal/api"
 	"github.com/simtabi/browser-foreman/src/internal/auth"
@@ -61,7 +62,7 @@ func load() (config.Paths, config.Config, error) {
 }
 
 func serveCmd() *cobra.Command {
-	var replace bool
+	var replace, open, noOpen bool
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the server (API, events, webhooks)",
@@ -75,8 +76,10 @@ func serveCmd() *cobra.Command {
 			}
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
+			terminal := term.IsTerminal(int(os.Stdout.Fd()))
 			l, err := bind(ctx, c, replace, cmd.OutOrStdout())
 			if errors.Is(err, errAlreadyRunning) {
+				showPage(ctx, cmd.OutOrStdout(), c.Server.Addr, shouldOpen(c.Server.Open, open, noOpen, terminal))
 				return nil
 			}
 			if err != nil {
@@ -106,10 +109,21 @@ func serveCmd() *cobra.Command {
 				}
 			}
 			srv.Background(ctx)
+			go func() { // once it answers, so the page loads at once
+				for range 50 {
+					if answers(ctx, c.Server.Addr) {
+						showPage(ctx, cmd.OutOrStdout(), c.Server.Addr, shouldOpen(c.Server.Open, open, noOpen, terminal))
+						return
+					}
+					time.Sleep(100 * time.Millisecond)
+				}
+			}()
 			return srv.Run(ctx)
 		},
 	}
 	cmd.Flags().BoolVar(&replace, "replace", false, "stop the Browser Foreman already running on the address and take its place")
+	cmd.Flags().BoolVar(&open, "open", false, "open the page in the default browser (server.open: auto opens it when started from a terminal)")
+	cmd.Flags().BoolVar(&noOpen, "no-open", false, "do not open the page in the browser")
 	return cmd
 }
 
