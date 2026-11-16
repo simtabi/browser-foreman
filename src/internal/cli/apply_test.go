@@ -153,7 +153,7 @@ func TestApplyAsksForWhatItIsNotGivenAndRefusesWithoutATerminal(t *testing.T) {
 	if _, err := run(t, "apply", "--base", "export", "--mode", "merge", "--route", "extension"); err == nil || !strings.Contains(err.Error(), "--read") {
 		t.Fatalf("the extension route asks how to read the profile: %v", err)
 	}
-	if _, err := run(t, "apply", "--base", "export", "--mode", "merge", "--route", "extension", "--read", "extension"); err == nil || !strings.Contains(err.Error(), "chrome-live") {
+	if _, err := run(t, "apply", "--base", "export", "--mode", "merge", "--route", "extension", "--read", "extension"); err == nil || !strings.Contains(err.Error(), "google-chrome-live") {
 		t.Fatalf("the extension route with no server and nothing read: %v", err)
 	}
 }
@@ -162,14 +162,14 @@ func TestTheExtensionRouteReadsTheFileOrTheLastExtensionRead(t *testing.T) {
 	env(t)
 	path := chromeProfile(t)
 	out, err := run(t, "apply", "--base", "export", "--mode", "merge", "--route", "extension", "--read", "file", "--file", path, "--yes")
-	if err != nil || !strings.Contains(out, "Saved as workspace chrome-target") {
+	if err != nil || !strings.Contains(out, "Saved as workspace google-chrome-target") {
 		t.Fatalf("%v\n%s", err, out)
 	}
 	s, err := openStore()
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, _, err := s.State(context.Background(), "chrome-target", 0)
+	target, _, err := s.State(context.Background(), "google-chrome-target", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,12 +187,12 @@ func TestTheExtensionRouteReadsTheFileOrTheLastExtensionRead(t *testing.T) {
 	}
 	// With no server running, the extension route uses what the extension read last, and says so.
 	live := writeback.WithPrefix(must(writeback.ReadFile(path)), "ext-")
-	if _, err := writeback.Save(context.Background(), s, "chrome-live", "Chrome", "import", "read", live, time.Now()); err != nil {
+	if _, err := writeback.Save(context.Background(), s, "google-chrome-live", "Google Chrome", "import", "read", live, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	s.Close()
 	out, err = run(t, "apply", "--base", "export", "--mode", "merge", "--route", "extension", "--read", "extension")
-	if err != nil || !strings.Contains(out, "read last (chrome-live") || !strings.Contains(out, "Against chrome-live") {
+	if err != nil || !strings.Contains(out, "read last (google-chrome-live") || !strings.Contains(out, "Against google-chrome-live") {
 		t.Fatalf("%v\n%s", err, out)
 	}
 }
@@ -252,5 +252,19 @@ func TestAskExtensionToReadWaitsForItsAnswer(t *testing.T) {
 		if (final == "done") != (err == nil) {
 			t.Fatalf("%s: %v", final, err)
 		}
+	}
+}
+
+func TestTheExtensionsNameForABrowserIsUsedForItsWorkspaces(t *testing.T) {
+	for _, in := range []string{"Chrome", "chrome", "Google Chrome"} {
+		if p, e := namesOf(in); p != "Chrome" || e != "Google Chrome" {
+			t.Errorf("%s: %q %q", in, p, e)
+		}
+	}
+	if p, e := namesOf("Brave Browser"); p != "Brave" || e != "Brave Browser" {
+		t.Errorf("Brave: %q %q", p, e)
+	}
+	if p, e := namesOf("Netscape"); p != "Netscape" || e != "Netscape" {
+		t.Errorf("unknown: %q %q", p, e)
 	}
 }

@@ -73,6 +73,23 @@ func values(options []choice) string {
 	return strings.Join(v, ", ")
 }
 
+// browserNames pairs the name profile detection gives a browser with the one its extension reports (core.ts
+// browserName), which names the workspaces the extension reads into and writes from.
+var browserNames = [][2]string{
+	{"Chrome", "Google Chrome"}, {"Chrome Beta", "Google Chrome"}, {"Brave", "Brave Browser"}, {"Edge", "Microsoft Edge"},
+	{"Vivaldi", "Vivaldi"}, {"Chromium", "Chromium"}, {"Chromium (snap)", "Chromium"}, {"Arc", "Arc"}, {"Opera", "Opera"},
+}
+
+// namesOf returns a browser's profile-detection name and its extension's name, from either.
+func namesOf(browser string) (profileName, extensionName string) {
+	for _, n := range browserNames {
+		if strings.EqualFold(browser, n[0]) || strings.EqualFold(browser, n[1]) {
+			return n[0], n[1]
+		}
+	}
+	return browser, browser
+}
+
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 
 // slug is a name as the extension turns it into a workspace id ("Chrome Beta" → "chrome-beta").
@@ -99,6 +116,7 @@ func applyCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			in, out := cmd.InOrStdin(), cmd.OutOrStdout()
 			interactive := in == os.Stdin && term.IsTerminal(int(os.Stdin.Fd()))
+			profileName, extName := namesOf(browser)
 			if base == "" {
 				return errors.New("--base names the export the cleanup started from (a workspace)")
 			}
@@ -134,7 +152,7 @@ func applyCmd() *cobra.Command {
 			path, pathErr := file, error(nil)
 			findPath := func() error {
 				if path == "" && pathErr == nil {
-					path, pathErr = pickProfile(in, out, interactive, browser, profile)
+					path, pathErr = pickProfile(in, out, interactive, profileName, profile)
 				}
 				return pathErr
 			}
@@ -182,11 +200,11 @@ func applyCmd() *cobra.Command {
 					}
 					theirs, from = writeback.WithPrefix(t, importer.ExtPrefix), path
 				} else {
-					if theirs, from, err = readThroughExtension(ctx, s, c, cmd.ErrOrStderr(), browser); err != nil {
+					if theirs, from, err = readThroughExtension(ctx, s, c, cmd.ErrOrStderr(), extName); err != nil {
 						return err
 					}
 				}
-				return applyThroughExtension(ctx, s, out, j, browser, theirs, from, yes, list, now)
+				return applyThroughExtension(ctx, s, out, j, extName, theirs, from, yes, list, now)
 			}
 			if r != "file" {
 				return fmt.Errorf("--route %q: use file or extension", r)
@@ -214,11 +232,11 @@ func applyCmd() *cobra.Command {
 				fingerprint = p.Report.Fingerprint
 			}
 			got, err := writeback.ApplyFile(ctx, s, j, path, writeback.FileOptions{Fingerprint: fingerprint, SyncRiskOK: syncRiskOK,
-				Backup: slug(browser) + "-before-write"}, now)
+				Backup: slug(extName) + "-before-write"}, now)
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(out, "Written. The profile as it was: workspace %s-before-write (entry %d) and %s.\n", slug(browser), got.Backup.Seq, got.Kept)
+			fmt.Fprintf(out, "Written. The profile as it was: workspace %s-before-write (entry %d) and %s.\n", slug(extName), got.Backup.Seq, got.Kept)
 			if got.Drift.Empty() {
 				fmt.Fprintln(out, "Verified: read back, it holds the plan.")
 				return nil
@@ -231,7 +249,7 @@ func applyCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringVar(&ws, "workspace", "main", "the cleaned workspace to write")
 	f.StringVar(&base, "base", "", "the workspace holding the export the cleanup started from")
-	f.StringVar(&browser, "browser", "Chrome", "the browser (Chrome, Brave, Edge, Vivaldi, Chromium…)")
+	f.StringVar(&browser, "browser", "Chrome", "the browser (Chrome, Brave, Edge, Vivaldi, Chromium…; the extension's names, such as Google Chrome, work too)")
 	f.StringVar(&profile, "profile", "", "the profile: its folder (Default, Profile 1…) or the name the browser shows")
 	f.StringVar(&file, "file", "", "a Bookmarks file to write instead of looking the profile up")
 	f.StringVar(&mode, "mode", "", "merge or replace (or writeback.mode)")
