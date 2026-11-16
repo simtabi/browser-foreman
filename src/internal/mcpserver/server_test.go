@@ -32,6 +32,12 @@ func setup(t *testing.T, writes bool) (*mcp.ClientSession, *API) {
 // setupWith reaches the API over a real port, or with inProcess through InProcess, which calls the handler directly.
 func setupWith(t *testing.T, writes, inProcess bool) (*mcp.ClientSession, *API) {
 	t.Helper()
+	return serve(t, Options{Writes: writes, Version: "test"}, inProcess, "test")
+}
+
+// serve is setupWith with every option, for a client that reports itself as client.
+func serve(t *testing.T, o Options, inProcess bool, client string) (*mcp.ClientSession, *API) {
+	t.Helper()
 	token, err := auth.NewSecret("brofo_")
 	if err != nil {
 		t.Fatal(err)
@@ -78,11 +84,11 @@ func setupWith(t *testing.T, writes, inProcess bool) (*mcp.ClientSession, *API) 
 	must(data.SaveTabs(ctx, store.TabSnapshot{ID: "2026-11-12_184210", At: time.Now(), Reason: "manual", Windows: open}))
 
 	t1, t2 := mcp.NewInMemoryTransports()
-	srv := New(a, Options{Writes: writes, Version: "test"})
+	srv := New(a, o)
 	if _, err := srv.Connect(ctx, t1, nil); err != nil {
 		t.Fatal(err)
 	}
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test"}, nil).Connect(ctx, t2, nil)
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: client}, nil).Connect(ctx, t2, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,8 +126,8 @@ func TestToolListIsPinned(t *testing.T) {
 	if got, want := names(t, rw), sorted(ReadTools, WriteTools); !slices.Equal(got, want) {
 		t.Fatalf("tools with writes %v, want %v", got, want)
 	}
-	if len(ReadTools) != 8 || len(WriteTools) != 8 {
-		t.Fatalf("pinned %d read and %d write tools, want 8 and 8", len(ReadTools), len(WriteTools))
+	if len(ReadTools) != 12 || len(WriteTools) != 10 {
+		t.Fatalf("pinned %d read and %d write tools, want 12 and 10", len(ReadTools), len(WriteTools))
 	}
 }
 

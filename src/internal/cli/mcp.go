@@ -67,7 +67,11 @@ func mcpCmd() *cobra.Command {
 				a = mcpserver.InProcess(newServer(c, data, time.Now).Handler(), c.Server.Addr, token)
 				fmt.Fprintf(os.Stderr, "browser-foreman mcp: no server at %s, so the store at %s is served in-process\n", c.Server.Addr, c.Storage.Path)
 			}
-			s := mcpserver.New(a, mcpserver.Options{Writes: c.MCP.Writes, Version: version.Version})
+			clients := map[string]mcpserver.Scope{}
+			for name, sc := range c.MCP.Clients {
+				clients[name] = mcpserver.Scope{Writes: sc.Writes, Folders: sc.Folders}
+			}
+			s := mcpserver.New(a, mcpserver.Options{Writes: c.MCP.Writes, Folders: c.MCP.Folders, Clients: clients, Version: version.Version})
 			return s.Run(ctx, &mcp.StdioTransport{})
 		},
 	}

@@ -10,6 +10,11 @@ ships.
 
 ### Added
 
+- MCP: `get_preview`, `health_report`, `find_duplicates` and `stats`; `label_bookmarks` (tags, rating, note) and
+  `add_bookmark` with writes on; the resources `bookmarks://workspaces` and `bookmarks://workspaces/{id}/health`; and
+  the prompts `triage-dead-links`, `tidy-folder`, `dedupe` and `auto-tag`, each of which asks before changing anything.
+- MCP write scopes: `mcp.folders` holds every write to what is inside some folders, and `mcp.clients` gives one client,
+  by the name it reports, its own writes and folders. Under a folder scope, undo, rollback and put back are refused.
 - `browser-foreman service install`, `uninstall` and `status` run `serve --no-open` at login (a launchd agent, a
   systemd user unit or a Windows logon task), so tab autosave and link re-checks keep going with no terminal open.
 - Desktop notifications through go-notifykit: a scheduled re-check that confirms links dead, or finds dead ones working

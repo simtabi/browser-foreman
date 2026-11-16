@@ -1,7 +1,7 @@
 # MCP server
 
-`browser-foreman mcp` gives an AI assistant 8 tools to read your bookmark workspaces and tab snapshots, and 8 more to
-change bookmarks when you turn writes on. It speaks the Model Context Protocol on stdio, through the official Go SDK,
+`browser-foreman mcp` gives an AI assistant 12 tools to read your bookmark workspaces and tab snapshots, and 10 more
+to change bookmarks when you turn writes on, held to the folders you allow. It speaks the Model Context Protocol on stdio, through the official Go SDK,
 so only the assistant that started it can reach it.
 
 ## How it works
@@ -26,7 +26,9 @@ It is off until you turn it on, and read-only until you turn writes on too:
 | Key | Variable | Default | What it does |
 |---|---|---|---|
 | `mcp.enabled` | `BROFO_MCP` | `false` | `browser-foreman mcp` refuses to start without it |
-| `mcp.writes` | `BROFO_MCP_WRITES` | `false` | adds the 8 tools that change bookmarks |
+| `mcp.writes` | `BROFO_MCP_WRITES` | `false` | adds the 10 tools that change bookmarks |
+| `mcp.folders` | — | none | limits writes to what is inside these folders (`["Bookmarks Bar/Inbox"]`); none: anywhere |
+| `mcp.clients` | — | none | gives one client, by the name it reports, its own `writes` and `folders` in place of the two above |
 
 The token is `BROFO_TOKEN` when set, else in `local` mode the configured `BROFO_API_TOKEN`. In `accounts` mode make one
 with `browser-foreman token create` and pass it as `BROFO_TOKEN`; the assistant then has that person's role.
@@ -36,6 +38,35 @@ Add it to Claude Code:
 ```bash
 claude mcp add bookmarks -- browser-foreman mcp
 ```
+
+### Write scopes
+
+An assistant can be held to part of your bookmarks, and each assistant to its own part:
+
+```json
+{
+  "mcp": {
+    "enabled": true,
+    "writes": false,
+    "clients": {
+      "claude-code": { "writes": true, "folders": ["Bookmarks Bar/Inbox", "Other bookmarks/Reading"] }
+    }
+  }
+}
+```
+
+Here every client reads, and only `claude-code` writes, only inside those two folders. A client is named by what it
+reports when it connects (`clientInfo.name`); one with no entry of its own gets `mcp.writes` and `mcp.folders`. Under
+a folder scope:
+
+- a bookmark or folder can be changed only when it lies inside an allowed folder, and a write into a folder (moving,
+  adding, saving tabs) only goes into an allowed folder or one inside it;
+- an allowed folder itself cannot be moved, renamed or trashed;
+- `undo`, `rollback` and `put_back` are refused, because each can change anything in the workspace.
+
+A refused write changes nothing and says which folder it tried and where to change the scope. The name a client
+reports is not proof of who it is: the scope keeps a well-meaning assistant to its part, and is no defence against a
+program that lies about its name. Only programs you start reach the server, on stdio.
 
 ## Tools
 
@@ -51,6 +82,10 @@ claude mcp add bookmarks -- browser-foreman mcp
 | `list_tab_snapshots` | saved tab snapshots, newest first, with counts |
 | `read_tab_snapshot` | one snapshot: every browser, window and tab (`query` keeps tabs whose title or address hold every word) |
 | `open_tabs_now` | the newest snapshot, or with `live: true` a fresh read of the browsers |
+| `get_preview` | one bookmark in full: note, rating, tags, and what the last link check found (status, final address, the page's own title and description, its archive copy) |
+| `health_report` | link health for a workspace or one folder: counts by status, and the confirmed dead, suspected dead, moved, unverified and sign-in bookmarks |
+| `find_duplicates` | groups of bookmarks leading to the same page, each with the copy to keep and why the others match |
+| `stats` | the workspace in numbers: bookmarks, folders, trash, labels, top folders, tags and sites, link status, oldest and newest |
 
 ### Write (only with `mcp.writes`)
 
@@ -64,6 +99,25 @@ claude mcp add bookmarks -- browser-foreman mcp
 | `rollback` | makes an older history entry the newest; needs `confirm: true` |
 | `save_tabs_as_bookmarks` | saves links, or one window of a tab snapshot (`snapshot`, `browser`, `window`), as a new folder of bookmarks |
 | `refresh_links` | re-checks some bookmarks (`ids`), a folder's links or the workspace's, and waits up to two minutes for the counts |
+| `label_bookmarks` | adds or removes tags, sets a rating (`0` clears) or replaces the note, on up to 500 bookmarks in one entry |
+| `add_bookmark` | adds a web address to a folder by path (made when missing), with an optional note, tags and rating |
+
+### Resources and prompts
+
+| Resource | What it holds |
+|---|---|
+| `bookmarks://workspaces` | every workspace, as `list_workspaces` gives them |
+| `bookmarks://workspaces/{id}/health` | that workspace's link health, as `health_report` gives it |
+
+| Prompt | What it asks the assistant to do |
+|---|---|
+| `triage-dead-links` | go through the confirmed dead links (of a workspace, or a `folder`) and sort them into keep, moved and drop |
+| `tidy-folder` | propose a tidier layout for a `folder`, then move bookmarks into it |
+| `dedupe` | merge bookmarks that lead to the same page, carrying notes and tags to the copy kept |
+| `auto-tag` | suggest one to three tags per bookmark, preferring tags already in use, then add them |
+
+Each prompt asks the assistant to show its plan and wait for your yes before changing anything, and to treat titles,
+notes and pages as data rather than instructions.
 
 Every write is one history entry, so `undo` (or the History window in the web interface) takes it back. Nothing the
 MCP server does deletes data: emptying the Trash is not one of its tools.

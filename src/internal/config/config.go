@@ -61,6 +61,17 @@ type Auth struct {
 type MCP struct {
 	Enabled bool `json:"enabled"`
 	Writes  bool `json:"writes"`
+	// Folders limits writes to what is inside these folders (paths like "Bookmarks Bar/Inbox"); empty: anywhere.
+	Folders []string `json:"folders,omitempty"`
+	// Clients gives one MCP client, by the name it reports (clientInfo.name, such as "claude-code"), its own writes
+	// and folders in place of the two above.
+	Clients map[string]MCPScope `json:"clients,omitempty"`
+}
+
+// MCPScope is what one MCP client may change.
+type MCPScope struct {
+	Writes  bool     `json:"writes"`
+	Folders []string `json:"folders,omitempty"`
 }
 
 // Writeback is how `browser-foreman apply` writes a cleaned workspace into a browser: each choice is a value, or
@@ -255,6 +266,17 @@ func (c Config) Validate() error {
 	if c.Webhooks.Timeout.Duration < time.Second || c.Webhooks.Timeout.Duration > 2*time.Minute {
 		return fmt.Errorf("webhooks.timeout %s: use 1s-2m", c.Webhooks.Timeout)
 	}
+	if err := checkFolders("mcp.folders", c.MCP.Folders); err != nil {
+		return err
+	}
+	for name, sc := range c.MCP.Clients {
+		if strings.TrimSpace(name) == "" {
+			return errors.New("mcp.clients: a client needs its name")
+		}
+		if err := checkFolders("mcp.clients."+name+".folders", sc.Folders); err != nil {
+			return err
+		}
+	}
 	for _, w := range []struct{ key, v, a, b string }{
 		{"writeback.read", c.Writeback.Read, "file", "extension"},
 		{"writeback.route", c.Writeback.Route, "file", "extension"},
@@ -262,6 +284,17 @@ func (c Config) Validate() error {
 	} {
 		if w.v != "ask" && w.v != w.a && w.v != w.b {
 			return fmt.Errorf("%s %q: use ask, %s or %s", w.key, w.v, w.a, w.b)
+		}
+	}
+	return nil
+}
+
+// checkFolders refuses a folder path that is empty or starts or ends with "/": paths are written as the page shows
+// them, "Bookmarks Bar/Inbox".
+func checkFolders(key string, folders []string) error {
+	for _, f := range folders {
+		if strings.TrimSpace(f) == "" || strings.HasPrefix(f, "/") || strings.HasSuffix(f, "/") {
+			return fmt.Errorf("%s: %q is not a folder path like \"Bookmarks Bar/Inbox\"", key, f)
 		}
 	}
 	return nil

@@ -31,6 +31,8 @@ writes a starting `config.json` and a `.env` with a fresh token, both `0600`, an
 | `auth.session_ttl` | `BROFO_SESSION_TTL` | `24h` | how long a sign-in lasts, `5m`–`720h` |
 | `mcp.enabled` | `BROFO_MCP` | `false` | lets `browser-foreman mcp` start; see [MCP server](tools/mcp.md) |
 | `mcp.writes` | `BROFO_MCP_WRITES` | `false` | adds the MCP tools that change bookmarks |
+| `mcp.folders` | — | none | limits MCP writes to these folders; see [write scopes](tools/mcp.md#write-scopes) |
+| `mcp.clients` | — | none | per-client `writes` and `folders`, by the name the client reports |
 | `writeback.mode` | — | `ask` | `merge`, `replace`, or `ask` each time; see [write-back](tools/write-back.md) |
 | `writeback.route` | — | `ask` | `file`, `extension`, or `ask` each time |
 | `writeback.read` | — | `ask` | how the extension route reads the profile now: `extension`, `file`, or `ask` |

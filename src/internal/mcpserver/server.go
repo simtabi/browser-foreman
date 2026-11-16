@@ -32,16 +32,19 @@ type Untrusted struct {
 
 func wrap(v any) Untrusted { return Untrusted{Notice: Notice, Data: v} }
 
-// Options says what the server offers.
+// Options says what the server offers. Writes and Folders are the scope of every client; Clients gives a client,
+// by the name it reports, its own scope instead.
 type Options struct {
 	Writes  bool
+	Folders []string
+	Clients map[string]Scope
 	Version string
 }
 
 // ReadTools and WriteTools are the tools' names, in the order they are added; a test pins them.
 var (
-	ReadTools  = []string{"list_workspaces", "search_bookmarks", "read_folder", "get_history", "export_workspace", "list_tab_snapshots", "read_tab_snapshot", "open_tabs_now"}
-	WriteTools = []string{"move_bookmarks", "rename", "trash", "put_back", "undo", "rollback", "save_tabs_as_bookmarks", "refresh_links"}
+	ReadTools  = []string{"list_workspaces", "search_bookmarks", "read_folder", "get_history", "export_workspace", "list_tab_snapshots", "read_tab_snapshot", "open_tabs_now", "get_preview", "health_report", "find_duplicates", "stats"}
+	WriteTools = []string{"move_bookmarks", "rename", "trash", "put_back", "undo", "rollback", "save_tabs_as_bookmarks", "refresh_links", "label_bookmarks", "add_bookmark"}
 )
 
 var (
@@ -57,14 +60,15 @@ func writes(title string, destructive bool) *mcp.ToolAnnotations {
 	return &mcp.ToolAnnotations{Title: title, DestructiveHint: &d, OpenWorldHint: &no}
 }
 
-// New builds the server: the read tools always, the write tools only with Options.Writes.
+// New builds the server: the read tools always, the write tools only when some client may write; each write checks
+// its caller's scope.
 func New(api *API, o Options) *mcp.Server {
 	instructions := "Browser Foreman keeps bookmark workspaces (each with full history) and snapshots of open tabs. Start with list_workspaces, then search_bookmarks or read_folder. " + Notice
-	if !o.Writes {
+	if !o.anyWrites() {
 		instructions += " Read-only: changing bookmarks is turned off (mcp.writes in the configuration)."
 	}
 	s := mcp.NewServer(&mcp.Implementation{Name: "browser-foreman", Version: o.Version}, &mcp.ServerOptions{Instructions: instructions})
-	t := &tools{api: api}
+	t := &tools{api: api, opts: o}
 	mcp.AddTool(s, &mcp.Tool{Name: "list_workspaces", Description: "List the bookmark workspaces: id, name, bookmarks, folders, history length, locked, archived. include_archived: false leaves archived ones out.", Annotations: readOnly("List workspaces")}, t.listWorkspaces)
 	mcp.AddTool(s, &mcp.Tool{Name: "search_bookmarks", Description: "Search a workspace's bookmarks by words in the title, address, note, description or folder. Returns id, title, url, folder, status. The Trash is left out unless include_trash.", Annotations: readOnly("Search bookmarks")}, t.search)
 	mcp.AddTool(s, &mcp.Tool{Name: "read_folder", Description: "One folder of a workspace (path like \"Bookmarks Bar/Dev\"; empty for the top): its subfolders with counts, and its bookmarks.", Annotations: readOnly("Read a folder")}, t.readFolder)
@@ -73,7 +77,17 @@ func New(api *API, o Options) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{Name: "list_tab_snapshots", Description: "Saved snapshots of open tabs, newest first, with counts.", Annotations: readOnly("List tab snapshots")}, t.listSnapshots)
 	mcp.AddTool(s, &mcp.Tool{Name: "read_tab_snapshot", Description: "One tab snapshot: every browser, window and tab. Private windows show only a count unless the owner keeps their pages. query keeps only tabs whose title or address contain every word.", Annotations: readOnly("Read a tab snapshot")}, t.readSnapshot)
 	mcp.AddTool(s, &mcp.Tool{Name: "open_tabs_now", Description: "The tabs open now: the newest snapshot, or with live: true a fresh read of the browsers.", Annotations: readOnly("Open tabs now")}, t.openNow)
-	if !o.Writes {
+	mcp.AddTool(s, &mcp.Tool{Name: "get_preview", Description: "One bookmark in full: title, address, folder, note, rating, tags, and what the last link check found (status, where it ends up, the page's own title and description, its archive copy).", Annotations: readOnly("Preview a bookmark")}, t.getPreview)
+	mcp.AddTool(s, &mcp.Tool{Name: "health_report", Description: "How a workspace's links stand (or one folder's): counts by status, and the bookmarks that are confirmed dead, suspected dead, moved, unverified or need a sign-in. A link is confirmed dead after two dead checks at least a day apart.", Annotations: readOnly("Link health")}, t.healthReport)
+	mcp.AddTool(s, &mcp.Tool{Name: "find_duplicates", Description: "Groups of bookmarks that lead to the same page (same final address, same canonical page, or similar titles), each with the copy to keep and why the others match.", Annotations: readOnly("Find duplicates")}, t.findDuplicates)
+	mcp.AddTool(s, &mcp.Tool{Name: "stats", Description: "A workspace in numbers: bookmarks, folders, trash, rated, tagged and noted bookmarks, the top folders, tags and sites, link status counts, and the oldest and newest bookmark.", Annotations: readOnly("Workspace stats")}, t.stats)
+	s.AddResource(&mcp.Resource{URI: "bookmarks://workspaces", Name: "workspaces", Description: "Every bookmark workspace, as list_workspaces gives them.", MIMEType: "application/json"}, t.workspacesResource)
+	s.AddResourceTemplate(&mcp.ResourceTemplate{URITemplate: "bookmarks://workspaces/{id}/health", Name: "workspace-health", Description: "A workspace's link health, as health_report gives it.", MIMEType: "application/json"}, t.healthResource)
+	s.AddPrompt(&mcp.Prompt{Name: "triage-dead-links", Description: "Go through the links that stopped working, and decide what to keep.", Arguments: []*mcp.PromptArgument{arg("workspace", "the workspace id", true), arg("folder", "only this folder (a path)", false)}}, t.triagePrompt)
+	s.AddPrompt(&mcp.Prompt{Name: "tidy-folder", Description: "Propose a tidier layout for a folder, and move bookmarks into it.", Arguments: []*mcp.PromptArgument{arg("workspace", "the workspace id", true), arg("folder", "the folder (a path)", true)}}, t.tidyPrompt)
+	s.AddPrompt(&mcp.Prompt{Name: "dedupe", Description: "Merge bookmarks that lead to the same page.", Arguments: []*mcp.PromptArgument{arg("workspace", "the workspace id", true)}}, t.dedupePrompt)
+	s.AddPrompt(&mcp.Prompt{Name: "auto-tag", Description: "Suggest tags for bookmarks, and add them.", Arguments: []*mcp.PromptArgument{arg("workspace", "the workspace id", true), arg("folder", "only this folder (a path)", false)}}, t.autoTagPrompt)
+	if !o.anyWrites() {
 		return s
 	}
 	mcp.AddTool(s, &mcp.Tool{Name: "move_bookmarks", Description: "Move bookmarks or folders (by id) into a folder (by path), at the end or at index; create: true makes the folder when it is missing. One history entry; undo takes it back.", Annotations: writes("Move bookmarks", false)}, t.move)
@@ -84,10 +98,15 @@ func New(api *API, o Options) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{Name: "rollback", Description: "Make the state after history entry `to` the newest, as a new entry (undo brings today's back). Needs confirm: true.", Annotations: writes("Go back in history", true)}, t.rollback)
 	mcp.AddTool(s, &mcp.Tool{Name: "save_tabs_as_bookmarks", Description: "Save links (url and title), or one window of a tab snapshot (snapshot, browser, window from read_tab_snapshot), as a new folder of bookmarks inside the folder at parent (by path; \"Saved tabs\" when left out). Only web links are kept. One history entry.", Annotations: writes("Save tabs as bookmarks", false)}, t.saveTabs)
 	mcp.AddTool(s, &mcp.Tool{Name: "refresh_links", Description: "Check links again: some bookmarks or folders (ids), one folder (by path), or the whole workspace; and wait up to two minutes for the result: how many are working, moved, dead.", Annotations: &mcp.ToolAnnotations{Title: "Re-check links", DestructiveHint: &no, OpenWorldHint: &yes}}, t.refresh)
+	mcp.AddTool(s, &mcp.Tool{Name: "label_bookmarks", Description: "Add or remove tags, set a rating (1-5, 0 clears) or replace the note, on bookmarks (by id). One history entry.", Annotations: writes("Label bookmarks", false)}, t.label)
+	mcp.AddTool(s, &mcp.Tool{Name: "add_bookmark", Description: "Add a bookmark (a web address) to a folder (by path; made when missing), with an optional note, tags and rating.", Annotations: writes("Add a bookmark", false)}, t.addBookmark)
 	return s
 }
 
-type tools struct{ api *API }
+type tools struct {
+	api  *API
+	opts Options
+}
 
 // ---- shared ----
 
@@ -466,7 +485,10 @@ func (t *tools) ensureFolder(ctx context.Context, workspace, path string, create
 	return parent, nil
 }
 
-func (t *tools) move(ctx context.Context, _ *mcp.CallToolRequest, in moveIn) (*mcp.CallToolResult, Untrusted, error) {
+func (t *tools) move(ctx context.Context, req *mcp.CallToolRequest, in moveIn) (*mcp.CallToolResult, Untrusted, error) {
+	if err := t.allowWrite(ctx, req, in.Workspace, in.IDs, in.ToFolder, false); err != nil {
+		return nil, Untrusted{}, err
+	}
 	f, err := t.ensureFolder(ctx, in.Workspace, in.ToFolder, in.Create)
 	if err != nil {
 		return nil, Untrusted{}, err
@@ -486,7 +508,10 @@ type renameIn struct {
 	Title     string `json:"title"`
 }
 
-func (t *tools) rename(ctx context.Context, _ *mcp.CallToolRequest, in renameIn) (*mcp.CallToolResult, Untrusted, error) {
+func (t *tools) rename(ctx context.Context, req *mcp.CallToolRequest, in renameIn) (*mcp.CallToolResult, Untrusted, error) {
+	if err := t.allowWrite(ctx, req, in.Workspace, []string{in.ID}, "", false); err != nil {
+		return nil, Untrusted{}, err
+	}
 	var out changed
 	err := t.api.do(ctx, "PATCH", ws(in.Workspace)+"/nodes/"+url.PathEscape(in.ID), map[string]any{"title": in.Title}, &out)
 	return nil, wrap(out), err
@@ -499,7 +524,10 @@ type trashIn struct {
 	Confirm   bool     `json:"confirm" jsonschema:"must be true: the owner agreed"`
 }
 
-func (t *tools) trash(ctx context.Context, _ *mcp.CallToolRequest, in trashIn) (*mcp.CallToolResult, Untrusted, error) {
+func (t *tools) trash(ctx context.Context, req *mcp.CallToolRequest, in trashIn) (*mcp.CallToolResult, Untrusted, error) {
+	if err := t.allowWrite(ctx, req, in.Workspace, in.IDs, "", false); err != nil {
+		return nil, Untrusted{}, err
+	}
 	if err := confirmNeeded(in.Confirm, "Moving to the Trash"); err != nil {
 		return nil, Untrusted{}, err
 	}
@@ -513,7 +541,10 @@ type idsIn struct {
 	IDs       []string `json:"ids"`
 }
 
-func (t *tools) putBack(ctx context.Context, _ *mcp.CallToolRequest, in idsIn) (*mcp.CallToolResult, Untrusted, error) {
+func (t *tools) putBack(ctx context.Context, req *mcp.CallToolRequest, in idsIn) (*mcp.CallToolResult, Untrusted, error) {
+	if err := t.allowWrite(ctx, req, in.Workspace, nil, "", true); err != nil {
+		return nil, Untrusted{}, err
+	}
 	var out changed
 	err := t.api.do(ctx, "POST", ws(in.Workspace)+"/trash/restore", map[string]any{"ids": in.IDs}, &out)
 	return nil, wrap(out), err
@@ -523,7 +554,10 @@ type wsIn struct {
 	Workspace string `json:"workspace"`
 }
 
-func (t *tools) undo(ctx context.Context, _ *mcp.CallToolRequest, in wsIn) (*mcp.CallToolResult, Untrusted, error) {
+func (t *tools) undo(ctx context.Context, req *mcp.CallToolRequest, in wsIn) (*mcp.CallToolResult, Untrusted, error) {
+	if err := t.allowWrite(ctx, req, in.Workspace, nil, "", true); err != nil {
+		return nil, Untrusted{}, err
+	}
 	var out changed
 	err := t.api.do(ctx, "POST", ws(in.Workspace)+"/undo", nil, &out)
 	return nil, wrap(out), err
@@ -535,7 +569,10 @@ type rollbackIn struct {
 	Confirm   bool   `json:"confirm" jsonschema:"must be true: the owner agreed"`
 }
 
-func (t *tools) rollback(ctx context.Context, _ *mcp.CallToolRequest, in rollbackIn) (*mcp.CallToolResult, Untrusted, error) {
+func (t *tools) rollback(ctx context.Context, req *mcp.CallToolRequest, in rollbackIn) (*mcp.CallToolResult, Untrusted, error) {
+	if err := t.allowWrite(ctx, req, in.Workspace, nil, "", true); err != nil {
+		return nil, Untrusted{}, err
+	}
 	if err := confirmNeeded(in.Confirm, "Going back in history"); err != nil {
 		return nil, Untrusted{}, err
 	}
@@ -594,7 +631,14 @@ func (t *tools) windowLinks(ctx context.Context, in saveIn) ([]link, error) {
 	return nil, fmt.Errorf("snapshot %s has no %s window %d", in.Snapshot, in.Browser, *in.Window)
 }
 
-func (t *tools) saveTabs(ctx context.Context, _ *mcp.CallToolRequest, in saveIn) (*mcp.CallToolResult, Untrusted, error) {
+func (t *tools) saveTabs(ctx context.Context, req *mcp.CallToolRequest, in saveIn) (*mcp.CallToolResult, Untrusted, error) {
+	parent := in.Parent
+	if parent == "" {
+		parent = "Saved tabs"
+	}
+	if err := t.allowWrite(ctx, req, in.Workspace, nil, parent, false); err != nil {
+		return nil, Untrusted{}, err
+	}
 	if in.Snapshot != "" {
 		links, err := t.windowLinks(ctx, in)
 		if err != nil {
@@ -625,7 +669,10 @@ type refreshIn struct {
 	IDs       []string `json:"ids,omitempty" jsonschema:"only these bookmarks or folders (ids from search_bookmarks or read_folder)"`
 }
 
-func (t *tools) refresh(ctx context.Context, _ *mcp.CallToolRequest, in refreshIn) (*mcp.CallToolResult, Untrusted, error) {
+func (t *tools) refresh(ctx context.Context, req *mcp.CallToolRequest, in refreshIn) (*mcp.CallToolResult, Untrusted, error) {
+	if err := t.allowWrite(ctx, req, in.Workspace, nil, "", false); err != nil { // re-checking changes no bookmark: writes on is enough
+		return nil, Untrusted{}, err
+	}
 	body := map[string]any{"workspace": in.Workspace}
 	if in.Folder != "" && len(in.IDs) > 0 {
 		return nil, Untrusted{}, errors.New("give either folder or ids, not both")
