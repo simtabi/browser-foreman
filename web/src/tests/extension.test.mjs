@@ -100,4 +100,17 @@ for (const size of [16, 128]) {
   const png = iconPNG(size);
   eq([png.subarray(1, 4).toString(), png.readUInt32BE(16), png.readUInt32BE(20)], ["PNG", size, size], `icon ${size}`);
 }
+// A stopped or replaced service worker is not an error to show (chrome://extensions › Errors listed "No SW").
+ok(C.workerGone("No SW"), "Chrome's own words");
+ok(C.workerGone("Error: Extension context invalidated."), "the context is gone");
+ok(!C.workerGone("fetch failed: 401"), "a real failure is still one");
+// Nothing in the background is fired and forgotten: an un-awaited call that fails becomes an uncaught error. Every
+// such call goes through background(), which catches. Counted on the source so a new `void report()` fails here.
+{
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(join(here, "..", "extension", "background.ts"), "utf8");
+  const forgotten = src.split("\n").filter(l => /\bvoid [a-zA-Z]+\(/.test(l) && !l.trim().startsWith("//"));
+  eq(forgotten, [], "fire-and-forget calls in background.ts");
+  ok((src.match(/background\(/g) || []).length >= 6, "the guarded calls are there to count");
+}
 console.log(`extension: ${n} checks passed`);

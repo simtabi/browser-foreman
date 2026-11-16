@@ -133,3 +133,9 @@ export async function extFingerprint(roots: { id: string; title?: string; url?: 
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
+
+/** Whether an error only says Chrome stopped or replaced the extension's service worker while it ran (a reload or an
+ *  update): "No SW", or "Extension context invalidated". Nothing to report; the next worker carries on. */
+export function workerGone(message: string): boolean {
+  return /\bNo SW\b|Extension context invalidated/i.test(message);
+}

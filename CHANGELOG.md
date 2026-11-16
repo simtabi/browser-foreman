@@ -238,6 +238,10 @@ ships.
 
 ### Fixed
 
+- Extension 0.1.5: chrome://extensions no longer lists "Uncaught (in promise) Error: No SW". Background jobs (the
+  minute alarm, startup, tab changes) ran unawaited, so when Chrome stopped or replaced the service worker mid-job
+  (a reload, an update) the error escaped. Every such job now goes through one guard that drops that case and keeps
+  any other failure for the popup; a test fails if an unguarded call comes back.
 - A long bookmark list no longer freezes the page. Measured with 50,000 bookmarks: a broad search showing 10,917 rows
   blocked the page for 2.1 s and a click on a row for 6.1 s; the list now builds in chunks and a click repaints only
   the rows it changes (longest block 257 ms and 99 ms). `search_bookmarks` over MCP also searches tags.

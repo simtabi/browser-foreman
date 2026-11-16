@@ -2,7 +2,7 @@
 // waits for the server's commands (open links, open a tab group, read the bookmarks), and carries out what the popup asks.
 
 import { ext, type ExtBookmark } from "./ext";
-import { browserName, Client, connectStep, extFingerprint, groupColor, tabReport, webOnly, type Command } from "./core";
+import { browserName, Client, connectStep, extFingerprint, groupColor, tabReport, webOnly, workerGone, type Command } from "./core";
 import { plan, run, type WsNode } from "./apply";
 
 interface Settings { server?: string; token?: string; browser?: string }
@@ -22,6 +22,17 @@ async function unpairedIf(e: unknown): Promise<void> {
   if ((e as { status?: number }).status === 401) { await ext.storage.local.remove(["token"]); await ext.storage.local.set({ declined: true }); } // disconnected on purpose: no asking again by itself
 }
 
+// background runs a job nobody awaits (an alarm, an event, a startup hook). Its failure is kept for the popup instead
+// of escaping as an uncaught error on chrome://extensions. "No SW" and "Extension context invalidated" mean Chrome
+// stopped or replaced this service worker (a reload, an update) while the job ran: the next worker starts it again.
+function background(job: () => Promise<unknown>): void {
+  job().catch(async (e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (workerGone(msg)) return;
+    try { await ext.storage.local.set({ lastError: msg }); } catch { /* the worker is going away too */ }
+  });
+}
+
 // ---- tabs ----
 let timer: ReturnType<typeof setTimeout> | undefined;
 async function report(): Promise<void> {
@@ -31,7 +42,7 @@ async function report(): Promise<void> {
   try { await c.sendTabs({ ...tabReport(windows, groups), version: VERSION() }); await ext.storage.local.set({ lastReport: Date.now(), lastError: "" }); }
   catch (e) { await ext.storage.local.set({ lastError: String((e as Error).message) }); await unpairedIf(e); }
 }
-const soon = (): void => { clearTimeout(timer); timer = setTimeout(() => void report(), 3000); };
+const soon = (): void => { clearTimeout(timer); timer = setTimeout(() => background(report), 3000); };
 for (const h of [ext.tabs.onCreated, ext.tabs.onRemoved, ext.tabs.onMoved, ext.tabs.onAttached, ext.windows.onCreated, ext.windows.onRemoved]) h.addListener(soon);
 ext.tabs.onUpdated.addListener((_id, change) => { if (change.url || change.title || change.status === "complete") soon(); });
 ext.tabGroups?.onUpdated.addListener(soon);
@@ -94,7 +105,7 @@ async function settle(asking: any): Promise<string> {
     await ext.storage.local.set({ server: asking.server, token: a.token, browser: thisBrowser(), unanswered: 0 });
     await ext.storage.local.remove(["asking", "declined"]);
     await badge("");
-    void report(); void poll();
+    background(report); background(poll);
   } else if (a.state !== "pending") {
     const st = await ext.storage.local.get(["unanswered"]);
     await ext.storage.local.set(a.state === "denied" ? { declined: true } : { unanswered: (st.unanswered ?? 0) + 1 });
@@ -123,10 +134,11 @@ async function autoConnect(): Promise<void> {
   } finally { connecting = false; }
 }
 
-ext.alarms.create("tick", { periodInMinutes: 1 });
-ext.alarms.onAlarm.addListener(a => { if (a.name === "tick") { void report(); void poll(); void autoConnect(); } });
-ext.runtime.onStartup.addListener(() => { void report(); void poll(); void autoConnect(); });
-ext.runtime.onInstalled.addListener(() => { void report(); void poll(); void autoConnect(); }); // after an install, update or reload too: commands waiting are taken at once, not at the next minute
+background(async () => { await ext.alarms.create("tick", { periodInMinutes: 1 }); });
+const everything = (): void => { background(report); background(poll); background(autoConnect); };
+ext.alarms.onAlarm.addListener(a => { if (a.name === "tick") everything(); });
+ext.runtime.onStartup.addListener(everything);
+ext.runtime.onInstalled.addListener(everything); // after an install, update or reload too: commands waiting are taken at once, not at the next minute
 
 // ---- the popup's requests ----
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -172,7 +184,7 @@ async function handle(msg: any): Promise<unknown> {
       const browser = thisBrowser();
       const token = await Client.pair(msg.server, msg.code, browser, (u, i) => fetch(u, i));
       await ext.storage.local.set({ server: new URL(msg.server).origin, token, browser });
-      void report(); void poll();
+      background(report); background(poll);
       return { paired: true, browser };
     }
     case "ask": { // Connect pressed: ask now (again, even after a no), then wait for the owner's answer
@@ -204,6 +216,9 @@ async function handle(msg: any): Promise<unknown> {
   throw new Error("unknown request");
 }
 ext.runtime.onMessage.addListener((msg, _sender, reply) => {
-  handle(msg).then(r => reply({ ok: true, result: r }), e => reply({ ok: false, error: String((e as Error).message ?? e) }));
+  handle(msg).then(r => reply({ ok: true, result: r }), e => {
+    const m = String((e as Error).message ?? e);
+    reply({ ok: false, error: workerGone(m) ? "The extension was restarting: try again." : m });
+  }).catch(() => { /* the popup closed before the reply */ });
   return true; // the reply comes later
 });
