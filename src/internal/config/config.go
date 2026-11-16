@@ -82,6 +82,18 @@ type Writeback struct {
 	Mode  string `json:"mode"`  // merge, replace or ask
 }
 
+// AI is who answers AI jobs (suggested tags, duplicate verdicts) as soon as they are made: nobody (none, the
+// default: an MCP client takes them), Anthropic's API (anthropic) or a local Ollama (ollama). Jobs are made only when
+// the owner asks, and only then does anything about the bookmarks leave this computer.
+type AI struct {
+	Provider  string `json:"provider"`             // none, anthropic or ollama
+	Model     string `json:"model,omitempty"`      // anthropic: claude-opus-5-5 when empty; ollama: required
+	Effort    string `json:"effort,omitempty"`     // anthropic: low, medium or high; empty: low
+	OllamaURL string `json:"ollama_url,omitempty"` // http://127.0.0.1:11434 when empty
+	// AnthropicKey is ANTHROPIC_API_KEY, from .env or the environment only; empty lets the SDK use `ant auth login`.
+	AnthropicKey string `json:"-"`
+}
+
 // Notify is desktop notifications (through go-notifykit): one banner when a scheduled link re-check finds links
 // that stopped working or work again. BROFO_NOTIFY_DESKTOP=0 turns them off for one run; go-notifykit reads it.
 type Notify struct {
@@ -98,6 +110,7 @@ type Config struct {
 	MCP       MCP       `json:"mcp"`
 	Writeback Writeback `json:"writeback"`
 	Notify    Notify    `json:"notify"`
+	AI        AI        `json:"ai"`
 	APIToken  string    `json:"-"`
 	// Sources lists what was read, in order, for `browser-foreman config show`.
 	Sources []string `json:"-"`
@@ -135,6 +148,7 @@ func Defaults() Config {
 		Auth:      Auth{SessionTTL: Duration{24 * time.Hour}},
 		Writeback: Writeback{Read: "ask", Route: "ask", Mode: "ask"},
 		Notify:    Notify{Desktop: true},
+		AI:        AI{Provider: "none", Effort: "low", OllamaURL: "http://127.0.0.1:11434"},
 	}
 }
 
@@ -203,6 +217,9 @@ func apply(c *Config, get func(string) string) error {
 		"BROFO_STORAGE_DRIVER":   func(v string) error { c.Storage.Driver = v; return nil },
 		"BROFO_STORAGE_PATH":     func(v string) error { c.Storage.Path = v; return nil },
 		"BROFO_API_TOKEN":        func(v string) error { c.APIToken = v; return nil },
+		"BROFO_AI_PROVIDER":      func(v string) error { c.AI.Provider = v; return nil },
+		"BROFO_AI_MODEL":         func(v string) error { c.AI.Model = v; return nil },
+		"ANTHROPIC_API_KEY":      func(v string) error { c.AI.AnthropicKey = v; return nil },
 		"BROFO_WEBHOOK_ATTEMPTS": func(v string) error { n, err := strconv.Atoi(v); c.Webhooks.Attempts = n; return err },
 		"BROFO_MCP":              func(v string) error { b, err := strconv.ParseBool(v); c.MCP.Enabled = b; return err },
 		"BROFO_MCP_WRITES":       func(v string) error { b, err := strconv.ParseBool(v); c.MCP.Writes = b; return err },
@@ -265,6 +282,18 @@ func (c Config) Validate() error {
 	}
 	if c.Webhooks.Timeout.Duration < time.Second || c.Webhooks.Timeout.Duration > 2*time.Minute {
 		return fmt.Errorf("webhooks.timeout %s: use 1s-2m", c.Webhooks.Timeout)
+	}
+	switch c.AI.Provider {
+	case "none", "anthropic":
+	case "ollama":
+		if c.AI.Model == "" {
+			return errors.New("ai.provider ollama needs ai.model: a model you have pulled (`ollama list` shows them)")
+		}
+	default:
+		return fmt.Errorf("ai.provider %q: use none, anthropic or ollama", c.AI.Provider)
+	}
+	if e := c.AI.Effort; e != "" && e != "low" && e != "medium" && e != "high" {
+		return fmt.Errorf("ai.effort %q: use low, medium or high", e)
 	}
 	if err := checkFolders("mcp.folders", c.MCP.Folders); err != nil {
 		return err

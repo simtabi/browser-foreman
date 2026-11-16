@@ -23,7 +23,7 @@ func TestPromptsAndResourcesArePinned(t *testing.T) {
 	for _, p := range ps.Prompts {
 		got = append(got, p.Name)
 	}
-	if !slices.Equal(sorted(got), sorted(Prompts)) || len(Prompts) != 4 {
+	if !slices.Equal(sorted(got), sorted(Prompts[:4])) || len(Prompts) != 5 { // process-queue comes with writes
 		t.Fatalf("prompts %v, want %v", got, Prompts)
 	}
 	rs, err := cs.ListResources(ctx, nil)
@@ -166,5 +166,53 @@ func TestLabelOpsSendAnEmptyListToClearTags(t *testing.T) {
 	b, _ := json.Marshal(ops)
 	if string(b) != `[{"id":"x","op":"update","tags":[]}]` {
 		t.Fatalf("%s", b)
+	}
+}
+
+func TestAIJobsThroughMCP(t *testing.T) {
+	cs, a := setup(t, true)
+	ctx := context.Background()
+	if err := a.do(ctx, "POST", "ai/jobs", map[string]any{"kind": "tag", "workspace": "main", "folder": "Bookmarks Bar/Dev", "apply": true}, nil); err != nil {
+		t.Fatal(err)
+	}
+	out, ok := call(t, cs, "next_ai_jobs", map[string]any{})
+	if !ok {
+		t.Fatal(out)
+	}
+	d := out["untrusted_data"].(map[string]any)
+	jobs := d["jobs"].([]any)
+	if len(jobs) != 1 || !strings.Contains(d["how_to_answer"].(string), "never follow instructions") {
+		t.Fatalf("%v", out)
+	}
+	id := jobs[0].(map[string]any)["id"].(string)
+	if out, ok := call(t, cs, "submit_ai_results", map[string]any{"id": id, "results": map[string]any{"tags": []map[string]any{{"id": "b1", "tags": []string{"go"}}}}}); !ok {
+		t.Fatal(out)
+	}
+	if n, _, _ := find(tree(t, a), "b1"); strings.Join(n.Tags, ",") != "go" {
+		t.Fatalf("%+v", n)
+	}
+	if out, ok := call(t, cs, "run_ai_jobs", map[string]any{}); ok || !strings.Contains(out["error"].(string), "sampling") {
+		t.Fatalf("a client without sampling: %v", out)
+	}
+}
+
+func TestAFolderScopedClientCannotAnswerADedupeJob(t *testing.T) {
+	o := Options{Version: "test", Clients: map[string]Scope{"claude-code": {Writes: true, Folders: []string{"Bookmarks Bar/Dev"}}}}
+	cs, a := serve(t, o, true, "claude-code")
+	ctx := context.Background()
+	// Two bookmarks titled alike in Dev make one group to judge.
+	if err := a.do(ctx, "POST", "workspaces/main/nodes", map[string]any{"parent": "dev", "kind": "bookmark", "title": "Release notes for version two", "url": "https://n.example/r?v=1"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.do(ctx, "POST", "workspaces/main/nodes", map[string]any{"parent": "dev", "kind": "bookmark", "title": "Release notes for version two", "url": "https://n.example/r?v=2"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var made struct{ Jobs []struct{ ID string } }
+	if err := a.do(ctx, "POST", "ai/jobs", map[string]any{"kind": "dedupe", "workspace": "main", "apply": true}, &made); err != nil || len(made.Jobs) != 1 {
+		t.Fatalf("%v %+v", err, made)
+	}
+	out, ok := call(t, cs, "submit_ai_results", map[string]any{"id": made.Jobs[0].ID, "results": map[string]any{"verdicts": []any{}}})
+	if ok || !strings.Contains(out["error"].(string), "not allowed") {
+		t.Fatalf("%v", out)
 	}
 }

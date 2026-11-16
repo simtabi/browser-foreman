@@ -126,8 +126,8 @@ func TestToolListIsPinned(t *testing.T) {
 	if got, want := names(t, rw), sorted(ReadTools, WriteTools); !slices.Equal(got, want) {
 		t.Fatalf("tools with writes %v, want %v", got, want)
 	}
-	if len(ReadTools) != 12 || len(WriteTools) != 10 {
-		t.Fatalf("pinned %d read and %d write tools, want 12 and 10", len(ReadTools), len(WriteTools))
+	if len(ReadTools) != 12 || len(WriteTools) != 13 {
+		t.Fatalf("pinned %d read and %d write tools, want 12 and 13", len(ReadTools), len(WriteTools))
 	}
 }
 

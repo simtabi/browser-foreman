@@ -1668,6 +1668,64 @@
         "description": "Body: {workspace, base, browser, mode, expect, drop_new}. 409 when the browser changed since the preview; 502 with {error, written} when the write did not verify. Returns {written}."
       }
     },
+    "/api/v1/ai/jobs": {
+      "get": {
+        "summary": "The AI jobs, newest first (up to 100)",
+        "tags": [
+          "AI"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Each with kind, workspace, folder, apply, size, state, who answered, an error, and the checked results."
+      },
+      "post": {
+        "summary": "Make AI jobs from a workspace: tags to suggest, or look-alike bookmarks to judge",
+        "tags": [
+          "AI"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {kind: tag|dedupe, workspace, folder?, apply?, limit?, retag?}. With ai.provider set the server answers them at once; otherwise they wait for next_ai_jobs."
+      }
+    },
+    "/api/v1/ai/jobs/next": {
+      "post": {
+        "summary": "Take waiting AI jobs (up to 5) for 15 minutes",
+        "tags": [
+          "AI"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {max?, by?}. Returns {jobs, schema}: each kind's answer schema."
+      }
+    },
+    "/api/v1/ai/jobs/{id}/results": {
+      "post": {
+        "summary": "Answer an AI job",
+        "tags": [
+          "AI"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {results: {tags?, verdicts?}, by?}. The answer is checked against the job; a job made with apply writes it as one history entry."
+      }
+    },
     "/api/v1/extension/commands/{id}/done": {
       "post": {
         "summary": "Report what became of a command",

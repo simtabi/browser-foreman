@@ -12,7 +12,7 @@ import (
 
 // Prompts and Resources are the names New registers, in order; a test pins them.
 var (
-	Prompts   = []string{"triage-dead-links", "tidy-folder", "dedupe", "auto-tag"}
+	Prompts   = []string{"triage-dead-links", "tidy-folder", "dedupe", "auto-tag", "process-queue"}
 	Resources = []string{"bookmarks://workspaces", "bookmarks://workspaces/{id}/health"}
 )
 

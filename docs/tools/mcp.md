@@ -1,6 +1,6 @@
 # MCP server
 
-`browser-foreman mcp` gives an AI assistant 12 tools to read your bookmark workspaces and tab snapshots, and 10 more
+`browser-foreman mcp` gives an AI assistant 12 tools to read your bookmark workspaces and tab snapshots, and 13 more
 to change bookmarks when you turn writes on, held to the folders you allow. It speaks the Model Context Protocol on stdio, through the official Go SDK,
 so only the assistant that started it can reach it.
 
@@ -26,7 +26,7 @@ It is off until you turn it on, and read-only until you turn writes on too:
 | Key | Variable | Default | What it does |
 |---|---|---|---|
 | `mcp.enabled` | `BROFO_MCP` | `false` | `browser-foreman mcp` refuses to start without it |
-| `mcp.writes` | `BROFO_MCP_WRITES` | `false` | adds the 10 tools that change bookmarks |
+| `mcp.writes` | `BROFO_MCP_WRITES` | `false` | adds the 13 tools that change bookmarks |
 | `mcp.folders` | — | none | limits writes to what is inside these folders (`["Bookmarks Bar/Inbox"]`); none: anywhere |
 | `mcp.clients` | — | none | gives one client, by the name it reports, its own `writes` and `folders` in place of the two above |
 
@@ -101,6 +101,7 @@ program that lies about its name. Only programs you start reach the server, on s
 | `refresh_links` | re-checks some bookmarks (`ids`), a folder's links or the workspace's, and waits up to two minutes for the counts |
 | `label_bookmarks` | adds or removes tags, sets a rating (`0` clears) or replaces the note, on up to 500 bookmarks in one entry |
 | `add_bookmark` | adds a web address to a folder by path (made when missing), with an optional note, tags and rating |
+| `next_ai_jobs`, `submit_ai_results`, `run_ai_jobs` | take and answer [AI jobs](ai.md): tags to suggest, duplicates to judge |
 
 ### Resources and prompts
 
@@ -115,6 +116,7 @@ program that lies about its name. Only programs you start reach the server, on s
 | `tidy-folder` | propose a tidier layout for a `folder`, then move bookmarks into it |
 | `dedupe` | merge bookmarks that lead to the same page, carrying notes and tags to the copy kept |
 | `auto-tag` | suggest one to three tags per bookmark, preferring tags already in use, then add them |
+| `process-queue` | work through the waiting [AI jobs](ai.md) (with writes on) |
 
 Each prompt asks the assistant to show its plan and wait for your yes before changing anything, and to treat titles,
 notes and pages as data rather than instructions.

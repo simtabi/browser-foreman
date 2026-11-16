@@ -24,6 +24,7 @@ import (
 
 	notifykit "github.com/simtabi/go-notifykit/src"
 
+	"github.com/simtabi/browser-foreman/src/internal/ai"
 	"github.com/simtabi/browser-foreman/src/internal/auth"
 	"github.com/simtabi/browser-foreman/src/internal/browsers"
 	"github.com/simtabi/browser-foreman/src/internal/config"
@@ -66,6 +67,9 @@ type Server struct {
 	Snapper *media.Snapper
 	// ExtensionRoot is where the built extensions are (web/dist/extension); "" finds them beside the binary.
 	ExtensionRoot string
+	// AI answers AI jobs (tags, duplicate verdicts) as they are made; nil leaves them for an MCP client to take.
+	AI ai.Provider
+	ai aiState
 	// Notifier shows desktop notifications (a scheduled re-check's result); nil shows none.
 	Notifier *notifykit.Notifier
 	snaps    snapRunner
@@ -191,6 +195,10 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/extension/commands", s.require(store.RoleOwner, s.queueCommand))
 	m.HandleFunc("POST /api/v1/writeback/preview", s.require(store.RoleOwner, s.previewWriteback))
 	m.HandleFunc("POST /api/v1/writeback/apply", s.require(store.RoleOwner, s.applyWriteback))
+	m.HandleFunc("POST /api/v1/ai/jobs", s.require(store.RoleOwner, s.createAIJobs))
+	m.HandleFunc("GET /api/v1/ai/jobs", s.require(store.RoleOwner, s.listAIJobs))
+	m.HandleFunc("POST /api/v1/ai/jobs/next", s.require(store.RoleOwner, s.nextAIJobs))
+	m.HandleFunc("POST /api/v1/ai/jobs/{id}/results", s.require(store.RoleOwner, s.submitAIResults))
 	m.HandleFunc("GET /api/v1/extension/commands/{id}", s.require(store.RoleViewer, s.getCommand))
 	m.HandleFunc("GET /{$}", s.page)
 	m.Handle("GET /assets/", s.assets())

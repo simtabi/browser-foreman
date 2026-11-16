@@ -44,7 +44,7 @@ type Options struct {
 // ReadTools and WriteTools are the tools' names, in the order they are added; a test pins them.
 var (
 	ReadTools  = []string{"list_workspaces", "search_bookmarks", "read_folder", "get_history", "export_workspace", "list_tab_snapshots", "read_tab_snapshot", "open_tabs_now", "get_preview", "health_report", "find_duplicates", "stats"}
-	WriteTools = []string{"move_bookmarks", "rename", "trash", "put_back", "undo", "rollback", "save_tabs_as_bookmarks", "refresh_links", "label_bookmarks", "add_bookmark"}
+	WriteTools = []string{"move_bookmarks", "rename", "trash", "put_back", "undo", "rollback", "save_tabs_as_bookmarks", "refresh_links", "label_bookmarks", "add_bookmark", "next_ai_jobs", "submit_ai_results", "run_ai_jobs"}
 )
 
 var (
@@ -90,6 +90,7 @@ func New(api *API, o Options) *mcp.Server {
 	if !o.anyWrites() {
 		return s
 	}
+	s.AddPrompt(&mcp.Prompt{Name: "process-queue", Description: "Work through the AI jobs waiting in Browser Foreman: tags to suggest, duplicates to judge."}, t.queuePrompt)
 	mcp.AddTool(s, &mcp.Tool{Name: "move_bookmarks", Description: "Move bookmarks or folders (by id) into a folder (by path), at the end or at index; create: true makes the folder when it is missing. One history entry; undo takes it back.", Annotations: writes("Move bookmarks", false)}, t.move)
 	mcp.AddTool(s, &mcp.Tool{Name: "rename", Description: "Rename a bookmark or folder (by id). One history entry.", Annotations: writes("Rename", false)}, t.rename)
 	mcp.AddTool(s, &mcp.Tool{Name: "trash", Description: "Move bookmarks or folders (by id) to the workspace's Trash, where put_back or undo brings them back. Needs confirm: true.", Annotations: writes("Move to the Trash", true)}, t.trash)
@@ -100,6 +101,9 @@ func New(api *API, o Options) *mcp.Server {
 	mcp.AddTool(s, &mcp.Tool{Name: "refresh_links", Description: "Check links again: some bookmarks or folders (ids), one folder (by path), or the whole workspace; and wait up to two minutes for the result: how many are working, moved, dead.", Annotations: &mcp.ToolAnnotations{Title: "Re-check links", DestructiveHint: &no, OpenWorldHint: &yes}}, t.refresh)
 	mcp.AddTool(s, &mcp.Tool{Name: "label_bookmarks", Description: "Add or remove tags, set a rating (1-5, 0 clears) or replace the note, on bookmarks (by id). One history entry.", Annotations: writes("Label bookmarks", false)}, t.label)
 	mcp.AddTool(s, &mcp.Tool{Name: "add_bookmark", Description: "Add a bookmark (a web address) to a folder (by path; made when missing), with an optional note, tags and rating.", Annotations: writes("Add a bookmark", false)}, t.addBookmark)
+	mcp.AddTool(s, &mcp.Tool{Name: "next_ai_jobs", Description: "Take up to five AI jobs waiting in Browser Foreman (tags to suggest, or groups of look-alike bookmarks to judge), with the JSON each is answered with. A job taken is yours for 15 minutes.", Annotations: writes("Take AI jobs", false)}, t.nextJobs)
+	mcp.AddTool(s, &mcp.Tool{Name: "submit_ai_results", Description: "Answer an AI job from next_ai_jobs. The answer is checked against the job (only its bookmarks, at most three tags each); a job made to be applied then writes it as one history entry, where tags are added and duplicates go to the Trash.", Annotations: writes("Answer an AI job", false)}, t.submit)
+	mcp.AddTool(s, &mcp.Tool{Name: "run_ai_jobs", Description: "Answer waiting AI jobs with this client's own model, through MCP sampling, when the client offers it; otherwise use next_ai_jobs and submit_ai_results.", Annotations: writes("Run AI jobs", false)}, t.runJobs)
 	return s
 }
 

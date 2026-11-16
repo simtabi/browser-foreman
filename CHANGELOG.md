@@ -10,6 +10,11 @@ ships.
 
 ### Added
 
+- AI jobs, off by default: `browser-foreman ai tag` suggests one to three tags per untagged bookmark, and
+  `ai dedupe` asks whether look-alike bookmarks are the same page (only the groups Find duplicates is unsure of).
+  `ai.provider` chooses who answers: Anthropic's API (structured JSON answers, refusal fallbacks), a local Ollama, or
+  an MCP assistant (`next_ai_jobs`, `submit_ai_results`, `run_ai_jobs` through sampling, the `process-queue` prompt).
+  Every answer is checked against its job before anything is written, and `--apply` writes it as one history entry.
 - MCP: `get_preview`, `health_report`, `find_duplicates` and `stats`; `label_bookmarks` (tags, rating, note) and
   `add_bookmark` with writes on; the resources `bookmarks://workspaces` and `bookmarks://workspaces/{id}/health`; and
   the prompts `triage-dead-links`, `tidy-folder`, `dedupe` and `auto-tag`, each of which asks before changing anything.

@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/simtabi/browser-foreman/src/internal/ai"
 	"github.com/simtabi/browser-foreman/src/internal/api"
 	"github.com/simtabi/browser-foreman/src/internal/auth"
 	"github.com/simtabi/browser-foreman/src/internal/browsers"
@@ -51,7 +52,7 @@ func Root() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd(), userCmd(), tokenCmd(), backupCmd(), restoreCmd(), pairCmd(), mcpCmd(), mergeCmd(), sortCmd(), applyCmd(), stopCmd(), serviceCmd(), notifyCmd())
+	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd(), userCmd(), tokenCmd(), backupCmd(), restoreCmd(), pairCmd(), mcpCmd(), mergeCmd(), sortCmd(), applyCmd(), stopCmd(), serviceCmd(), notifyCmd(), aiCmd())
 	return root
 }
 
@@ -182,6 +183,12 @@ func newServer(c config.Config, data store.Store, now func() time.Time) *api.Ser
 			},
 		}}
 	srv.Tabs = &tabs.Service{Data: data, Browsers: bs, Reader: tabReader, Closer: tabReader, Now: now}
+	switch c.AI.Provider { // validated on load: none leaves jobs for an MCP client
+	case "anthropic":
+		srv.AI = ai.NewAnthropic(c.AI.AnthropicKey, c.AI.Model, c.AI.Effort)
+	case "ollama":
+		srv.AI = &ai.Ollama{URL: c.AI.OllamaURL, Model: c.AI.Model}
+	}
 	return srv
 }
 

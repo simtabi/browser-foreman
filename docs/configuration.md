@@ -37,6 +37,11 @@ writes a starting `config.json` and a `.env` with a fresh token, both `0600`, an
 | `writeback.route` | — | `ask` | `file`, `extension`, or `ask` each time |
 | `writeback.read` | — | `ask` | how the extension route reads the profile now: `extension`, `file`, or `ask` |
 | `notify.desktop` | `BROFO_NOTIFY_DESKTOP` | `true` | a desktop notification when a scheduled re-check finds links that stopped working or work again; see [running at login and notifications](tools/service.md) |
+| `ai.provider` | `BROFO_AI_PROVIDER` | `none` | who answers AI jobs: `none` (an MCP assistant), `anthropic` or `ollama`; see [AI](tools/ai.md) |
+| `ai.model` | `BROFO_AI_MODEL` | `claude-opus-5-5` for `anthropic` | the model; required for `ollama` |
+| `ai.effort` | — | `low` | with `anthropic`: `low`, `medium` or `high` |
+| `ai.ollama_url` | — | `http://127.0.0.1:11434` | where Ollama listens |
+| — | `ANTHROPIC_API_KEY` | none | Anthropic's key, `.env` or the environment only; without it, an `ant auth login` profile |
 | — | `BROFO_API_TOKEN` | none | the owner's token in `local` mode; `.env` or the environment only, never JSON |
 
 ## Example
