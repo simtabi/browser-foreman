@@ -71,6 +71,12 @@ type Writeback struct {
 	Mode  string `json:"mode"`  // merge, replace or ask
 }
 
+// Notify is desktop notifications (through go-notifykit): one banner when a scheduled link re-check finds links
+// that stopped working or work again. BROFO_NOTIFY_DESKTOP=0 turns them off for one run; go-notifykit reads it.
+type Notify struct {
+	Desktop bool `json:"desktop"`
+}
+
 // Config is the whole configuration. APIToken is never read from a JSON file: secrets come from .env or the
 // environment, so a config file can be shared without one.
 type Config struct {
@@ -80,6 +86,7 @@ type Config struct {
 	Auth      Auth      `json:"auth"`
 	MCP       MCP       `json:"mcp"`
 	Writeback Writeback `json:"writeback"`
+	Notify    Notify    `json:"notify"`
 	APIToken  string    `json:"-"`
 	// Sources lists what was read, in order, for `browser-foreman config show`.
 	Sources []string `json:"-"`
@@ -116,6 +123,7 @@ func Defaults() Config {
 		Webhooks:  Webhooks{Timeout: Duration{10 * time.Second}, Attempts: 5},
 		Auth:      Auth{SessionTTL: Duration{24 * time.Hour}},
 		Writeback: Writeback{Read: "ask", Route: "ask", Mode: "ask"},
+		Notify:    Notify{Desktop: true},
 	}
 }
 

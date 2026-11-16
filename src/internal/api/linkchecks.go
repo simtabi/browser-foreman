@@ -29,6 +29,9 @@ type runStat struct {
 	Workspace   string `json:"workspace"`
 	NewlyBroken int    `json:"newly_broken"`
 	Fixed       int    `json:"fixed"`
+	// NewlyConfirmed counts links this check confirmed dead (a second dead result at least a day after the first):
+	// what the scheduled re-check's notification reports as stopped working.
+	NewlyConfirmed int `json:"newly_confirmed"`
 }
 
 // webURLs lists the http and https addresses of the bookmarks under the given nodes (every bookmark when none).
@@ -200,6 +203,9 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		}
 		res = linkcheck.Settle(before, known, res)
 		mu.Lock()
+		if res.Confirmed && !(known && before.Confirmed) {
+			stat.NewlyConfirmed++
+		}
 		if res.Confirmed && res.Archive == "" {
 			archive = append(archive, res)
 		}

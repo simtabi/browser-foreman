@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	notifykit "github.com/simtabi/go-notifykit/src"
+
 	"github.com/simtabi/browser-foreman/src/internal/auth"
 	"github.com/simtabi/browser-foreman/src/internal/browsers"
 	"github.com/simtabi/browser-foreman/src/internal/config"
@@ -64,9 +66,11 @@ type Server struct {
 	Snapper *media.Snapper
 	// ExtensionRoot is where the built extensions are (web/dist/extension); "" finds them beside the binary.
 	ExtensionRoot string
-	snaps         snapRunner
-	ext           extState
-	icons         iconCache
+	// Notifier shows desktop notifications (a scheduled re-check's result); nil shows none.
+	Notifier *notifykit.Notifier
+	snaps    snapRunner
+	ext      extState
+	icons    iconCache
 	// Deliveries is the webhook delivery log (the dispatcher's Log writes to it); nil: none kept.
 	Deliveries *webhooks.Log
 	checks     checkRunner

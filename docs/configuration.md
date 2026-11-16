@@ -34,6 +34,7 @@ writes a starting `config.json` and a `.env` with a fresh token, both `0600`, an
 | `writeback.mode` | — | `ask` | `merge`, `replace`, or `ask` each time; see [write-back](tools/write-back.md) |
 | `writeback.route` | — | `ask` | `file`, `extension`, or `ask` each time |
 | `writeback.read` | — | `ask` | how the extension route reads the profile now: `extension`, `file`, or `ask` |
+| `notify.desktop` | `BROFO_NOTIFY_DESKTOP` | `true` | a desktop notification when a scheduled re-check finds links that stopped working or work again; see [running at login and notifications](tools/service.md) |
 | — | `BROFO_API_TOKEN` | none | the owner's token in `local` mode; `.env` or the environment only, never JSON |
 
 ## Example

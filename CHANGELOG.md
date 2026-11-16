@@ -10,6 +10,11 @@ ships.
 
 ### Added
 
+- `browser-foreman service install`, `uninstall` and `status` run `serve --no-open` at login (a launchd agent, a
+  systemd user unit or a Windows logon task), so tab autosave and link re-checks keep going with no terminal open.
+- Desktop notifications through go-notifykit: a scheduled re-check that confirms links dead, or finds dead ones working
+  again, shows one banner, which opens the page when clicked (`notify.desktop`, on by default). `browser-foreman
+  notify send`, `ping` and `doctor`, and `serve` listens for pings.
 - *Browsers › Write back to a browser…* previews and applies a write-back from the page, through a connected
   browser's extension, with the same plan, fingerprint check, backup and read-back verification as `apply`. The
   command line and the page now share one implementation.

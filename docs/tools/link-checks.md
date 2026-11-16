@@ -116,6 +116,10 @@ nothing is sent while it is off.
 
 ## Running one
 
+Links are re-checked on their own every `recheck_days` while Browser Foreman runs; [install it as a login
+service](service.md) to keep that going with no terminal open. A scheduled re-check that confirms links dead, or finds
+dead ones working again, shows one desktop notification.
+
 From the web interface: right-click a folder or bookmark › *Re-check*, or *Refresh all*. The activity panel shows
 progress and has Pause and Cancel. Through the API:
 

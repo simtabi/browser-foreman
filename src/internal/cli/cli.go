@@ -25,6 +25,7 @@ import (
 	"github.com/simtabi/browser-foreman/src/internal/events"
 	"github.com/simtabi/browser-foreman/src/internal/linkcheck"
 	"github.com/simtabi/browser-foreman/src/internal/media"
+	"github.com/simtabi/browser-foreman/src/internal/notify"
 	"github.com/simtabi/browser-foreman/src/internal/store"
 	"github.com/simtabi/browser-foreman/src/internal/tabs"
 	"github.com/simtabi/browser-foreman/src/internal/version"
@@ -34,7 +35,9 @@ import (
 // Execute runs the command line and returns the process exit code.
 func Execute() int {
 	if err := Root().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "browser-foreman:", err)
+		if !errors.Is(err, errNotifyFailed) { // go-notifykit has already said what went wrong
+			fmt.Fprintln(os.Stderr, "browser-foreman:", err)
+		}
 		return 1
 	}
 	return 0
@@ -48,7 +51,7 @@ func Root() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd(), userCmd(), tokenCmd(), backupCmd(), restoreCmd(), pairCmd(), mcpCmd(), mergeCmd(), sortCmd(), applyCmd(), stopCmd())
+	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd(), userCmd(), tokenCmd(), backupCmd(), restoreCmd(), pairCmd(), mcpCmd(), mergeCmd(), sortCmd(), applyCmd(), stopCmd(), serviceCmd(), notifyCmd())
 	return root
 }
 
@@ -107,6 +110,16 @@ func serveCmd() *cobra.Command {
 				if users, err := data.Users(cmd.Context()); err == nil && len(users) == 0 {
 					fmt.Fprintln(cmd.OutOrStdout(), "Accounts mode with no users: nobody can sign in until you run `browser-foreman user add NAME --role owner`.")
 				}
+			}
+			if n, err := notify.New(c); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "desktop notifications are off: %v\n", err)
+			} else {
+				srv.Notifier = n
+				go func() { // so `browser-foreman notify ping` and scripts can show a notification through this server
+					if err := n.Listen(ctx); err != nil && ctx.Err() == nil {
+						fmt.Fprintf(cmd.ErrOrStderr(), "notification listener: %v\n", err)
+					}
+				}()
 			}
 			srv.Background(ctx)
 			go func() { // once it answers, so the page loads at once

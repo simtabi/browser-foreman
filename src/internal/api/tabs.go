@@ -3,11 +3,14 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/simtabi/browser-foreman/src/internal/linkcheck"
+	"github.com/simtabi/browser-foreman/src/internal/notify"
 	"github.com/simtabi/browser-foreman/src/internal/store"
 	"github.com/simtabi/browser-foreman/src/internal/tabs"
 )
@@ -224,6 +227,29 @@ func (s *Server) Background(ctx context.Context) {
 	}()
 }
 
+// reportSweep waits for a scheduled check and shows one desktop notification when it confirmed links dead or found
+// dead ones working again. A check someone started from the page reports there instead.
+func (s *Server) reportSweep(ctx context.Context, workspace string, job *linkcheck.Job) {
+	job.Wait()
+	if s.Notifier == nil || job.View().State != linkcheck.Done {
+		return
+	}
+	s.checks.mu.Lock()
+	st := *s.checks.stats[job.ID]
+	s.checks.mu.Unlock()
+	addr := s.Cfg.Server.Addr
+	if s.Listener != nil {
+		addr = s.Listener.Addr().String()
+	}
+	n, ok := notify.Sweep(workspace, st.NewlyConfirmed, st.Fixed, addr)
+	if !ok {
+		return
+	}
+	if _, err := s.Notifier.Send(ctx, n); err != nil && s.Console != nil {
+		fmt.Fprintf(s.Console, "Desktop notification not shown: %v\n", err) // a courtesy: never fatal
+	}
+}
+
 // recheckStale starts one check per round, for the first workspace (not archived) holding links due again.
 func (s *Server) recheckStale(ctx context.Context) {
 	p, err := store.LoadPrefs(ctx, s.Data)
@@ -256,8 +282,9 @@ func (s *Server) recheckStale(ctx context.Context) {
 		if len(due) == 0 {
 			continue
 		}
-		if _, err := s.StartCheck(x.ID, due); err == nil {
+		if job, err := s.StartCheck(x.ID, due); err == nil {
 			_, _ = s.Bus.Publish("linkcheck.scheduled", map[string]any{"workspace": x.ID, "due": len(due)})
+			go s.reportSweep(ctx, x.Name, job)
 		}
 		return
 	}
