@@ -16,6 +16,7 @@ export interface ExtApi {
     remove(id: string): Promise<void>; removeTree(id: string): Promise<void> };
   storage: { local: { get(keys: string[] | string): Promise<Record<string, any>>; set(o: Record<string, unknown>): Promise<void>; remove(keys: string[] | string): Promise<void> } };
   alarms: { create(name: string, o: { periodInMinutes: number }): void; onAlarm: Hook<(a: { name: string }) => void> };
+  action?: { setBadgeText(o: { text: string }): Promise<void>; setBadgeBackgroundColor(o: { color: string }): Promise<void>; setTitle(o: { title: string }): Promise<void> };
 }
 interface Hook<F> { addListener(f: F): void }
 

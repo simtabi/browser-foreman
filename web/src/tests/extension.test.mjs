@@ -17,6 +17,15 @@ eq(C.browserName("Mozilla/5.0 … Chrome/131.0 Safari/537.36", ["Chromium", "Goo
 eq(C.browserName("Mozilla/5.0 … Chrome/131.0 Safari/537.36 Edg/131.0", ["Microsoft Edge"], false), "Microsoft Edge");
 eq(C.browserName("Mozilla/5.0 (Macintosh) AppleWebKit/605 Version/18.1 Safari/605.1.15", [], false), "Safari");
 eq(C.checkServer("http://127.0.0.1:8765/x"), "http://127.0.0.1:8765");
+// Connecting by itself: ask when nothing waits, wait while a request is live, rest after a no or three unanswered.
+const now = Date.parse("2026-11-16T10:00:00Z"), later = "2026-11-16T10:04:00Z", gone = "2026-11-16T09:59:00Z";
+eq(C.connectStep({ paired: true }, now), "none", "connected: nothing to do");
+eq(C.connectStep({ paired: false }, now), "ask", "installed and not connected: it asks by itself");
+eq(C.connectStep({ paired: false, asking: { expires: later } }, now), "wait", "a request is waiting: it does not ask twice");
+eq(C.connectStep({ paired: false, asking: { expires: gone } }, now), "ask", "an expired request: ask again");
+eq(C.connectStep({ paired: false, declined: true }, now), "rest", "the owner said no (or disconnected): only Connect asks again");
+eq(C.connectStep({ paired: false, unanswered: 3 }, now), "rest", "three unanswered: stop prompting");
+eq(C.connectStep({ paired: false, unanswered: 2 }, now), "ask");
 for (const bad of ["https://evil.example", "http://192.168.1.4:8765", "file:///x", "nonsense"]) assert.throws(() => C.checkServer(bad), bad), n++;
 const rep = C.tabReport([{ id: 1, incognito: false, focused: true, type: "normal", tabs: [{ id: 9, url: "https://go.dev/", title: "Go", active: true, pinned: false, groupId: 4, windowId: 1, index: 0 }] },
   { id: 2, incognito: false, focused: false, type: "devtools", tabs: [] }], [{ id: 4, windowId: 1, title: "Work", color: "blue", collapsed: false }]);

@@ -2,7 +2,7 @@
 // waits for the server's commands (open links, open a tab group, read the bookmarks), and carries out what the popup asks.
 
 import { ext, type ExtBookmark } from "./ext";
-import { browserName, Client, groupColor, tabReport, webOnly, type Command } from "./core";
+import { browserName, Client, connectStep, groupColor, tabReport, webOnly, type Command } from "./core";
 import { plan, run, type WsNode } from "./apply";
 
 interface Settings { server?: string; token?: string; browser?: string }
@@ -19,7 +19,7 @@ async function client(): Promise<Client | null> {
 }
 // A token the server no longer accepts (revoked) unpairs the extension, so it stops calling.
 async function unpairedIf(e: unknown): Promise<void> {
-  if ((e as { status?: number }).status === 401) await ext.storage.local.remove(["token"]);
+  if ((e as { status?: number }).status === 401) { await ext.storage.local.remove(["token"]); await ext.storage.local.set({ declined: true }); } // disconnected on purpose: no asking again by itself
 }
 
 // ---- tabs ----
@@ -71,10 +71,57 @@ async function poll(): Promise<void> {
     }
   } finally { polling = false; }
 }
+// ---- connecting by itself ----
+// Installed and not connected, the extension asks Browser Foreman to connect on its own, so the owner is prompted
+// without opening the popup. Its four letters show on the toolbar icon, to compare with the prompt (in the page, in
+// the terminal running serve, or `browser-foreman pair --approve`). Nothing connects unless the owner approves.
+const DEFAULT_SERVER = "http://127.0.0.1:8765";
+const DEFAULT_TITLE = "Browser Foreman";
+async function badge(match: string): Promise<void> {
+  await ext.action?.setBadgeText({ text: match }).catch(() => {});
+  await ext.action?.setBadgeBackgroundColor({ color: "#066fd1" }).catch(() => {});
+  await ext.action?.setTitle({ title: match ? `Browser Foreman: approve ${match} to connect` : DEFAULT_TITLE }).catch(() => {});
+}
+/** The answer to a waiting request, carried out: approved connects; anything but pending ends the request. */
+async function settle(asking: any): Promise<string> {
+  const a = await Client.answer(asking.server, asking, (u, i) => fetch(u, i));
+  if (a.state === "approved" && a.token) {
+    await ext.storage.local.set({ server: asking.server, token: a.token, browser: thisBrowser(), unanswered: 0 });
+    await ext.storage.local.remove(["asking", "declined"]);
+    await badge("");
+    void report(); void poll();
+  } else if (a.state !== "pending") {
+    const st = await ext.storage.local.get(["unanswered"]);
+    await ext.storage.local.set(a.state === "denied" ? { declined: true } : { unanswered: (st.unanswered ?? 0) + 1 });
+    await ext.storage.local.remove(["asking"]);
+    await badge("");
+  }
+  return a.state;
+}
+let connecting = false;
+async function autoConnect(): Promise<void> {
+  if (connecting) return;
+  connecting = true;
+  try {
+    const s = await settings();
+    const st = await ext.storage.local.get(["asking", "declined", "unanswered"]);
+    switch (connectStep({ paired: !!s.token, ...st }, Date.now())) {
+      case "wait": await settle(st.asking).catch(() => {}); break;
+      case "ask": {
+        const server = s.server ?? DEFAULT_SERVER;
+        const req = await Client.request(server, thisBrowser(), VERSION(), (u, i) => fetch(u, i)).catch(() => null); // not running: next minute
+        if (req) { await ext.storage.local.set({ asking: { server, ...req } }); await badge(req.match); }
+        break;
+      }
+      default: if (!st.asking) await badge("");
+    }
+  } finally { connecting = false; }
+}
+
 ext.alarms.create("tick", { periodInMinutes: 1 });
-ext.alarms.onAlarm.addListener(a => { if (a.name === "tick") { void report(); void poll(); } });
-ext.runtime.onStartup.addListener(() => { void report(); void poll(); });
-ext.runtime.onInstalled.addListener(() => { void report(); });
+ext.alarms.onAlarm.addListener(a => { if (a.name === "tick") { void report(); void poll(); void autoConnect(); } });
+ext.runtime.onStartup.addListener(() => { void report(); void poll(); void autoConnect(); });
+ext.runtime.onInstalled.addListener(() => { void report(); void autoConnect(); });
 
 // ---- the popup's requests ----
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -96,24 +143,20 @@ async function handle(msg: any): Promise<unknown> {
       void report(); void poll();
       return { paired: true, browser };
     }
-    case "ask": { // one-click pairing: ask, then wait for the owner's answer in Browser Foreman
+    case "ask": { // Connect pressed: ask now (again, even after a no), then wait for the owner's answer
       const server = new URL(msg.server).origin, browser = thisBrowser();
       const req = await Client.request(server, browser, VERSION(), (u, i) => fetch(u, i));
-      await ext.storage.local.set({ asking: { server, ...req } });
+      await ext.storage.local.set({ asking: { server, ...req }, unanswered: 0 });
+      await ext.storage.local.remove(["declined"]);
+      await badge(req.match);
       return { match: req.match };
     }
     case "answer": {
       const { asking } = await ext.storage.local.get(["asking"]);
       if (!asking) return { state: "none" };
-      const a = await Client.answer(asking.server, asking, (u, i) => fetch(u, i));
-      if (a.state === "approved" && a.token) {
-        await ext.storage.local.set({ server: asking.server, token: a.token, browser: thisBrowser() });
-        await ext.storage.local.remove(["asking"]);
-        void report(); void poll();
-      } else if (a.state !== "pending") await ext.storage.local.remove(["asking"]);
-      return { state: a.state, match: asking.match };
+      return { state: await settle(asking), match: asking.match };
     }
-    case "unpair": await ext.storage.local.remove(["token"]); return { paired: false };
+    case "unpair": await ext.storage.local.remove(["token"]); await ext.storage.local.set({ declined: true }); return { paired: false };
     case "report": await report(); return { ok: true };
     case "read": { const c = await client(); if (!c) throw new Error("not paired"); return { summary: await readInto(c, msg.workspace || undefined) }; }
     case "workspaces": { const c = await client(); if (!c) throw new Error("not paired"); return c.workspaces(); }

@@ -103,3 +103,14 @@ export const groupColor = (c?: string): string => GROUP_COLORS.includes(c ?? "")
 
 /** Only web links are opened from a command. */
 export const webOnly = (urls: string[]): string[] => urls.filter(u => /^https?:\/\//i.test(u)).slice(0, 200);
+
+/** What the extension does about connecting, each minute and when it starts, while it is not connected:
+ *  - "wait": a request is waiting for the owner's answer: ask the server for it;
+ *  - "ask": nothing is waiting: ask the server to connect (the owner approves, comparing the letters on the icon);
+ *  - "rest": the owner said no, or three requests went unanswered: ask again only when Connect is pressed. */
+export function connectStep(s: { paired: boolean; asking?: { expires: string }; declined?: boolean; unanswered?: number }, now: number): "none" | "wait" | "ask" | "rest" {
+  if (s.paired) return "none";
+  if (s.asking && Date.parse(s.asking.expires) > now) return "wait";
+  if (s.declined || (s.unanswered ?? 0) >= 3) return "rest";
+  return "ask";
+}

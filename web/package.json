@@ -1,6 +1,6 @@
 {
   "name": "@simtabi/browser-foreman-web",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Browser Foreman's web interface (TypeScript + Alpine), embedded in the browser-foreman binary.",
   "scripts": {
     "build:web": "node src/build.mjs",
