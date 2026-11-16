@@ -165,7 +165,7 @@ func (s *Server) requireExtension(next func(http.ResponseWriter, *http.Request, 
 	return func(w http.ResponseWriter, r *http.Request) {
 		p, ok := s.who(r)
 		if !ok || p.Via != "token" || !strings.HasPrefix(p.tokenName, extPrefix) {
-			writeErr(w, 401, "send a paired extension's token")
+			writeErr(w, 401, "this extension is not connected (or was disconnected): connect it again from its popup")
 			return
 		}
 		next(w, r.WithContext(contextWith(r, p)), strings.TrimPrefix(p.tokenName, extPrefix))
@@ -342,7 +342,7 @@ func (s *Server) commandDone(w http.ResponseWriter, r *http.Request, browser str
 	s.ext.init()
 	c := s.ext.byID[r.PathValue("id")]
 	if c == nil || c.Browser != browser {
-		writeErr(w, 404, "no command with that id for this browser")
+		writeErr(w, 404, "that command is not this browser's, or it was already done or has expired")
 		return
 	}
 	c.State, c.Error = "done", ""
@@ -358,7 +358,7 @@ func (s *Server) getCommand(w http.ResponseWriter, r *http.Request) {
 	s.ext.init()
 	c := s.ext.byID[r.PathValue("id")]
 	if c == nil {
-		writeErr(w, 404, "no command with that id")
+		writeErr(w, 404, "that command was already done or has expired (commands are kept for a while only)")
 		return
 	}
 	writeJSON(w, 200, map[string]any{"command": c})

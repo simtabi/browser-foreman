@@ -159,7 +159,7 @@ func (s *Server) pollPairing(w http.ResponseWriter, r *http.Request) {
 	q := s.ext.requests[r.PathValue("id")]
 	if q == nil || subtle.ConstantTimeCompare([]byte(auth.HashSecret(in.Poll)), []byte(q.pollHash)) != 1 {
 		s.ext.mu.Unlock()
-		writeErr(w, 404, "no such request, or it has expired; ask again")
+		writeErr(w, 404, "this connection request has expired or was answered; ask again with Connect")
 		return
 	}
 	state := q.State
@@ -203,7 +203,7 @@ func (s *Server) answerPairing(approve bool) http.HandlerFunc {
 		q := s.ext.requests[r.PathValue("id")]
 		if q == nil || q.State != "pending" {
 			s.ext.mu.Unlock()
-			writeErr(w, 404, "no request waiting with that id")
+			writeErr(w, 404, "that connection request has expired (they wait five minutes) or was already answered; the extension asks again within a minute, or press Connect in its popup")
 			return
 		}
 		q.State = "answering" // no second answer while the token is made
@@ -369,7 +369,7 @@ func (s *Server) openExtensionSetup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if b == nil {
-		writeErr(w, 404, "that browser is not installed here")
+		writeErr(w, 404, "that browser is not installed on this computer, so it cannot be set up here")
 		return
 	}
 	target, page := extensionBuild(*b)

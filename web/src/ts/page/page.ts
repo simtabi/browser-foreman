@@ -85,7 +85,7 @@ const store = {
 // ---------- settings: preferences for this tool, kept in this browser (never in a workspace, never exported) ----------
 const SETTINGS_DEFAULT = {theme: "system", tooltips: true, tipDelay: 400, toastSecs: 4.5, openWarn: 20,
   treeThumbs: true, treeDesc: true, treeDates: true, tileLimit: 120, rememberPlace: true, pageSize: 25, liveMs: 5000,
-  bootLoader: true};  // bootLoader is read before the page paints, by theme-early.ts
+  bootLoader: true, extApprove: "strict"};  // bootLoader is read before the page paints, by theme-early.ts
 const SETTINGS_KEY = STORE + ":settings";
 let SET = (() => { try { return Object.assign({}, SETTINGS_DEFAULT, JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); } catch { return {...SETTINGS_DEFAULT}; } })();
 function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(SET)); } catch {} applySettings(); window.dispatchEvent(new CustomEvent("bf:settings")); }
@@ -103,6 +103,8 @@ const sysDark = matchMedia("(prefers-color-scheme: dark)");
 function applySettings() {
   const t = SET.theme === "system" ? (sysDark.matches ? "dark" : "light") : SET.theme;
   document.documentElement.setAttribute("data-bs-theme", t);
+  // Read by v1-ui.ts (Browser extensions): where a browser asking to connect may be approved.
+  document.documentElement.dataset.extApprove = SET.extApprove === "loose" ? "loose" : "strict";
   const b = document.body.classList;
   b.toggle("no-tree-thumbs", !SET.treeThumbs); b.toggle("no-tree-desc", !SET.treeDesc); b.toggle("no-tree-dates", !SET.treeDates);
 }
@@ -1972,7 +1974,7 @@ function paintScope() {
     c.onchange = () => fn(c.checked); l.append(c, ...(ic ? [icon(ic)] : []), el("span", "flex-fill", label)); if (note) l.append(stateBadge(note)); l.onclick = e => e.stopPropagation(); m.append(l); };
   if (names.length) {
     m.append(el("h6", "dropdown-header", "Show tabs and history from"));
-    row("All browsers", SCOPE.isAll, on => SCOPE.setAll(on), !SCOPE.isAll && !SCOPE.isNone);
+    row("All browsers", SCOPE.isAll, on => SCOPE.setAll(on), !SCOPE.isAll && !SCOPE.isNone, "", "ti-world");  // an icon, so every label lines up
     for (const n of names) row(n, SCOPE.has(n), on => SCOPE.toggle(n, on), false, LIVE_STATE ? browserState(LIVE_STATE, n) : "", "browser:" + n);
     m.append(el("div", "dropdown-divider"));
   }

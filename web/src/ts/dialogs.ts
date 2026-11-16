@@ -10,6 +10,8 @@ import { $, el, icon } from "./ui";
 
 export type ToastKind = "info" | "success" | "warning" | "danger";
 export interface ConfirmOptions { title: string; body: string; ok?: string; no?: string; danger?: boolean }
+/** A confirm with a third way out: later, which decides nothing (and is what Escape or closing it means). */
+export interface DecideOptions extends ConfirmOptions { later: string }
 export interface TextOptions { title: string; label: string; value?: string; hint?: string; multiline?: boolean; ok?: string }
 export interface DialogOptions {
   afterHide?: (id: string) => void;   // the page's own follow-up (e.g. give the tree its focus back)
@@ -27,15 +29,29 @@ export const visibleModals = (): HTMLElement[] =>
 export const modalOpen = (): boolean => visibleModals().length > 0;
 function dropBackdrop(): void { if (backdrop && !visibleModals().length) { backdrop.remove(); backdrop = null; } }
 
+// Dialogs stack: one opened over another (a confirm from inside a dialog) goes above it, and the one shared backdrop
+// sits just under the topmost. Without this a confirm opened from a dialog later in the page showed behind it,
+// invisible, while it waited for an answer (Disconnect… in Browser extensions, 2026-11-16).
+const BASE_Z = 1055, STEP_Z = 20;
+function restack(): void {
+  const open = visibleModals();
+  if (backdrop) backdrop.style.zIndex = String(BASE_Z - 5 + STEP_Z * Math.max(0, open.length - 1));
+}
+
 export function showModal(id: string): void {
-  const m = must<HTMLElement>(id); m.style.display = "block"; m.classList.add("show");
+  const m = must<HTMLElement>(id);
+  const under = visibleModals().filter(x => x !== m).length;
+  m.style.zIndex = String(BASE_Z + STEP_Z * under);
+  m.style.display = "block"; m.classList.add("show");
   if (!backdrop) { backdrop = el("div", "modal-backdrop fade show"); document.body.append(backdrop); }
+  restack();
 }
 
 export function hideModal(id: string): void {
-  const m = must<HTMLElement>(id); m.classList.remove("show"); m.style.display = "none";
+  const m = must<HTMLElement>(id); m.classList.remove("show"); m.style.display = "none"; m.style.zIndex = "";
   opts.afterHide?.(id);
   dropBackdrop();
+  restack();
 }
 
 /** Text editor dialog: rename, new folder, descriptions. Resolves with the text, or null when cancelled. */
@@ -66,6 +82,23 @@ export function askConfirm({ title, body, ok = "Continue", no = "Cancel", danger
     yes.onclick = () => done(true); noBtn.onclick = () => done(false);
     document.addEventListener("keydown", key, true);
     showModal("#confirmModal"); setTimeout(() => noBtn.focus({ focusVisible: false } as FocusOptions), 30);  // Esc and Enter still work; no ring until the keyboard moves
+  });
+}
+
+/** Confirm with Not now: resolves "yes", "no", or "later" (also Escape), for a question that may wait, such as an
+ *  extension asking to connect: later leaves it unanswered rather than refusing it. */
+export function askDecide({ title, body, ok = "Continue", no = "Cancel", later, danger = false }: DecideOptions): Promise<"yes" | "no" | "later"> {
+  return new Promise(resolve => {
+    must("#confirmTitle").textContent = title; must("#confirmBody").textContent = body;
+    must("#confirmBar").className = "modal-status " + (danger ? "bg-danger" : "bg-primary");
+    must("#confirmIcon").className = "ti mb-2 " + (danger ? "ti-alert-triangle text-danger" : "ti-info-circle text-primary");
+    const yes = must<HTMLButtonElement>("#confirmYes"), noBtn = must<HTMLButtonElement>("#confirmNo"), wait = must<HTMLButtonElement>("#confirmLater");
+    yes.className = "btn " + (danger ? "btn-danger" : "btn-primary"); yes.textContent = ok; noBtn.textContent = no; wait.textContent = later; wait.hidden = false;
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); done("later"); } };
+    const done = (v: "yes" | "no" | "later") => { hideModal("#confirmModal"); yes.onclick = noBtn.onclick = wait.onclick = null; wait.hidden = true; document.removeEventListener("keydown", key, true); resolve(v); };
+    yes.onclick = () => done("yes"); noBtn.onclick = () => done("no"); wait.onclick = () => done("later");
+    document.addEventListener("keydown", key, true);
+    showModal("#confirmModal"); setTimeout(() => wait.focus({ focusVisible: false } as FocusOptions), 30);
   });
 }
 

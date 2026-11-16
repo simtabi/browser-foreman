@@ -33,6 +33,9 @@ export const SETTING_GROUPS: SettingGroup[] = [
     ["bootLoader", "Loading screen", "Cover the whole page while it loads, until everything is ready. Off: each panel shows its own placeholder as it fills in. Takes effect the next time the page loads.", "switch"],
     ["rememberPlace", "Remember where I was", "Reopen at the same view, filter, search, folder or bookmark and tab snapshot after a refresh or on the next visit. Off: always start at Bookmarks.", "switch"],
   ]],
+  ["Browser extensions", [
+    ["extApprove", "Approve a connecting browser", "Strict: a browser asking to connect is approved only in Browser Foreman opened in that same browser, so Chrome never asks you about Brave. Loose: from any browser. The terminal (browser-foreman pair --approve) works either way.", "select", [["strict", "Only in that browser"], ["loose", "In any browser"]]],
+  ]],
   ["Opening links", [
     ["openWarn", "Ask before opening more than", "Opening many tabs at once asks first.", "select", [[5, "5 links"], [10, "10 links"], [20, "20 links"], [50, "50 links"], [100000, "Never ask"]]],
   ]],
