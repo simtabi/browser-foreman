@@ -10,6 +10,9 @@ ships.
 
 ### Added
 
+- An extension asking to connect shows in the terminal running `serve`, with its four letters, and
+  `browser-foreman pair --approve` approves it there once those letters are typed (or given with `--match`). Until
+  now a request was seen only in an open Browser Foreman page, so with none open it expired unseen.
 - `serve` handles a port already in use. If the same Browser Foreman holds it, `serve` says so and exits without an
   error; another build can be replaced with `--replace`. If another program holds it, `serve` names that program and
   uses the next free port, recorded in `server.json` so `mcp`, `pair`, `apply` and `stop` follow it.
@@ -197,6 +200,8 @@ ships.
 
 ### Fixed
 
+- In *Browser extensions…*, an opened *How to install* no longer closes by itself when the dialog refreshes its
+  status every three seconds.
 - A site that kept rate-limiting made each of its deferred links wait out the pause again at the end of a run, a few at
   a time. One proof-of-concept pass took 4.4 hours because of it. Now the site's other links stop waiting once one has
   waited in vain.

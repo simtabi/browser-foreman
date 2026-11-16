@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -136,6 +137,10 @@ func (s *Server) requestPairing(w http.ResponseWriter, r *http.Request) {
 	s.ext.requests[q.ID] = q
 	s.ext.mu.Unlock()
 	_, _ = s.Bus.Publish("extension.requested", map[string]any{"browser": q.Browser, "request": q.ID})
+	if s.Console != nil {
+		fmt.Fprintf(s.Console, "%s's extension asks to connect, showing %s. Approve it in Browser Foreman, or run `browser-foreman pair --approve` and type %s. It waits until %s.\n",
+			q.Browser, q.Match, q.Match, q.Expires.Local().Format("15:04"))
+	}
 	writeJSON(w, 201, map[string]any{"id": q.ID, "poll": poll, "match": q.Match, "expires": q.Expires})
 }
 

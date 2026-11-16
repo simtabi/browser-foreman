@@ -34,6 +34,15 @@ you are in it, whether to connect that browser, showing the same four letters. A
 request waits five minutes; at most five wait at once; only an extension can ask (a web page or another program
 cannot), and nothing connects unless the owner approves.
 
+The request also shows in the terminal running `browser-foreman serve`, with its letters, so it is seen when no
+Browser Foreman page is open. Approve it from a terminal by typing the letters the popup shows:
+
+```bash
+browser-foreman pair --approve
+```
+
+`--match KXQT` gives the letters instead of typing them. A request is approved only when the letters match it.
+
 Or make a one-time code, and type it into the popup (*Use a pairing code instead*) with the server's address:
 
 ```bash

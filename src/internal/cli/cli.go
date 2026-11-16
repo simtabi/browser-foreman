@@ -91,6 +91,7 @@ func serveCmd() *cobra.Command {
 			defer data.Close()
 			srv := newServer(c, data, time.Now)
 			srv.Listener = l
+			srv.Console = cmd.OutOrStdout()
 			if err := writeRuntime(c, c.Server.Addr, time.Now()); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "recording the address: %v\n", err)
 			}

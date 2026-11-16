@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -40,6 +41,9 @@ type Server struct {
 	Hooks    *webhooks.Store
 	Dispatch *webhooks.Dispatcher
 	Data     store.Store
+	// Console, when set, is told what needs the owner's attention, such as an extension waiting to connect: serve
+	// points it at its terminal, so a request is seen even with no page open.
+	Console io.Writer
 	// Listener, when set, is where Run serves (the caller bound it); otherwise Run listens on Cfg.Server.Addr.
 	Listener net.Listener
 	Limit    *auth.Limiter // failed sign-ins

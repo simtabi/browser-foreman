@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -14,6 +15,8 @@ import (
 
 func TestOneClickPairing(t *testing.T) {
 	s := newServer(t, "tok")
+	var console bytes.Buffer
+	s.Console = &console
 	h := s.Handler()
 	// Only an extension's own origin may ask; a page or a program cannot.
 	if w := send(h, "POST", "/api/v1/extension/requests", `{"browser":"Google Chrome","version":"0.1.0"}`); w.Code != 403 {
@@ -35,6 +38,10 @@ func TestOneClickPairing(t *testing.T) {
 		return w.Code, out
 	}
 	id, poll, match := ask("Google Chrome")
+	// The server's terminal says so, with the letters, so a request is seen with no page open.
+	if !strings.Contains(console.String(), "Google Chrome's extension asks to connect, showing "+match) {
+		t.Fatalf("console: %q", console.String())
+	}
 	if code, out := pollAs(id, poll); code != 200 || out["state"] != "pending" || out["token"] != "" {
 		t.Fatalf("pending poll %d %v", code, out)
 	}
