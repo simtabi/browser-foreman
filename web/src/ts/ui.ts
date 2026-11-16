@@ -22,9 +22,14 @@ export const browserIconUrl = (name: string): string => {
   const ws = (window as unknown as { BM_WS?: { v1?: boolean } }).BM_WS;
   return (ws && !ws.v1 ? "api/tabs/browser-icon" : "api/v1/browsers/icon") + `?name=${encodeURIComponent(name)}`;
 };
+// Browsers with no icon here (not installed on this computer): asked once, then drawn as a globe without asking again,
+// so a view repainted every few seconds does not fill the console with the same 404s.
+const noIcon = new Set<string>();
 export function browserIcon(name: string, cls = ""): HTMLElement {
+  const globe = () => el("i", `ti ti-world ${cls}`.trim());
+  if (noIcon.has(name)) return globe();
   const img = el("img", `browser-ico ${cls}`.trim()); img.src = browserIconUrl(name); img.alt = ""; img.width = img.height = 16;
-  img.onerror = () => img.replaceWith(el("i", `ti ti-world ${cls}`.trim()));
+  img.onerror = () => { noIcon.add(name); img.replaceWith(globe()); };
   return img;
 }
 export const kbd = (k: string): HTMLElement => el("kbd", null, k);
