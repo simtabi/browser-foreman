@@ -10,6 +10,12 @@ ships.
 
 ### Added
 
+- The extension (0.1.2) asks to connect by itself once it is loaded and finds Browser Foreman, showing its four
+  letters on its toolbar icon; it stops after a deny, a disconnect or three unanswered requests, until Connect is
+  pressed. Until now nothing happened after installing it unless its popup's Connect was pressed, and no step said so.
+- *Browser extensions…* is redesigned as a setup assistant: a waiting request on top with its letters, one row per
+  browser with where it stands and its next action, and a setup guide that checks each step live (built, loaded,
+  asking, connected, sending tabs, up to date) and says what is most likely wrong when one stalls.
 - An extension asking to connect shows in the terminal running `serve`, with its four letters, and
   `browser-foreman pair --approve` approves it there once those letters are typed (or given with `--match`). Until
   now a request was seen only in an open Browser Foreman page, so with none open it expired unseen.

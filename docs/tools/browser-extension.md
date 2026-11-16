@@ -29,8 +29,10 @@ of snapshots unless you choose otherwise, as with every other source.
 
 ## Connect it
 
-In one click: press **Connect** in the extension's popup. It shows four letters, and Browser Foreman asks, wherever
-you are in it, whether to connect that browser, showing the same four letters. Approve only if they match. The
+By itself: once loaded, the extension finds Browser Foreman on `127.0.0.1:8765` and asks to connect within a
+minute, with four letters on its toolbar icon. Browser Foreman asks you, wherever you are in it, showing the same four
+letters; approve only if they match. It stops asking by itself after you deny it or disconnect it, or after three
+requests nobody answered; **Connect** in its popup asks again at any time (and shows the letters there too). The
 request waits five minutes; at most five wait at once; only an extension can ask (a web page or another program
 cannot), and nothing connects unless the owner approves.
 
@@ -49,8 +51,11 @@ Or make a one-time code, and type it into the popup (*Use a pairing code instead
 browser-foreman pair
 ```
 
-Or, in the web interface, the Browsers menu (top bar) › *Browser extensions…*, which also lists the supported
-browsers, whether each is on this computer and connected, and how to install the extension in it (signed in as an owner in `accounts` mode). A code
+Or, in the web interface, the Browsers menu (top bar) › *Browser extensions…* (signed in as an owner in `accounts`
+mode). It lists each browser on this computer with where it stands, and a setup guide that follows it live: built,
+loaded, asking to connect (with the letters and Connect and Deny right there), connected, sending its tabs, and up to
+date. When a step stalls it says what is most likely wrong, such as Developer mode being off, the wrong folder chosen,
+an *Errors* button on the extension's card, Browser Foreman on another port, or a browser that has gone quiet. A code
 works once, for ten minutes, and five wrong codes lock pairing for fifteen minutes. The extension gets its own API
 token, named `extension:<browser>`, listed under *Browser extensions…* and in `GET /api/v1/tokens`; disconnecting
 revokes it. The extension only talks to a server on this computer (`127.0.0.1` or `localhost`).
