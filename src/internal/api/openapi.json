@@ -1638,6 +1638,36 @@
         "description": "Body: {browser, kind: open|open-group, urls, title?, color?, incognito?}"
       }
     },
+    "/api/v1/writeback/preview": {
+      "post": {
+        "summary": "Read a browser through its extension now and plan writing a workspace into it; nothing is written",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {workspace, base, browser, mode: merge|replace}. Returns {report, expect}: expect is the browser's fingerprint, which apply needs."
+      }
+    },
+    "/api/v1/writeback/apply": {
+      "post": {
+        "summary": "Write a workspace into a browser through its extension, then read it back and verify",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {workspace, base, browser, mode, expect, drop_new}. 409 when the browser changed since the preview; 502 with {error, written} when the write did not verify. Returns {written}."
+      }
+    },
     "/api/v1/extension/commands/{id}/done": {
       "post": {
         "summary": "Report what became of a command",

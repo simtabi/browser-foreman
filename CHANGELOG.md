@@ -10,6 +10,9 @@ ships.
 
 ### Added
 
+- *Browsers › Write back to a browser…* previews and applies a write-back from the page, through a connected
+  browser's extension, with the same plan, fingerprint check, backup and read-back verification as `apply`. The
+  command line and the page now share one implementation.
 - `apply --route extension --yes` writes through the extension by itself while Browser Foreman runs, refusing a
   browser that changed since the plan (a fingerprint both sides compute alike), then reads the browser back and
   plans again to verify. Extension 0.1.4 takes waiting commands as soon as it reloads.

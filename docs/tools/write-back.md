@@ -42,7 +42,7 @@ The file route always reads the file it is about to write. The extension route c
 
 | Read | How | Needs |
 |---|---|---|
-| `extension` | The server asks the browser's extension to read its bookmarks into `<browser>-live` now, and waits up to a minute. If Browser Foreman is not running, the bookmarks the extension read last are used instead, and the dry run says when they were read. | The extension installed and connected. |
+| `extension` | The server asks the browser's extension to read its bookmarks into `<browser>-live` now, and waits up to two minutes. If Browser Foreman is not running, the bookmarks the extension read last are used instead, and the dry run says when they were read. | The extension installed and connected. |
 | `file` | The profile's `Bookmarks` file is read, with the ids the extension sees. | Access to the profile's folder (see below). |
 
 ## Choosing
@@ -76,6 +76,29 @@ plan twice changes nothing the second time.
 
 Addresses are written the way browsers store them: a default port (`https://site:443/`) is left out, so a
 write never sets an address the browser then changes back.
+
+## From the page
+
+*Browsers › Write back to a browser…* writes the open workspace through a connected browser's extension, with the
+same plan and checks as `apply --route extension --read extension`:
+
+1. Choose the browser (only those whose extension is connected), the workspace holding the export the cleanup
+   started from, and the mode. The page remembers the export per workspace.
+2. **Preview** reads the browser now and shows the plan: what is added, removed, moved and renamed, what the browser
+   changed after the export, any conflicts, and what stays in Browser Foreman. Nothing is written.
+3. **Apply…** asks first, naming the number of changes and, for `replace`, the bookmarks it drops. It reads the
+   browser again and refuses if it changed since the preview. Then the extension saves the browser's bookmarks to
+   `<browser>-before-write`, writes, and reads them back, and the page plans again: it reports success only when that
+   plan is empty.
+
+The file route stays on the command line, because it needs the browser quit and access to its profile folder.
+
+The page calls two owner-only routes, which take `workspace`, `base`, `browser` and `mode`:
+
+| Route | Does |
+|---|---|
+| `POST /api/v1/writeback/preview` | Reads the browser and returns the plan as `report`, with `expect`, the browser's fingerprint. |
+| `POST /api/v1/writeback/apply` | Takes `expect` (and `drop_new` for `replace`), answers 409 if the browser changed since, writes, and returns `written`. A write that does not verify answers 502 with `written.drift`. |
 
 ## On macOS
 

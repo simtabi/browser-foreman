@@ -433,52 +433,42 @@ func applyThroughExtension(ctx context.Context, s store.Store, c config.Config, 
 		fmt.Fprintln(out, "\nDry run: nothing saved. With --yes, the result is saved as workspace "+target+" for the extension to write.")
 		return nil
 	}
-	e, err := writeback.Save(ctx, s, target, browser+" write-back", "writeback", fmt.Sprintf("Write-back of %s (%s) planned against %s", j.Workspace, j.Mode, from), t, now)
-	if err != nil {
-		return err
-	}
-	fmt.Fprintf(out, "Saved as workspace %s (entry %d).\n", target, e.Seq)
 	addr := serverAddr(ctx, c)
 	if !answers(ctx, addr) {
-		fmt.Fprintf(out, "Browser Foreman is not running, so the extension cannot be asked to write it: start `browser-foreman serve` and run this again, or in %s open the extension, choose %s under Write a workspace back, and confirm.\n", browser, target)
+		// No server to carry the write: save the plan, so the extension's popup can write it.
+		e, err := writeback.Save(ctx, s, target, browser+" write-back", "writeback", fmt.Sprintf("Write-back of %s (%s) planned against %s", j.Workspace, j.Mode, from), t, now)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Saved as workspace %s (entry %d). Browser Foreman is not running, so the extension cannot be asked to write it: start `browser-foreman serve` and run this again, or in %s open the extension, choose %s under Write a workspace back, and confirm.\n", target, e.Seq, browser, target)
 		return nil
 	}
 	token := os.Getenv("BROFO_TOKEN")
 	if token == "" {
 		token = c.APIToken
 	}
-	base := "http://" + addr
 	fmt.Fprintf(out, "Writing it into %s through its extension (its bookmarks as they are go to %s-before-write first)…\n", browser, slug(browser))
-	res, err := runExtensionCommand(ctx, base, token, browser, map[string]any{"kind": "write-bookmarks", "workspace": target, "expect": writeback.ExtFingerprint(theirs)}, "write the plan", 20*time.Minute)
+	w, err := writeback.WriteThrough(ctx, s, httpExtension{"http://" + addr, token}, j, browser, theirs, t, from, now)
+	if w.Steps > 0 || err == nil {
+		fmt.Fprintf(out, "Written: %d created, %d renamed or readdressed, %d moved, %d bookmarks and %d folders removed (%d steps). Saved first: %s\n",
+			w.Created, w.Updated, w.Moved, w.RemovedBookmarks, w.RemovedFolders, w.Steps, w.Backup)
+	}
 	if err != nil {
+		if !w.Drift.Empty() {
+			fmt.Fprintln(out, "Read back, it differs from the plan:")
+			printReport(out, w.Drift, list)
+		}
 		return err
 	}
-	var counts struct {
-		Created, Updated, Moved, RemovedBookmarks, RemovedFolders, Steps int
-		Backup                                                           string
-	}
-	_ = json.Unmarshal(res, &counts)
-	fmt.Fprintf(out, "Written: %d created, %d renamed or readdressed, %d moved, %d bookmarks and %d folders removed (%d steps). Saved first: %s\n",
-		counts.Created, counts.Updated, counts.Moved, counts.RemovedBookmarks, counts.RemovedFolders, counts.Steps, counts.Backup)
-	// Verify: read the browser again and plan against it; a write that landed as planned leaves nothing to do.
-	if err := askExtensionToRead(ctx, base, token, browser, 2*time.Minute); err != nil {
-		return fmt.Errorf("written, but reading it back failed: %w", err)
-	}
-	after, _, err := s.State(ctx, slug(browser)+"-live", 0)
-	if err != nil {
-		return err
-	}
-	_, drift, err := writeback.PlanTree(ctx, s, j, after)
-	if err != nil {
-		return err
-	}
-	if drift.Empty() {
-		fmt.Fprintf(out, "Verified: %s now holds the plan; planning again changes nothing.\n", browser)
-		return nil
-	}
-	fmt.Fprintln(out, "Read back, it differs from the plan:")
-	printReport(out, drift, list)
-	return errors.New("the browser's bookmarks differ from the plan after writing")
+	fmt.Fprintf(out, "Verified: %s now holds the plan; planning again changes nothing.\n", browser)
+	return nil
+}
+
+// httpExtension carries commands to a browser's extension through the running server's API.
+type httpExtension struct{ base, token string }
+
+func (h httpExtension) Run(ctx context.Context, browser string, cmd map[string]any, what string, wait time.Duration) (json.RawMessage, error) {
+	return runExtensionCommand(ctx, h.base, h.token, browser, cmd, what, wait)
 }
 
 // printReport prints the report's counts and the first list items of each kind.

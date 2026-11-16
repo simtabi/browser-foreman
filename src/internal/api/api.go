@@ -185,6 +185,8 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/extension/commands", s.requireExtension(s.nextCommands))
 	m.HandleFunc("POST /api/v1/extension/commands/{id}/done", s.requireExtension(s.commandDone))
 	m.HandleFunc("POST /api/v1/extension/commands", s.require(store.RoleOwner, s.queueCommand))
+	m.HandleFunc("POST /api/v1/writeback/preview", s.require(store.RoleOwner, s.previewWriteback))
+	m.HandleFunc("POST /api/v1/writeback/apply", s.require(store.RoleOwner, s.applyWriteback))
 	m.HandleFunc("GET /api/v1/extension/commands/{id}", s.require(store.RoleViewer, s.getCommand))
 	m.HandleFunc("GET /{$}", s.page)
 	m.Handle("GET /assets/", s.assets())

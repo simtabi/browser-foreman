@@ -5,7 +5,7 @@
 import { askConfirm, askDecide, askText, hideModal, showModal, toast } from "./dialogs";
 import { browserName } from "../extension/core";
 import { closeDropdowns } from "./menu";
-import { el, fmtDate, icon } from "./ui";
+import { el, fmtDate, icon, plural } from "./ui";
 import { DataTable, avatar, by, nameCell } from "./datatable";
 import { RangePicker } from "./rangepick";
 import { lookPicker, wsBadge } from "./wslook";
@@ -981,8 +981,101 @@ function install(W: V1): void {
     input.click();
   }
 
+  // Write back to a browser: the same plan and checks as `browser-foreman apply`, through the browser's extension.
+  // Preview reads the browser now and plans; Apply reads it again, refuses if it changed since the preview, writes
+  // (the extension saves the browser first), then reads it back and plans again to verify.
+  type WbItem = { title: string; url?: string; folder: string; to?: string; was?: string; was_url?: string; is_folder?: boolean };
+  type WbReport = { mode: string; added: WbItem[] | null; removed: WbItem[] | null; moved: WbItem[] | null; renamed: WbItem[] | null;
+    added_since: WbItem[] | null; removed_since: WbItem[] | null; moved_since: WbItem[] | null; renamed_since: WbItem[] | null;
+    conflicts: WbItem[] | null; drop_new: number; not_written: number };
+  async function writeBack(): Promise<void> {
+    const { body, foot } = modal("wsWriteBack", "Write back to a browser", "lg", "ti-upload");
+    body.append(el("p", "text-secondary mb-3", `Writes “${W.workspace.name}” into a browser's own bookmarks, through its extension: what the browser added, moved or deleted after the export is kept (merge), or dropped once you confirm how much (replace). Preview first; nothing changes until you apply.`));
+    let connected: string[] = [];
+    try { connected = (await W.call<{ extensions: { name: string }[] }>("GET", "extension/status")).extensions.map(x => x.name.replace(/^extension:/, "")); } catch (e) { fail(e); }
+    const field = (label: string, control: HTMLElement, hint = "") => { const f = el("div", "mb-3"); f.append(el("label", "form-label", label), control); if (hint) f.append(el("div", "form-hint", hint)); return f; };
+    const browserSel = el("select", "form-select"); for (const n of connected) browserSel.append(new Option(n, n));
+    const baseKey = "bf:wb-base:" + W.id;
+    const others = W.workspaces.filter(w => w.id !== W.id && !w.archived);
+    const baseSel = el("select", "form-select"); for (const w of others) baseSel.append(new Option(w.name, w.id));
+    let remembered = ""; try { remembered = localStorage.getItem(baseKey) ?? ""; } catch { /* private window */ }
+    baseSel.value = others.some(w => w.id === remembered) ? remembered : (others.find(w => /original|export/i.test(w.id + w.name))?.id ?? others[0]?.id ?? "");
+    const modeSel = el("select", "form-select");
+    modeSel.append(new Option("Merge: apply the cleanup, keep what the browser changed after the export", "merge"), new Option("Replace: the browser becomes the cleanup (asks before dropping what it gained)", "replace"));
+    const out = el("div", "mt-3");
+    if (!connected.length) {
+      const b = el("button", "btn btn-sm btn-primary"); b.type = "button"; b.append(icon("ti-puzzle", "me-1"), "Browser extensions…"); b.onclick = () => { hideModal("#wsWriteBack"); void extensions(); };
+      const e = el("div", "empty py-4"), ic = el("div", "empty-icon"); ic.append(icon("ti-plug-connected-x"));
+      const act = el("div", "empty-action"); act.append(b);
+      e.append(ic, el("p", "empty-title", "No browser is connected"), el("p", "empty-subtitle text-secondary", "Writing back goes through a browser's extension. Set it up and connect it first."), act);
+      body.append(e);
+    } else if (!others.length) {
+      const e = el("div", "empty py-4"), ic = el("div", "empty-icon"); ic.append(icon("ti-files"));
+      e.append(ic, el("p", "empty-title", "The export this cleanup started from is missing"),
+        el("p", "empty-subtitle text-secondary", "Writing back compares three things: the export, this cleanup and the browser now. Import the export the cleanup started from into a workspace of its own, then come back."));
+      body.append(e);
+    } else body.append(field("Browser", browserSel, "Only browsers whose extension is connected."), field("The export this cleanup started from", baseSel, "Changes the browser made after it are told apart from the cleanup's."), field("Mode", modeSel), out);
+    const close = el("button", "btn me-auto"); close.type = "button"; close.textContent = "Close"; close.onclick = () => hideModal("#wsWriteBack");
+    const preview = el("button", "btn"); preview.type = "button"; preview.append(icon("ti-eye", "me-1"), "Preview");
+    const apply = el("button", "btn btn-danger"); apply.type = "button"; apply.append(icon("ti-upload", "me-1"), "Apply…"); apply.disabled = true;
+    foot.append(close, ...(connected.length && others.length ? [preview, apply] : []));
+    let expect = "", report: WbReport | null = null;
+    const req = () => ({ workspace: W.id, base: baseSel.value, browser: browserSel.value, mode: modeSel.value });
+    const invalidate = () => { expect = ""; report = null; apply.disabled = true; out.replaceChildren(); };
+    for (const c of [browserSel, baseSel, modeSel]) c.addEventListener("change", invalidate);
+    const n = (xs: WbItem[] | null) => xs?.length ?? 0;
+    const changes = (r: WbReport) => n(r.added) + n(r.removed) + n(r.moved) + n(r.renamed);
+    const list = (title: string, xs: WbItem[] | null, line: (x: WbItem) => string) => {
+      if (!n(xs)) return null;
+      const d = el("details", "ext-steps-box"); d.append(el("summary", null, `${title} · ${n(xs).toLocaleString()}`));
+      const ul = el("ul", "small text-secondary mt-1 mb-0");
+      for (const x of xs!.slice(0, 50)) ul.append(el("li", null, line(x)));
+      if (n(xs) > 50) ul.append(el("li", null, `… and ${(n(xs) - 50).toLocaleString()} more`));
+      d.append(ul); return d;
+    };
+    const where = (x: WbItem) => `${x.title}${x.is_folder ? "/" : ""} (${x.folder})`;
+    const paint = (r: WbReport) => {
+      const stat = (label: string, v: number, tone: string) => { const c = el("div", "col"); const b = el("div", "card card-sm"); const bb = el("div", "card-body");
+        bb.append(el("div", `h3 m-0 text-${v ? tone : "secondary"}`, v.toLocaleString()), el("div", "text-secondary small", label)); b.append(bb); c.append(b); return c; };
+      const row = el("div", "row g-2 mb-2");
+      row.append(stat("to add", n(r.added), "green"), stat("to remove", n(r.removed), "red"), stat("to move", n(r.moved), "primary"), stat("to rename or readdress", n(r.renamed), "yellow"));
+      const since = n(r.added_since) + n(r.removed_since) + n(r.moved_since) + n(r.renamed_since);
+      const notes: HTMLElement[] = [];
+      if (!changes(r)) notes.push(el("div", "alert alert-success mb-2", `${browserSel.value} already holds this: there is nothing to write.`));
+      notes.push(el("div", "small text-secondary mb-2", since ? `${browserSel.value} changed ${plural(since, "bookmark")} after the export: ${r.mode === "merge" ? "merge keeps them" : "replace drops what it added"}.` : `${browserSel.value} changed nothing after the export.`));
+      if (n(r.conflicts)) notes.push(el("div", "small text-warning mb-2", `${plural(n(r.conflicts), "bookmark")} ${n(r.conflicts) === 1 ? "was" : "were"} changed differently on both sides: the cleanup wins.`));
+      if (r.not_written) notes.push(el("div", "small text-secondary mb-2", `${plural(r.not_written, "bookmark")} ${r.not_written === 1 ? "carries" : "carry"} notes, descriptions, ratings or tags: a browser has no place for them, so they stay here.`));
+      const lists = [list("Added", r.added, where), list("Removed", r.removed, where), list("Moved", r.moved, x => `${x.title} (${x.folder} → ${x.to})`),
+        list("Renamed or readdressed", r.renamed, x => x.was_url ? `${x.was_url} → ${x.url}` : `${x.was} → ${x.title}`),
+        list("Added in the browser after the export", r.added_since, where), list("Deleted in the browser after the export (stay deleted)", r.removed_since, where)].filter(Boolean) as HTMLElement[];
+      out.replaceChildren(row, ...notes, ...lists);
+    };
+    preview.onclick = async () => {
+      try { localStorage.setItem(baseKey, baseSel.value); } catch { /* private window */ }
+      try {
+        const j = await busy(`Reading ${browserSel.value}'s bookmarks and planning…`, () => W.call<{ report: WbReport; expect: string }>("POST", "writeback/preview", req()));
+        report = j.report; expect = j.expect; paint(j.report); apply.disabled = !changes(j.report);
+      } catch (e) { invalidate(); fail(e); }
+    };
+    apply.onclick = async () => {
+      if (!report || !expect) return;
+      const r = report, total = changes(r);
+      const ok = await askConfirm({ title: `Write ${plural(total, "change")} into ${browserSel.value}?`, ok: "Write them", no: "Cancel",
+        body: `Its bookmarks as they are now are saved to Browser Foreman first, so this can be undone from there. If ${browserSel.value} syncs its bookmarks, the change reaches every device signed in to it.` + (r.drop_new ? ` Replace drops ${plural(r.drop_new, "bookmark")} it gained after the export.` : "") });
+      if (!ok) return;
+      try {
+        const j = await busy(`Writing into ${browserSel.value}… This can take a few minutes for thousands of bookmarks.`, () =>
+          W.call<{ written: { created: number; moved: number; updated: number; removedBookmarks: number; removedFolders: number; backup: string } }>("POST", "writeback/apply", { ...req(), expect, drop_new: r.drop_new }));
+        const w = j.written;
+        toast(`${w.created.toLocaleString()} created, ${w.moved.toLocaleString()} moved, ${w.updated.toLocaleString()} renamed, ${(w.removedBookmarks + w.removedFolders).toLocaleString()} removed. Read back and checked: it holds the plan.`, "success", `Written into ${browserSel.value}`);
+        invalidate(); out.replaceChildren(el("div", "alert alert-success", `${browserSel.value} now holds “${W.workspace.name}”. Its bookmarks as they were are saved: ${w.backup}`));
+      } catch (e) { fail(e); }
+    };
+    showModal("#wsWriteBack");
+  }
+
   W.ui = {
-    history, manage, importer, addFiles, addLinks, updateWs, browserHistory, resetWs, menu, download, toggleLock, backup, restore, extensions, duplicatesCsv, findDuplicates, sortFolders,
+    history, manage, importer, addFiles, addLinks, updateWs, browserHistory, resetWs, menu, download, toggleLock, backup, restore, extensions, writeBack, duplicatesCsv, findDuplicates, sortFolders,
     rename, notes,
   };
   watchRequests();  // an extension asking to connect is answered from wherever the owner is in the page

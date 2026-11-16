@@ -1991,6 +1991,12 @@ function paintScope() {
     ext.onclick = e => { e.preventDefault(); closeDropdowns(); void wsUI().extensions(); };
     m.append(ext);
   }
+  // Write this workspace back into a browser, through its extension: preview, then apply.
+  if (wsUI()?.writeBack) {
+    const wb = el("a", "dropdown-item"); wb.href = "#"; wb.append(icon("ti-upload", "me-2"), "Write back to a browser…");
+    wb.onclick = e => { e.preventDefault(); closeDropdowns(); void wsUI().writeBack(); };
+    m.append(wb);
+  }
   wrap.replaceChildren(b, m);
 }
 // One chosen browser is named ("New Brave Browser window"); none yet, or several at once, reads "browser"
