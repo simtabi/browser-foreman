@@ -32,8 +32,7 @@ interface and an API over them, and tells other programs what changed.
 | `version` | build metadata stamped by the Makefile |
 
 Outside `src/`: `web/` holds the web interface's TypeScript sources and the browser extension's (`web/src/extension`,
-one source built for Chromium, Firefox and Safari); `legacy/` holds the Python implementation the
-project started as, kept for reference and never built; `site/` is the landing page.
+one source built for Chromium, Firefox and Safari); `site/` is the landing page.
 
 ## How a change travels
 

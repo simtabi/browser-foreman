@@ -24,7 +24,7 @@ storage/
 /public/
 *.jsonl
 
-# Python (legacy/)
+# Python (scripts)
 __pycache__/
 *.pyc
 .venv/
