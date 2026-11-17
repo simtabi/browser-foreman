@@ -264,6 +264,9 @@ listed there beyond the plan.
 
 ### Fixed
 
+- Releases carry their notes and mark pre-releases: `src/.goreleaser.yaml` disabled the changelog, which also
+  dropped the CHANGELOG section the shared workflow passes, so v0.1.0-rc.1 published with an empty description, and
+  without `prerelease: auto` an rc tag became the latest release. A test now fails on either.
 - The release workflow could not load: it pinned simtabi/.github's shared go-release.yml to a commit that history
   reset left on no branch, so GitHub answered "workflow was not found" on every push. It now pins `v0.1.1`.
 - The welcome message no longer says "0 more wait in the Trash" when the Trash is empty.
