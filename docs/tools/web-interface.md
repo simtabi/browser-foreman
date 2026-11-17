@@ -23,7 +23,8 @@ save is refused and the page offers *Reload* or *Keep my change*, so nothing is 
 read-only.
 
 Settings (`,`) holds the page's own preferences and, under *Server settings*, the server's config files and `.env`:
-AI provider and keys, notifications, webhooks, MCP and more, grouped as the files are
+AI first (choose who answers AI jobs, then that provider's key and a model from its own list), then notifications,
+webhooks, MCP and more, each a folded group that shows its current values
 ([editing from the page](../configuration.md#editing-from-the-page)).
 
 ## The layout

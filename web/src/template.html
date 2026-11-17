@@ -546,6 +546,14 @@ body.no-tree-thumbs .bm-fav { position: static; padding: 0; box-shadow: none; ba
 .set-help { font-size: .8125rem; color: var(--tblr-secondary); }
 .set-row > :last-child { flex: none; }
 .set-danger .set-title { color: var(--tblr-danger); }
+.set-collapse > summary { list-style: none; cursor: pointer; }
+.set-collapse > summary::-webkit-details-marker { display: none; }
+.set-collapse > summary .set-chev { color: var(--tblr-secondary); transition: transform .15s; align-self: center; }
+.set-collapse[open] > summary { margin-bottom: .35rem; }
+.set-collapse[open] > summary .set-chev { transform: rotate(90deg); }
+.set-collapse > summary .set-title { min-width: auto; }
+.set-nested { border-color: var(--tblr-border-color) !important; }
+@media (prefers-reduced-motion: reduce) { .set-collapse > summary .set-chev { transition: none; } }
 body.no-tree-thumbs #list .th { display: none !important; }
 body.no-tree-desc #list .bm-desc { display: none !important; }
 body.no-tree-dates #list .bm-date { display: none !important; }
