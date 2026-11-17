@@ -51,6 +51,24 @@ and connects only to the server it already uses, or, while it is not connected, 
 page on another port cannot take a connected extension away, and no page can reach the popup's own actions
 (pairing codes, writes, disconnecting).
 
+**One connected copy per browser** (0.1.7 and later). Two copies can call themselves the same browser on one
+computer: your own Chrome, and another Chrome (one an assistant drives, say). Each copy makes an id of its own when
+it is installed, and the server connects one copy per browser name:
+
+- approving a copy (or pairing it with a code) pins it, saved with the server's settings, and revokes the other copies'
+  keys; a revoked copy is told so and stops asking by itself, so the two never race for one identity;
+- a request from a second copy says so, *Google Chrome (copy b2c4) asks to connect*, with a warning that approving
+  it disconnects the copy connected now;
+- *Browser extensions…* shows which copy is connected and, when the page runs in another copy of that browser,
+  **Use this browser** moves it to the copy the page is open in;
+- while one copy is connected, another copy does not ask by itself (the server refuses it, and it stops); pressing
+  Connect in that copy's popup, or **Use this browser**, still asks, on purpose;
+- with strict approvals, a request prompts only in Browser Foreman open in the very copy that asks, not in every
+  page of a browser with the same name.
+
+Reloading or updating the extension cuts it off from pages already open; *Browser extensions…* then says to reload
+the page, with a button.
+
 The prompt offers **Connect**, **Deny** and **Not now**. Not now (or Escape) decides nothing: the request keeps
 waiting, the prompt does not come back for it, and you can still approve it in *Browser extensions…* or from a
 terminal until it expires.

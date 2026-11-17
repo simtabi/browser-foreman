@@ -10,6 +10,11 @@ ships.
 
 ### Added
 
+- Extension 0.1.7: one connected copy per browser. Each installed copy makes an id of its own; approving a copy (or
+  pairing it by code) pins it in the server's settings (`extension_pins`) and revokes the other copies of that
+  browser, which stop asking. Two Chromes on one computer, your own and another, no longer race for one identity,
+  commands and tab reports. Requests and the Browser extensions dialog name each copy, warn when approving one
+  replaces another, and offer **Use this browser** to pin the copy the page is open in.
 - Extension 0.1.6 and *Browser extensions…*: the page now asks the extension in its own browser directly whether it
   is installed and connected, every few seconds while the dialog is open, and **Connect** pairs it in one click (the
   extension asks; the page approves that very request). A disconnected or denied extension, which no longer asks by
@@ -244,6 +249,11 @@ ships.
 
 ### Fixed
 
+- Extension 0.1.8: with two copies of one browser open, both pages prompted for both copies' requests, and the copy
+  not connected kept asking. The server now refuses a second copy asking by itself while another is connected (it
+  stops; Connect in its popup or **Use this browser** still asks), and with strict approvals a request prompts only
+  in the page open in the copy that asks. A page opened before the extension was reloaded no longer throws
+  "Extension context invalidated": it is told to reload, and the dialog offers **Reload page**.
 - Extension 0.1.5: chrome://extensions no longer lists "Uncaught (in promise) Error: No SW". Background jobs (the
   minute alarm, startup, tab changes) ran unawaited, so when Chrome stopped or replaced the service worker mid-job
   (a reload, an update) the error escaped. Every such job now goes through one guard that drops that case and keeps

@@ -111,6 +111,20 @@ ok(/on this computer/.test(C.connectRefusal("https://evil.example", "http://127.
 ok(C.messageAllowed(true, "page-hello") && C.messageAllowed(true, "page-connect"), "a page's two requests");
 ok(!C.messageAllowed(true, "pair") && !C.messageAllowed(true, "apply") && !C.messageAllowed(true, "unpair") && !C.messageAllowed(true, undefined), "nothing else from a page");
 ok(!C.messageAllowed(false, "page-connect") && C.messageAllowed(false, "status"), "the popup keeps its own, not the bridge's");
+// Each installed copy has its own id, so two copies of one browser are told apart.
+{
+  let k = 0; const fixed = n => Uint8Array.from({ length: n }, () => k++);
+  eq(C.newInstance(fixed), "000102030405060708090a0b0c0d0e0f", "32 hex characters from 16 random bytes");
+  ok(C.newInstance() !== C.newInstance(), "two copies, two ids");
+}
+// The bridge in a page opened before a reload is cut off: sendMessage throws at once ("Extension context
+// invalidated"), so the call must be inside a try, not only followed by .catch.
+{
+  const { readFileSync } = await import("node:fs");
+  const br = readFileSync(join(here, "..", "extension", "bridge.ts"), "utf8");
+  ok(/try\s*\{\s*sent = ext\.runtime\.sendMessage/.test(br), "the bridge's sendMessage is guarded by try");
+  ok(/stale: true/.test(br), "and it tells the page to reload");
+}
 // A stopped or replaced service worker is not an error to show (chrome://extensions › Errors listed "No SW").
 ok(C.workerGone("No SW"), "Chrome's own words");
 ok(C.workerGone("Error: Extension context invalidated."), "the context is gone");

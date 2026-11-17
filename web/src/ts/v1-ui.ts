@@ -10,7 +10,7 @@ import { DataTable, avatar, by, nameCell } from "./datatable";
 import { RangePicker } from "./rangepick";
 import { lookPicker, wsBadge } from "./wslook";
 import { busy } from "./busy";
-import { extensionConnect, extensionHello, type ExtensionHello } from "./bridge";
+import { bridgeStale, extensionConnect, extensionHello, type ExtensionHello } from "./bridge";
 import { type DGroup, startsTicked, trashOps } from "./dupes";
 import { version as EXT_VERSION } from "../../package.json";  // the extension's manifest takes the same version
 
@@ -607,11 +607,12 @@ function install(W: V1): void {
   // Browser extension: the supported browsers first (the five major ones always shown, with whether each is on this
   // computer and connected, and how to install it there), then the pairing code, then the connected browsers.
   // Reached from the Browsers menu, beside Browsers and access (it was in the workspace menu until 2026-11-13).
-  type Ext = { id: string; name: string; created: string; last_used?: string };
+  type Ext = { id: string; name: string; created: string; last_used?: string; instance?: string };
   // What the server knows (GET extension/guide): which build each installed browser takes, whether it is built, its
   // extensions page; and each extension's last reported version.
   type Guide = { browsers: { browser: string; target: "chromium" | "firefox" | "safari"; page: string; built: boolean }[]; seen: Record<string, { version: string; at: string }> };
-  type Waiting = { id: string; browser: string; version: string; match: string; expires: string };
+  // instance: the asking copy's short id; replaces: the connected copy of the same browser that approving it disconnects.
+  type Waiting = { id: string; browser: string; version: string; match: string; expires: string; instance?: string; replaces?: string };
   const EXT_MAJOR = ["Google Chrome", "Microsoft Edge", "Firefox", "Safari", "Brave Browser"];
   const extSteps = (target: string | undefined, page: string): [string, string?][] => {
     if (target === "firefox") return [["Open about:debugging, then This Firefox", page], ["Click Load Temporary Add-on…"],
@@ -638,7 +639,14 @@ function install(W: V1): void {
     return browserName(navigator.userAgent, (nav.userAgentData?.brands ?? []).map(b => b.brand), !!nav.brave);
   })();
   /** Settings › Browser extensions: strict approves a browser only from a page open in that same browser; loose, from any. */
-  const approvableHere = (q: Waiting): boolean => document.documentElement.dataset.extApprove === "loose" || q.browser === pageBrowser;
+  // The copy of the browser this page runs in, as its extension says through the bridge (null: none answers). Two
+  // copies of one browser share its name, so strict approval matches the copy, not just the name.
+  let pageCopy: string | null = null;
+  const learnCopy = (h: ExtensionHello | null) => { pageCopy = h?.instance ?? null; };
+  // Where a request can be approved, in words: the asking copy when two copies share the browser's name.
+  const approveWhere = (q: Waiting): string => q.instance ? `the copy of ${q.browser} that asks (copy ${q.instance})` : q.browser;
+  const approvableHere = (q: Waiting): boolean => document.documentElement.dataset.extApprove === "loose" ||
+    (q.browser === pageBrowser && (q.instance ? q.instance === pageCopy : true));
   /** Approve or deny a request; one that already expired or was answered elsewhere says so plainly. */
   async function sendAnswer(q: Waiting, ok: boolean): Promise<void> {
     answered.add(q.id);
@@ -661,6 +669,7 @@ function install(W: V1): void {
     const tick = async () => {
       if (document.hidden || asking) return;
       let list: Waiting[];
+      learnCopy(await extensionHello());
       try { list = (await W.call<{ requests: Waiting[] }>("GET", "extension/requests")).requests; }
       catch { watching = false; clearInterval(timer); return; }  // not the owner (or the server is gone): stop asking
       const q = list.find(x => !answered.has(x.id) && approvableHere(x)); if (!q) return; // strict: only this browser's own
@@ -708,15 +717,31 @@ function install(W: V1): void {
       if (withLater) { const later = el("button", "btn btn-ghost-secondary" + sz); later.type = "button"; later.textContent = "Not now"; later.onclick = () => { snoozed.add(q.id); answered.add(q.id); paintAsks(); }; out.push(later); }
       const no = el("button", "btn" + sz); no.type = "button"; no.textContent = "Deny"; no.onclick = decide(q, false);
       const yes = el("button", "btn btn-primary" + sz); yes.type = "button"; yes.append(icon("ti-plug-connected", "me-1"), "Connect"); yes.onclick = decide(q, true);
-      if (!approvableHere(q)) { yes.disabled = true; yes.dataset.tip = `Open Browser Foreman in ${q.browser} to approve it (Settings › Browser extensions)`; }
+      if (!approvableHere(q)) { yes.disabled = true; yes.dataset.tip = `Open Browser Foreman in ${approveWhere(q)} to approve it (Settings › Browser extensions)`; }
       out.push(no, yes); return out;
     };
     const paintAsks = () => {
-      asks.replaceChildren(...waiting.filter(q => !snoozed.has(q.id)).map(q => {
+      // The extension was reloaded since this page opened: it can no longer be reached from here until a reload.
+      const staleCard: HTMLElement[] = [];
+      if (bridgeStale) {
         const card = el("div", "ext-ask"), txt = el("div", "ext-ask-text");
-        txt.append(el("div", "fw-semibold", `${q.browser} asks to connect`),
+        txt.append(el("div", "fw-semibold", "Reload this page to reach the extension"),
+          el("div", "small text-secondary", `${pageBrowser}'s extension was reloaded or updated since this page opened, so the two are cut off until the page reloads.`));
+        const b = el("button", "btn btn-sm btn-primary"); b.type = "button"; b.append(icon("ti-refresh", "me-1"), "Reload page"); b.onclick = () => location.reload();
+        const acts = el("div", "ext-ask-acts"); acts.append(b);
+        card.append(icon("browser:" + pageBrowser, "ext-ico"), txt, acts);
+        staleCard.push(card);
+      }
+      asks.replaceChildren(...staleCard, ...waiting.filter(q => !snoozed.has(q.id)).map(q => {
+        const card = el("div", "ext-ask"), txt = el("div", "ext-ask-text");
+        // Two copies of one browser (your Chrome, and another Chrome on this computer) ask under the same name: say
+        // which copy this is, whether it is the one this page runs in, and what approving it disconnects.
+        const ours = !!live && live.browser === q.browser && !!q.instance && live.instance === q.instance;
+        const copy = q.instance ? ` (copy ${q.instance}${ours ? ", the one this page is open in" : live && live.browser === q.browser ? ", not the one this page is open in" : ""})` : "";
+        txt.append(el("div", "fw-semibold", `${q.browser}${copy} asks to connect`),
           el("div", "small text-secondary", approvableHere(q) ? "Connect only if the extension's toolbar icon (or its popup) shows these same letters. Not you? Deny it."
-            : `To approve it, open Browser Foreman in ${q.browser} (approvals are strict: Settings › Browser extensions). You can still deny it here.`));
+            : `To approve it, open Browser Foreman in ${approveWhere(q)} (approvals are strict: Settings › Browser extensions). You can still deny it here.`));
+        if (q.replaces) txt.append(el("div", "small text-warning", `Copy ${q.replaces} of ${q.browser} is connected now. Approving this one moves ${q.browser} here and disconnects copy ${q.replaces}: only one copy of a browser is connected at a time.`));
         const letters = lettersWithCopy(q.match);
         const acts = el("div", "ext-ask-acts");
         acts.append(...answerButtons(q, true, true)); // body actions are small, as in every row
@@ -738,8 +763,10 @@ function install(W: V1): void {
       const heard = c?.last_used && !c.last_used.startsWith("0001") ? `heard from ${fmtDate(Date.parse(c.last_used) / 1000)}` : "";
       const pill = (cls: string, text: string) => { const p = el("span", "ext-pill " + cls); p.append(el("span", "ext-pill-dot"), text); return p; };
       const meta = el("div", "ext-meta");
-      if (c) meta.append(pill(old ? "is-warn" : "is-ok", old ? `Connected · update to ${EXT_VERSION}` : "Connected"),
-        ...[seen?.version ? `version ${seen.version}` : "", heard].filter(Boolean).map(t => el("span", "ext-meta-text", t)));
+      // Which copy is connected: the one this page runs in, or another copy of the same browser on this computer.
+      const thisCopy = !!c && !!lv && !!c.instance && lv.instance === c.instance, otherCopy = !!c && !!lv && !!c.instance && lv.instance !== c.instance;
+      if (c) meta.append(pill(old ? "is-warn" : otherCopy ? "is-warn" : "is-ok", old ? `Connected · update to ${EXT_VERSION}` : otherCopy ? `Another copy is connected (${c.instance})` : "Connected"),
+        ...[thisCopy ? "this browser" : "", c.instance && !otherCopy ? `copy ${c.instance}` : "", seen?.version ? `version ${seen.version}` : "", heard].filter(Boolean).map(t => el("span", "ext-meta-text", t)));
       else if (asking) meta.append(pill("is-ask", "Asking to connect"));
       else if (elsewhere) meta.append(pill("is-warn", `Extension ${lv!.version} · connected to ${lv!.server}`));
       else if (lv) meta.append(pill("is-idle", `Extension ${lv.version} installed · ready to connect`));
@@ -748,7 +775,13 @@ function install(W: V1): void {
       main.append(icon("browser:" + name, "ext-ico"), who);
       // The one next step for this browser.
       const act = el("div", "ext-row-act");
-      if (c && old) {
+      if (otherCopy && !asking) {
+        // The page's own copy is not the connected one: pin it, which disconnects the other.
+        const b = el("button", "btn btn-sm btn-primary"); b.type = "button"; b.append(icon("ti-pin", "me-1"), "Use this browser");
+        b.dataset.tip = `Connect the copy of ${name} this page is open in (${lv!.instance}) and disconnect copy ${c!.instance}`;
+        b.onclick = connectHere(name);
+        act.append(b);
+      } else if (c && old) {
         const b = el("button", "btn btn-sm btn-warning"); b.type = "button"; b.append(icon("ti-refresh", "me-1"), "Update");
         b.dataset.tip = "The extension reloads itself and reads the new build";
         b.onclick = async () => { try { await W.call("POST", "extension/commands", { browser: name, kind: "reload" }); toast(`${name}'s extension is reloading.`, "success"); setTimeout(() => void load(), 4000); } catch (e) { fail(e); } };
@@ -852,7 +885,7 @@ function install(W: V1): void {
         const expires = new Date(q.expires).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         connection.push({ state: "problem", title: "Approve the connection", detail: [note(approvableHere(q)
           ? `Connect only if the extension's toolbar icon shows ${q.match.split("").join(" ")} too. It waits until ${expires}.`
-          : `Open Browser Foreman in ${name} to approve it: approvals are strict (Settings › Browser extensions). It waits until ${expires}.`), row] });
+          : `Open Browser Foreman in ${approveWhere(q)} to approve it: approvals are strict (Settings › Browser extensions). It waits until ${expires}.`), row] });
       } else if (f.live && f.live.paired && !f.live.here) {
         connection.push({ state: "problem", title: `Connected to another Browser Foreman`, detail: [note(`The extension uses ${f.live.server}. To use this one instead, disconnect it there (or in its popup), then press Connect here.`)] });
       } else if (f.live) {
@@ -926,7 +959,7 @@ function install(W: V1): void {
     };
     body.append(codeBox);
     const load = async () => {
-      live = await extensionHello();
+      live = await extensionHello(); learnCopy(live);
       const [ext, br, gd, rq] = await Promise.allSettled([W.call<{ extensions: Ext[] }>("GET", "extension/status"), W.call<{ installed?: { name: string }[] }>("GET", "browsers"),
         W.call<Guide>("GET", "extension/guide"), W.call<{ requests: Waiting[] }>("GET", "extension/requests")]);
       connected = ext.status === "fulfilled" ? ext.value.extensions : [];

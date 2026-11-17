@@ -125,8 +125,10 @@ func (s *Server) localAccount(ctx context.Context) error {
 // the sign-in limiter, so codes cannot be guessed.
 func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Code    string `json:"code"`
-		Browser string `json:"browser"`
+		Code     string `json:"code"`
+		Browser  string `json:"browser"`
+		Instance string `json:"instance"`
+		Version  string `json:"version"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -139,8 +141,8 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Browser = strings.TrimSpace(in.Browser)
-	if in.Browser == "" || len(in.Browser) > 60 {
-		writeErr(w, 400, "browser: 1 to 60 characters")
+	if in.Browser == "" || len(in.Browser) > 60 || len(in.Instance) > 64 || len(in.Version) > 30 {
+		writeErr(w, 400, "browser: 1 to 60 characters; instance: at most 64; version: at most 30")
 		return
 	}
 	code := strings.ToUpper(strings.TrimSpace(in.Code))
@@ -162,7 +164,13 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	_, _ = s.Bus.Publish("extension.paired", map[string]any{"browser": in.Browser, "token": id})
+	revoked, err := s.pinExtension(r.Context(), in.Browser, strings.TrimSpace(in.Instance), strings.TrimSpace(in.Version), id)
+	if err != nil {
+		_ = s.Data.RevokeToken(r.Context(), id)
+		writeErr(w, 500, err.Error())
+		return
+	}
+	_, _ = s.Bus.Publish("extension.paired", map[string]any{"browser": in.Browser, "token": id, "instance": shortInstance(in.Instance), "replaced": revoked})
 	writeJSON(w, 201, map[string]any{"token": secret, "id": id, "browser": in.Browser})
 }
 
@@ -387,10 +395,23 @@ func (s *Server) extensionStatus(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	out := []tokenOut{}
+	pins, err := s.livePins(r.Context())
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	type extOut struct {
+		tokenOut
+		Instance string `json:"instance,omitempty"` // the connected copy, when it said (0.1.7 and later)
+	}
+	out := []extOut{}
 	for _, t := range all {
 		if strings.HasPrefix(t.Name, extPrefix) {
-			out = append(out, tokenOut{t.ID, t.User, t.Name, t.Created, t.LastUsed})
+			x := extOut{tokenOut: tokenOut{t.ID, t.User, t.Name, t.Created, t.LastUsed}}
+			if pin, ok := pins[strings.TrimPrefix(t.Name, extPrefix)]; ok && pin.Token == t.ID {
+				x.Instance = shortInstance(pin.Instance)
+			}
+			out = append(out, x)
 		}
 	}
 	writeJSON(w, 200, map[string]any{"extensions": out})

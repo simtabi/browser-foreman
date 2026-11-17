@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 // Prefs are the owner's choices about browsers and tabs, kept with the data (not in the config files, which hold the
@@ -47,8 +48,21 @@ type Prefs struct {
 	// ActiveWorkspace is the workspace last opened, which background snapshots are saved for.
 	TabsOwn         []string `json:"tabs_own,omitempty"`
 	ActiveWorkspace string   `json:"active_workspace,omitempty"`
+	// ExtensionPins say which installed copy of each browser's extension is the connected one, by browser name: two
+	// copies calling themselves "Google Chrome" (your Chrome, and another Chrome on this computer) otherwise race
+	// for one identity. Set when a copy is approved; the others' keys are revoked then.
+	ExtensionPins map[string]ExtensionPin `json:"extension_pins,omitempty"`
 	// SmartFolders are saved searches: a name over a Show filter and search text.
 	SmartFolders []SmartFolder `json:"smart_folders,omitempty"`
+}
+
+// ExtensionPin is the copy of one browser's extension that is connected: its instance id (made once by that copy),
+// the key it was given, and its version and when it was approved.
+type ExtensionPin struct {
+	Instance string    `json:"instance"`
+	Token    string    `json:"token"`
+	Version  string    `json:"version,omitempty"`
+	At       time.Time `json:"at"`
 }
 
 // SmartFolder is one saved search. Workspace limits it to one workspace; empty shows it in every one.
@@ -100,6 +114,14 @@ func (p Prefs) Validate() error {
 		return errors.New("snapshot_wait_seconds: 1 to 30")
 	case p.SnapshotDir != "" && (!filepath.IsAbs(p.SnapshotDir) || len(p.SnapshotDir) > 1024 || filepath.Clean(p.SnapshotDir) != p.SnapshotDir):
 		return errors.New("snapshot_dir: a full path to a folder (or empty for the default)")
+	}
+	if len(p.ExtensionPins) > 50 {
+		return errors.New("extension_pins: at most 50")
+	}
+	for b, pin := range p.ExtensionPins {
+		if b == "" || len(b) > 60 || len(pin.Instance) > 64 || len(pin.Token) > 64 {
+			return fmt.Errorf("extension pin %q: a browser of 1 to 60 characters, an instance and token of at most 64", b)
+		}
 	}
 	if len(p.SmartFolders) > 50 {
 		return errors.New("smart_folders: at most 50")

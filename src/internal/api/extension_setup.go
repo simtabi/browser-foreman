@@ -41,6 +41,7 @@ type pairRequest struct {
 	ID       string
 	Browser  string
 	Version  string
+	Instance string // the asking copy's own id (made once by it); "" from extensions before 0.1.7
 	Match    string
 	pollHash string
 	Created  time.Time
@@ -94,16 +95,31 @@ func (s *Server) requestPairing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Browser string `json:"browser"`
-		Version string `json:"version"`
+		Browser  string `json:"browser"`
+		Version  string `json:"version"`
+		Instance string `json:"instance"`
+		// Replace says the owner pressed Connect in this copy (its popup, or Use this browser in the page): it may ask
+		// although another copy of its browser is connected. Asking by itself, it may not, so two copies never race.
+		Replace bool `json:"replace"`
 	}
 	if !decode(w, r, &in) {
 		return
 	}
-	in.Browser, in.Version = strings.TrimSpace(in.Browser), strings.TrimSpace(in.Version)
-	if in.Browser == "" || len(in.Browser) > 60 || len(in.Version) > 30 {
-		writeErr(w, 400, "browser: 1 to 60 characters; version: at most 30")
+	in.Browser, in.Version, in.Instance = strings.TrimSpace(in.Browser), strings.TrimSpace(in.Version), strings.TrimSpace(in.Instance)
+	if in.Browser == "" || len(in.Browser) > 60 || len(in.Version) > 30 || len(in.Instance) > 64 {
+		writeErr(w, 400, "browser: 1 to 60 characters; version: at most 30; instance: at most 64")
 		return
+	}
+	if in.Instance != "" && !in.Replace {
+		pins, err := s.livePins(r.Context())
+		if err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		if pin, ok := pins[in.Browser]; ok && pin.Instance != in.Instance {
+			writeErr(w, http.StatusConflict, fmt.Sprintf("another copy of %s (%s) is connected; to use this copy instead, press Connect in its popup, or Use this browser in Browser Foreman", in.Browser, shortInstance(pin.Instance)))
+			return
+		}
 	}
 	now := s.Now()
 	key := "pairreq:" + clientKey(r)
@@ -117,7 +133,7 @@ func (s *Server) requestPairing(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	q := &pairRequest{ID: "rq_" + newID()[3:], Browser: in.Browser, Version: in.Version, Match: newMatch(),
+	q := &pairRequest{ID: "rq_" + newID()[3:], Browser: in.Browser, Version: in.Version, Instance: in.Instance, Match: newMatch(),
 		pollHash: auth.HashSecret(poll), Created: now.UTC(), Expires: now.Add(requestTTL), State: "pending"}
 	s.ext.mu.Lock()
 	s.ext.init()
@@ -178,14 +194,25 @@ func (s *Server) pollPairing(w http.ResponseWriter, r *http.Request) {
 }
 
 // listPairingRequests shows the owner what is waiting, with each match code.
-func (s *Server) listPairingRequests(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) listPairingRequests(w http.ResponseWriter, r *http.Request) {
+	pins, err := s.livePins(r.Context())
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
 	s.ext.mu.Lock()
 	s.ext.init()
 	s.ext.prune(s.Now())
 	out := []map[string]any{}
 	for _, q := range s.ext.requests {
 		if q.State == "pending" {
-			out = append(out, map[string]any{"id": q.ID, "browser": q.Browser, "version": q.Version, "match": q.Match, "created": q.Created, "expires": q.Expires})
+			x := map[string]any{"id": q.ID, "browser": q.Browser, "version": q.Version, "match": q.Match, "created": q.Created, "expires": q.Expires,
+				"instance": shortInstance(q.Instance)}
+			// Another copy of this browser is the connected one: approving this one moves the browser here.
+			if pin, ok := pins[q.Browser]; ok && pin.Instance != q.Instance {
+				x["replaces"] = shortInstance(pin.Instance)
+			}
+			out = append(out, x)
 		}
 	}
 	s.ext.mu.Unlock()
@@ -218,8 +245,17 @@ func (s *Server) answerPairing(approve bool) http.HandlerFunc {
 				writeErr(w, 500, err.Error())
 				return
 			}
+			revoked, err := s.pinExtension(r.Context(), q.Browser, q.Instance, q.Version, id)
+			if err != nil {
+				_ = s.Data.RevokeToken(r.Context(), id) // half-done: no key without its pin
+				s.ext.mu.Lock()
+				q.State = "pending"
+				s.ext.mu.Unlock()
+				writeErr(w, 500, err.Error())
+				return
+			}
 			state, token = "approved", secret
-			_, _ = s.Bus.Publish("extension.paired", map[string]any{"browser": q.Browser, "token": id})
+			_, _ = s.Bus.Publish("extension.paired", map[string]any{"browser": q.Browser, "token": id, "instance": shortInstance(q.Instance), "replaced": revoked})
 		}
 		s.ext.mu.Lock()
 		q.State, q.token = state, token

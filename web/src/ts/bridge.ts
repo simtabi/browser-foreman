@@ -10,6 +10,7 @@ export interface ExtensionHello {
   installed: true;
   version: string;
   browser: string;   // the extension's own name for this browser ("Google Chrome")
+  instance: string;  // this copy's short id: two copies of one browser on this computer differ here
   paired: boolean;   // connected to some Browser Foreman
   server: string;    // the one it uses
   here: boolean;     // connected to this page's server
@@ -18,13 +19,15 @@ export interface ExtensionHello {
 }
 
 let seq = 0;
+/** True once the bridge in this page said it is cut off from its extension (reloaded since the page opened). */
+export let bridgeStale = false;
 function ask(kind: "hello" | "connect", timeoutMs: number): Promise<{ ok: boolean; result?: unknown; error?: string } | null> {
   return new Promise(resolve => {
     const id = `b${Date.now()}-${++seq}`;
     const done = (v: { ok: boolean; result?: unknown; error?: string } | null) => { window.removeEventListener("message", on); clearTimeout(t); resolve(v); };
     const on = (e: MessageEvent) => {
-      const m = e.data as { brofo?: string; id?: string; ok?: boolean; result?: unknown; error?: string } | null;
-      if (e.source === window && m?.brofo === "answer" && m.id === id) done({ ok: !!m.ok, result: m.result, error: m.error });
+      const m = e.data as { brofo?: string; id?: string; ok?: boolean; result?: unknown; error?: string; stale?: boolean } | null;
+      if (e.source === window && m?.brofo === "answer" && m.id === id) { if (m.stale) bridgeStale = true; else if (m.ok) bridgeStale = false; done({ ok: !!m.ok, result: m.result, error: m.error }); }
     };
     const t = setTimeout(() => done(null), timeoutMs);
     window.addEventListener("message", on);

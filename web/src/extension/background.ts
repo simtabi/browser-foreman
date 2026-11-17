@@ -2,12 +2,20 @@
 // waits for the server's commands (open links, open a tab group, read the bookmarks), and carries out what the popup asks.
 
 import { ext, type ExtBookmark } from "./ext";
-import { browserName, Client, connectRefusal, connectStep, extFingerprint, groupColor, isLoopback, messageAllowed, tabReport, webOnly, workerGone, type Command } from "./core";
+import { browserName, Client, connectRefusal, connectStep, extFingerprint, groupColor, isLoopback, messageAllowed, newInstance, tabReport, webOnly, workerGone, type Command } from "./core";
 import { plan, run, type WsNode } from "./apply";
 
 interface Settings { server?: string; token?: string; browser?: string }
 const VERSION = (): string => ext.runtime.getManifest().version;
 
+// This copy's own id, made once and kept: the server pins one copy per browser name with it.
+async function instanceId(): Promise<string> {
+  const st = await ext.storage.local.get(["instance"]);
+  if (typeof st.instance === "string" && st.instance) return st.instance;
+  const id = newInstance();
+  await ext.storage.local.set({ instance: id });
+  return id;
+}
 const settings = async (): Promise<Settings> => ext.storage.local.get(["server", "token", "browser"]) as Promise<Settings>;
 const thisBrowser = (): string => {
   const nav = navigator as Navigator & { userAgentData?: { brands: { brand: string }[] }; brave?: unknown };
@@ -125,7 +133,12 @@ async function autoConnect(): Promise<void> {
       case "wait": await settle(st.asking).catch(() => {}); break;
       case "ask": {
         const server = s.server ?? DEFAULT_SERVER;
-        const req = await Client.request(server, thisBrowser(), VERSION(), (u, i) => fetch(u, i)).catch(() => null); // not running: next minute
+        const req = await Client.request(server, thisBrowser(), VERSION(), (u, i) => fetch(u, i), await instanceId()).catch(async (e: unknown) => {
+          // Another copy of this browser is the connected one: stop asking by itself, so the two never race. Connect
+          // in the popup (or Use this browser in the page) still asks, on purpose.
+          if ((e as { status?: number }).status === 409) await ext.storage.local.set({ declined: true, lastError: String((e as Error).message) });
+          return null; // not running: next minute
+        });
         if (req) { await ext.storage.local.set({ asking: { server, ...req } }); await badge(req.match); }
         break;
       }
@@ -182,14 +195,14 @@ async function handle(msg: any): Promise<unknown> {
     }
     case "pair": {
       const browser = thisBrowser();
-      const token = await Client.pair(msg.server, msg.code, browser, (u, i) => fetch(u, i));
+      const token = await Client.pair(msg.server, msg.code, browser, (u, i) => fetch(u, i), await instanceId(), VERSION());
       await ext.storage.local.set({ server: new URL(msg.server).origin, token, browser });
       background(report); background(poll);
       return { paired: true, browser };
     }
     case "ask": { // Connect pressed: ask now (again, even after a no), then wait for the owner's answer
       const server = new URL(msg.server).origin, browser = thisBrowser();
-      const req = await Client.request(server, browser, VERSION(), (u, i) => fetch(u, i));
+      const req = await Client.request(server, browser, VERSION(), (u, i) => fetch(u, i), await instanceId(), true); // Connect pressed: may replace another copy
       await ext.storage.local.set({ asking: { server, ...req }, unanswered: 0 });
       await ext.storage.local.remove(["declined"]);
       await badge(req.match);
@@ -235,13 +248,17 @@ async function handlePage(kind: string, origin: string): Promise<unknown> {
   const asking = st.asking as { server: string; match: string } | undefined;
   const same = (a: string) => { try { return new URL(a).origin === new URL(origin).origin; } catch { return false; } };
   if (kind === "page-hello") {
-    return { installed: true, version: VERSION(), browser: thisBrowser(), paired: !!s.token, server: new URL(server).origin,
+    return { installed: true, version: VERSION(), browser: thisBrowser(), instance: (await instanceId()).slice(0, 4), paired: !!s.token, server: new URL(server).origin,
       here: !!s.token && same(server), asking: asking && same(asking.server) ? asking.match : "", declined: !!st.declined };
   }
   const why = connectRefusal(origin, server, !!s.token);
   if (why) throw new Error(why);
-  if (s.token && same(server)) return { connected: true };
-  const req = await Client.request(origin, thisBrowser(), VERSION(), (u, i) => fetch(u, i));
+  if (s.token && same(server)) {
+    // Connected here, it believes: check its key still works (another copy may have been pinned, revoking it).
+    try { await new Client(origin, s.token, (u, i) => fetch(u, i)).workspaces(); return { connected: true }; } // a read: takes no queued command
+    catch (e) { await unpairedIf(e); if ((e as { status?: number }).status !== 401) throw e; }
+  }
+  const req = await Client.request(origin, thisBrowser(), VERSION(), (u, i) => fetch(u, i), await instanceId(), true); // asked from the page: may replace another copy
   await ext.storage.local.set({ asking: { server: origin, ...req }, unanswered: 0 });
   await ext.storage.local.remove(["declined"]);
   await badge(req.match);

@@ -47,20 +47,20 @@ export type Fetch = (url: string, init?: { method?: string; headers?: Record<str
 export class Client {
   constructor(private readonly server: string, private readonly token: string, private readonly fetch: Fetch) {}
 
-  static async pair(server: string, code: string, browser: string, fetch: Fetch): Promise<string> {
+  static async pair(server: string, code: string, browser: string, fetch: Fetch, instance = "", version = ""): Promise<string> {
     const r = await fetch(`${checkServer(server)}/api/v1/extension/pair`, { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: code.trim(), browser }) });
+      body: JSON.stringify({ code: code.trim(), browser, instance, version }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error ?? `the server answered ${r.status}`);
     return j.token as string;
   }
 
   /** One-click pairing, step one: ask to connect. The owner approves in Browser Foreman, comparing `match`. */
-  static async request(server: string, browser: string, version: string, fetch: Fetch): Promise<PairRequest> {
+  static async request(server: string, browser: string, version: string, fetch: Fetch, instance = "", replace = false): Promise<PairRequest> {
     const r = await fetch(`${checkServer(server)}/api/v1/extension/requests`, { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ browser, version }) });
+      body: JSON.stringify({ browser, version, instance, replace }) });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error ?? `the server answered ${r.status}`);
+    if (!r.ok) throw Object.assign(new Error(j.error ?? `the server answered ${r.status}`), { status: r.status });
     return { id: j.id, poll: j.poll, match: j.match, expires: j.expires };
   }
 
@@ -164,4 +164,10 @@ export function connectRefusal(origin: string, server: string, paired: boolean):
 export function messageAllowed(fromPage: boolean, kind: unknown): boolean {
   const bridge = kind === "page-hello" || kind === "page-connect";
   return fromPage === bridge;
+}
+
+/** A new instance id: random, made once by each installed copy and kept in its storage, so two copies that call
+ *  themselves the same browser ("Google Chrome" twice on one computer) are told apart. */
+export function newInstance(rand: (n: number) => Uint8Array = n => crypto.getRandomValues(new Uint8Array(n))): string {
+  return Array.from(rand(16), b => b.toString(16).padStart(2, "0")).join("");
 }
