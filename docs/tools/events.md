@@ -65,7 +65,12 @@ of that buffer, the stream starts with `: some events were missed; reload the st
 | `tabs.purged` | `{level, snapshots, windows}` |
 | `links.opened` | `{count, how, browsers, ok}`; never the links |
 | `preferences.updated` | `{open_with, autosave}` |
-| `extension.paired` | `{browser, token}` (the token's id, never the secret) |
+| `extension.requested` | an extension asked to connect: `{browser, request}` |
+| `extension.paired` | `{browser, token, instance, replaced}`: the token's id (never the secret), the connected copy's short id, and how many other copies' keys were revoked |
+| `snapshots.finished` | a page snapshot job ended: `{job, workspace, done, failed, state}` |
+| `ai.jobs.created` | `{workspace, kind, jobs}` |
+| `ai.job.done` | `{id, workspace, kind, by, applied}`: answered, checked, and applied when the job said so |
+| `ai.job.failed` | `{id, workspace, error}` |
 | `linkcheck.scheduled` | a scheduled re-check started: `{workspace, due}` |
 
 ---

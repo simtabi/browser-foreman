@@ -61,7 +61,7 @@ With writes on (see [MCP](mcp.md)), an assistant has three tools and a prompt fo
 |---|---|
 | `next_ai_jobs` | takes up to five waiting jobs for 15 minutes, with the JSON each is answered with |
 | `submit_ai_results` | answers one job |
-| `run_ai_jobs` | answers waiting jobs with the assistant's own model through MCP sampling, when the client offers it |
+| `run_ai_jobs` | answers waiting jobs with the assistant's own model through MCP sampling, when the client offers it. MCP deprecated sampling in protocol version 2026-07-28 (SEP-2577); it keeps working for at least twelve months. `next_ai_jobs` and `submit_ai_results`, or a provider set in `ai.provider`, need no sampling |
 | prompt `process-queue` | asks the assistant to work through the queue until it is empty |
 
 Under a [folder scope](mcp.md#write-scopes), an assistant may answer a tag job only for a folder inside its scope,

@@ -91,6 +91,10 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `GET` | `/api/v1/tabs` and the `/api/v1/tabs/…` routes | viewer to owner | open tabs, snapshots, timeline (`?days=` or `?from=`/`?to=`), `tabs/stored` counts, restore, close; `?workspace=` picks the workspace's pool; see [browsers and tabs](browsers-and-tabs.md) |
 | `GET` | `/api/v1/linkchecks` | viewer | the running check and earlier ones, with links newly broken and fixed |
 | `POST`, `GET` | `/api/v1/extension/…` | see [browser extension](browser-extension.md) | pairing, tabs and groups, bookmarks, commands |
+| `GET` | `/api/v1/history`, `/api/v1/history/access`; `POST` `/api/v1/history/access/open-settings` | owner | search the browsers' history, which profiles can be read, open Full Disk Access; see [browser history](browser-history.md) |
+| `POST`, `GET` | `/api/v1/snapshots`, `/api/v1/snapshots/{id}`, `/api/v1/snapshots/{id}/cancel` | editor, viewer | pictures of pages in the background; see [page snapshots](page-snapshots.md) |
+| `POST` | `/api/v1/writeback/preview`, `/api/v1/writeback/apply` | owner | a workspace back into a browser profile, previewed first; see [write-back](write-back.md) |
+| `POST`, `GET` | `/api/v1/ai/jobs`, `/api/v1/ai/jobs/next`, `/api/v1/ai/jobs/{id}/results` | owner | tag suggestions and duplicate verdicts by a model; see [AI](ai.md) |
 | `GET` | `/api/v1/settings` | owner | the configuration in force, without secrets; read-only |
 | `POST` | `/api/v1/workspaces/{id}/rollback` | editor | body `{to}`: the state after entry `to` becomes the newest, as an entry you can undo |
 

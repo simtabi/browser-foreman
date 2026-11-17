@@ -24,10 +24,5 @@ func profilesIn(globs ...string) []string {
 	return out
 }
 
-// chromiumProfiles are the profile folders of a Chromium browser's user data folder.
-func chromiumProfiles(userData string) []string {
-	return profilesIn(filepath.Join(userData, "Default"), filepath.Join(userData, "Profile *"))
-}
-
 // SessionDirs is where this system's browsers keep the profiles Sessions reads.
 func SessionDirs(b browsers.Browser) []string { return sessionDirs(b) }

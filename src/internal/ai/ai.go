@@ -1,5 +1,5 @@
 // Package ai holds Browser Foreman's AI jobs: suggesting tags for bookmarks, and judging whether bookmarks that look
-// alike are the same page. A job is answered by a provider the owner chose (Anthropic's API or a local Ollama), or by
+// alike are the same page. A job is answered by a provider the owner chose (Anthropic's API, OpenAI's API or a local Ollama), or by
 // an MCP client's own model (next_ai_jobs and submit_ai_results, or sampling). It is off unless configured; nothing is
 // sent anywhere until the owner creates a job.
 package ai

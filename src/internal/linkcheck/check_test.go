@@ -22,19 +22,23 @@ func site(t *testing.T) *httptest.Server {
 	}
 	mux.HandleFunc("/ok", page("Welcome", "A real article about Go with plenty of words in it."))
 	mux.HandleFunc("/gone", func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "nope", 404) })
-	mux.HandleFunc("/old", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/new-place", 301) })
+	mux.HandleFunc("/old", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/new-place", http.StatusMovedPermanently)
+	})
 	mux.HandleFunc("/new-place", page("New place", "Moved here."))
-	mux.HandleFunc("/private", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "http://localhost.test/admin", 302) })
-	mux.HandleFunc("/members", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/login?next=x", 302) })
+	mux.HandleFunc("/private", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://localhost.test/admin", http.StatusFound)
+	})
+	mux.HandleFunc("/members", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/login?next=x", http.StatusFound) })
 	mux.HandleFunc("/login", page("Sign in", "Sign in"))
 	mux.HandleFunc("/soft", page("Page not found", "Sorry"))
 	mux.HandleFunc("/parked", page("example.com is for sale", "Buy this domain"))
 	mux.HandleFunc("/bot", page("Just a moment...", "Checking your browser"))
 	mux.HandleFunc("/slow-down", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Retry-After", "60")
-		http.Error(w, "", 429)
+		http.Error(w, "", http.StatusTooManyRequests)
 	})
-	mux.HandleFunc("/deep/page", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/", 302) })
+	mux.HandleFunc("/deep/page", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/", http.StatusFound) })
 	mux.HandleFunc("/{$}", page("Home", "Home page"))
 	s := httptest.NewServer(mux)
 	t.Cleanup(s.Close)
@@ -220,7 +224,7 @@ func TestATimeoutIsTriedOnceMore(t *testing.T) {
 			}
 			return
 		}
-		w.Write([]byte("fine"))
+		_, _ = w.Write([]byte("fine"))
 	}))
 	defer s.Close()
 	c := New(300 * time.Millisecond)
@@ -238,10 +242,10 @@ func TestARateLimitedLinkIsFinishedInTheSameRun(t *testing.T) {
 	limited.Store(true)
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/a" && limited.Swap(false) {
-			http.Error(w, "slow down", 429)
+			http.Error(w, "slow down", http.StatusTooManyRequests)
 			return
 		}
-		w.Write([]byte("fine"))
+		_, _ = w.Write([]byte("fine"))
 	}))
 	defer s.Close()
 	c := checker()
@@ -258,7 +262,7 @@ func TestARateLimitedLinkIsFinishedInTheSameRun(t *testing.T) {
 
 // A site still paused after one link has waited it out is not waited out again for each of its other links.
 func TestASiteStillPausedIsWaitedOutOnce(t *testing.T) {
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "slow down", 429) }))
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "slow down", http.StatusTooManyRequests) }))
 	defer s.Close()
 	c := checker()
 	// A site that rate-limits every time, with pauses the run is willing to wait out: each wait meets another 429,

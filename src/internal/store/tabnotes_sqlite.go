@@ -48,7 +48,7 @@ func (s *SQLiteStore) DeleteTabs(ctx context.Context, ids []string) (int, error)
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // a no-op once committed
 	n := 0
 	for _, id := range ids {
 		r, err := tx.ExecContext(ctx, `DELETE FROM tabs WHERE id = ?`, id)

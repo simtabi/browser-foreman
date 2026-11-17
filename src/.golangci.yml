@@ -1,0 +1,21 @@
+version: "2"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  exclusions:
+    # golangci-lint's own presets: unchecked writes to a terminal and deferred Close, and known false positives.
+    presets:
+      - std-error-handling
+      - common-false-positives
+    rules:
+      # Error text starts with a name as people read it (Chrome, Safari, Anthropic, Browser Foreman) and is shown as
+      # written; 13 sites, measured 2026-11-17.
+      - linters: [staticcheck]
+        text: "ST1005:"
+      # De Morgan rewrites are suggestions; these conditions read as the rules they implement. 3 sites, 2026-11-17.
+      - linters: [staticcheck]
+        text: "QF1001:"
+
+formatters:
+  enable:
+    - gofmt

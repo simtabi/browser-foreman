@@ -65,14 +65,14 @@ func TestLinkChecksStoreResultsAndReportChanges(t *testing.T) {
 	var bGone, throttled atomic.Bool
 	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if throttled.Load() {
-			http.Error(w, "slow down", 429)
+			http.Error(w, "slow down", http.StatusTooManyRequests)
 			return
 		}
 		if r.URL.Path == "/b" && bGone.Load() {
 			http.Error(w, "gone", 404)
 			return
 		}
-		w.Write([]byte("hello"))
+		_, _ = w.Write([]byte("hello"))
 	}))
 	defer site.Close()
 	s := newServer(t, "tok")
@@ -160,13 +160,13 @@ func TestADeadLinkIsConfirmedADayLaterAndGetsItsArchiveCopy(t *testing.T) {
 		switch r.URL.Path {
 		case "/wayback":
 			asked.Add(1)
-			w.Write([]byte(`{"archived_snapshots":{"closest":{"available":true,"status":"200","url":"http://web.archive.org/web/2020/x"}}}`))
+			_, _ = w.Write([]byte(`{"archived_snapshots":{"closest":{"available":true,"status":"200","url":"http://web.archive.org/web/2020/x"}}}`))
 		case "/b":
 			http.Error(w, "gone", 404)
 		default:
 			w.Header().Set("Content-Type", "text/html")
 			w.Header().Set("X-Frame-Options", "DENY")
-			w.Write([]byte(`<html><head><title>A</title><meta property="og:description" content="About A"></head><body>Plenty of words here.</body></html>`))
+			_, _ = w.Write([]byte(`<html><head><title>A</title><meta property="og:description" content="About A"></head><body>Plenty of words here.</body></html>`))
 		}
 	}))
 	defer site.Close()

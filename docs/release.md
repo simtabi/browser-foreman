@@ -8,6 +8,18 @@ Homebrew, Scoop, Winget, image or `go install` path.
 Semantic versioning. Tags are `vX.Y.Z` and are final: never moved, deleted or reused. Testing uses `vX.Y.Z-rc.N`.
 A bad version is retracted and the fix ships as the next number.
 
+## Before tagging
+
+Every one of these holds, read back rather than assumed:
+
+- `make check lint` passes, and so does `npm run check:web && npm run test:web` in `web/`.
+- The pull request's CI is green on the commit to be tagged, and local `main` equals `origin/main`.
+- Every Go dependency of our own is on a tagged version, not a pseudo-version (`grep simtabi src/go.mod`).
+- `goreleaser check --config src/.goreleaser.yaml` passes, and the snapshot below builds every target.
+- `CHANGELOG.md` has the `## [X.Y.Z]` section, and the roadmap says what shipped.
+- The browser extension's version, in `web/package.json`, was raised if the extension changed since the last
+  release. The manifests and the page read it from there; it moves independently of the binary's version.
+
 ## Steps
 
 1. Move the `[Unreleased]` section of `CHANGELOG.md` under a new `## [X.Y.Z]` heading, through a pull request.
@@ -15,7 +27,8 @@ A bad version is retracted and the fix ships as the next number.
    so push a version tag only for final code:
 
 ```bash
-git -C ~/src/browser-foreman tag -a vX.Y.Z -m vX.Y.Z && git -C ~/src/browser-foreman push origin vX.Y.Z
+git -C ~/Artisan/projects/opensource/simtabi/packages/browser-foreman tag -a vX.Y.Z -m vX.Y.Z
+git -C ~/Artisan/projects/opensource/simtabi/packages/browser-foreman push origin vX.Y.Z
 ```
 
 3. To build the release for a tag already on GitHub (a first release of an older tag, or a re-run), request it:

@@ -128,7 +128,7 @@ func (s *SQLiteStore) UpdateWorkspace(ctx context.Context, w Workspace) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // a no-op once committed
 	res, err := tx.ExecContext(ctx, `UPDATE workspaces SET name = ? WHERE id = ?`, w.Name, w.ID)
 	if err != nil {
 		return err
@@ -161,7 +161,7 @@ func (s *SQLiteStore) Commit(ctx context.Context, id string, base int, c Change,
 	if err != nil {
 		return Entry{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // a no-op once committed
 	var head, exists, locked int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE((SELECT MAX(seq) FROM entries WHERE ws = ?), 0),
 	  COALESCE((SELECT locked FROM workspace_meta WHERE id = ?), 0) FROM workspaces WHERE id = ?`, id, id, id).Scan(&exists, &head, &locked); err != nil {
@@ -323,7 +323,7 @@ func (s *SQLiteStore) PurgeWorkspace(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // a no-op once committed
 	var n int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM workspaces WHERE id = ?`, id).Scan(&n); err != nil {
 		return err

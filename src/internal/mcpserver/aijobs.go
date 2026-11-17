@@ -108,7 +108,10 @@ type runOut struct {
 
 func (t *tools) runJobs(ctx context.Context, req *mcp.CallToolRequest, in runIn) (*mcp.CallToolResult, Untrusted, error) {
 	p := req.Session.InitializeParams()
-	if p == nil || p.Capabilities == nil || p.Capabilities.Sampling == nil {
+	// MCP deprecated sampling (SEP-2577, protocol 2026-07-28); it keeps working through a deprecation window of at
+	// least twelve months. next_ai_jobs and submit_ai_results, and the server's own providers, need no sampling.
+	if p == nil || p.Capabilities == nil || p.Capabilities.Sampling == nil { //nolint:staticcheck // SA1019: see above
+
 		return nil, Untrusted{}, errors.New("this client does not offer sampling: answer the jobs yourself with next_ai_jobs and submit_ai_results")
 	}
 	if sc, who := t.scopeFor(req); !sc.Writes {
@@ -133,8 +136,8 @@ func (t *tools) runJobs(ctx context.Context, req *mcp.CallToolRequest, in runIn)
 			continue
 		}
 		system += " Answer with JSON only, following this schema: " + string(ai.Schema(j.Kind))
-		res, err := req.Session.CreateMessage(ctx, &mcp.CreateMessageParams{SystemPrompt: system, MaxTokens: 4000,
-			Messages: []*mcp.SamplingMessage{{Role: "user", Content: &mcp.TextContent{Text: user}}}})
+		res, err := req.Session.CreateMessage(ctx, &mcp.CreateMessageParams{SystemPrompt: system, MaxTokens: 4000, //nolint:staticcheck // SA1019: sampling, see runJobs
+			Messages: []*mcp.SamplingMessage{{Role: "user", Content: &mcp.TextContent{Text: user}}}}) //nolint:staticcheck // SA1019: sampling, see runJobs
 		if err != nil {
 			out.Failed = append(out.Failed, j.ID+": sampling: "+err.Error())
 			continue

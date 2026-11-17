@@ -64,8 +64,9 @@ pull request, with tests and docs.
 - Reading open tabs (macOS first), snapshots on change or on a schedule, restoring a session after a crash,
   incognito handled privately.
 - Scheduled link re-checks.
-- Done on macOS. Not ported from the Python tool yet: notes on tabs and windows, deleting snapshots, purging private
-  pages, reading browser history and profile files; Linux and Windows browsers.
+- Done on macOS, Linux and Windows (Linux and Windows read tabs from session files; live tabs come from the
+  extension everywhere). Ported from the Python tool: notes and tags on tabs and windows, deleting snapshots, purging
+  private pages, reading browser history (with Full Disk Access on macOS) and every profile's bookmarks file.
 
 ## Phase 6 — Browser plugins (done)
 
@@ -77,11 +78,29 @@ pull request, with tests and docs.
   as a tab group from the web interface. Not yet: store listings (Chrome Web Store, Firefox Add-ons, App Store),
   which need the owner's developer accounts.
 
+## Beyond the plan (done)
+
+Added while the phases above were built, each with tests and docs:
+
+- Merging several browsers into one workspace, finding look-alike duplicates, filing bookmarks by rules, and
+  [write-back](tools/write-back.md) into a Chromium profile, from the command line or the page, previewed first.
+- [Labels](tools/labels.md): ratings, tags and when each bookmark was last opened; [page snapshots](tools/page-snapshots.md).
+- [Running at login](tools/service.md) (launchd, systemd, a Windows logon task) and a notification when a scheduled
+  re-check finds links newly dead or fixed.
+- The [MCP server](tools/mcp.md): health, duplicates and statistics to read; labelling and adding bookmarks behind
+  write scopes.
+- [AI jobs](tools/ai.md): tag suggestions and duplicate verdicts by Anthropic's or OpenAI's API, a local Ollama or an
+  assistant's own model, queued so they survive a restart.
+- Smart folders (saved searches) and a page that stays responsive with 50,000 bookmarks.
+- The browser extension found and connected from the page in one click, one connected copy per browser, and
+  *Set it up* opening in the very browser copy the page is in.
+
 ## Phase 7 — Landing page and release (next)
 
-- The landing page in `site/`, with screenshots, published at the product URL.
-- A full documentation pass; the hosted docs.
-- The owner decides on the public repository and the v0.1.0 tag.
+- Done: the landing page in `site/` (no screenshots yet); a full documentation pass, kept in step with the code by
+  tests that fail on an undocumented route or event; lint clean, and linted in CI.
+- Left: screenshots on the landing page; publishing it and the hosted docs at the product URL; the GitHub repository
+  (it does not exist yet, so neither CI nor the release workflow has run); the owner's go for the v0.1.0 tag.
 
 ---
 [← Docs index](../README.md#documentation)

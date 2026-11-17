@@ -1,5 +1,5 @@
-// Package api is Browser Foreman's HTTP server: the REST API under /api/v1, the event stream, and (from phase 4 of
-// the roadmap) the web interface. Every route and the role it needs is declared in Handler; docs/tools/rest-api.md
+// Package api is Browser Foreman's HTTP server: the REST API under /api/v1, the event stream, and the web
+// interface. Every route and the role it needs is declared in Handler; docs/tools/rest-api.md
 // lists them.
 //
 // Who is asking: a person's API token (Authorization: Bearer brofo_…), a signed-in browser (the brofo_session cookie,

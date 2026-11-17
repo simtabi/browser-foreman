@@ -11,7 +11,8 @@ What Browser Foreman protects, and how. Report a weakness privately: see [SECURI
 - **Every private request needs a caller.** Bookmarks, events, tokens, users and webhooks need a token or a signed-in
   session; only health, version and sign-in are open. Tokens are compared in constant time (the configured one) or by
   their SHA-256 (a person's). In `local` mode with no token configured, the API is refused rather than left open.
-- **Roles.** viewer reads, editor will change bookmarks (phase 4), owner manages people, tokens and webhooks.
+- **Roles.** viewer reads, editor changes bookmarks, owner manages people, tokens, webhooks, this computer's browsers
+  and AI jobs.
 - **The web page.** Its Content Security Policy allows scripts from the server and inline scripts carrying that
   response's nonce, nothing from other hosts. It needs `'unsafe-eval'` for Alpine, which compiles the page's own
   `x-*` attributes. Bookmark data is embedded as JSON with `<`, `>`, `&`, U+2028 and U+2029 escaped, so a title cannot
@@ -22,8 +23,15 @@ What Browser Foreman protects, and how. Report a weakness privately: see [SECURI
 - **This computer's browsers.** Opening links, restoring a session and closing tabs need the owner role, open only
   `http` and `https` addresses, and run only `open(1)` and the browsers' own automation. Reading tabs never starts a
   browser; private windows' pages are not kept or published unless the owner turns that on.
-- **Browser extensions** pair with a one-time code that works once, for ten minutes, behind the sign-in limiter,
-  and get their own revocable token. They only talk to a server on this computer. Writing a workspace into a
+- **Which running browser** (macOS). To open *Set it up* in the browser copy a page is in, the server runs `lsof` and
+  `ps` to find the process behind that page's connection (loopback only), then runs that browser's own executable,
+  inside its `.app`, with its own profile folder and the fixed extensions page. Nothing from the request becomes a
+  path, an address or an argument.
+- **Browser extensions** connect when the owner approves their request in the page (matching the letters the
+  extension shows) or pair with a one-time code that works once, for ten minutes, behind the sign-in limiter, and
+  get their own revocable token. Only an extension's own origin may ask, and only from this computer. One copy of each
+  browser is connected at a time: approving a copy revokes the other copies' keys, and the page can ask only its own
+  browser's extension, through a content script that passes two questions and checks the page's real origin. They only talk to a server on this computer. Writing a workspace into a
   browser's bookmarks saves the browser's current bookmarks to the server first, refuses a workspace not read from
   that browser, and never moves or removes the browser's own top folders.
 - **Headers.** Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
@@ -34,6 +42,18 @@ What Browser Foreman protects, and how. Report a weakness privately: see [SECURI
 - The API token is read only from `.env` or the environment, never from JSON config files.
 - `.env` must be `0600`; a file other users can read is refused. `config init` creates it `0600`.
 - Tokens and webhook secrets are never printed, logged or returned by the API.
+
+## AI and MCP
+
+- **Off until configured, quiet until asked.** No bookmark leaves this computer until the owner creates an AI job.
+  A job sends titles, addresses, folders and tags to the provider the owner chose: Anthropic's or OpenAI's API (keys
+  from `.env` or the environment only), or a local Ollama. An assistant can answer jobs with its own model instead.
+- **Answers are checked, not trusted.** A provider's answer must be the JSON the job asked for and may only name
+  the bookmarks the job sent; tags are cleaned and capped in length and number. Applying them is a normal workspace change, undoable.
+- **MCP is read-only by default.** The server speaks only stdio, to the client that started it. Write tools appear
+  only with `mcp.writes`, can be limited to folders (`mcp.folders`) and clients (`mcp.clients`), and trash and
+  rollback also need `confirm: true`. Everything returned from bookmarks, tabs and pages is wrapped as untrusted
+  data, since a title can hold text written to steer an assistant.
 
 ## Webhooks
 

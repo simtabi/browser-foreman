@@ -52,7 +52,7 @@ func (s *SQLiteStore) SaveLinks(ctx context.Context, rs []LinkResult) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // a no-op once committed
 	st, err := tx.PrepareContext(ctx, `INSERT INTO links (url, status, code, final, note, kind, checked, dead_since, confirmed, frame, meta, archive)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(url) DO UPDATE SET status = excluded.status, code = excluded.code, final = excluded.final,

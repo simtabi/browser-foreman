@@ -5,8 +5,10 @@ All notable changes are recorded here, following [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
-Everything planned for v0.1.0 is listed in [docs/roadmap.md](docs/roadmap.md); v0.1.0 is released when all of it
-ships.
+## [0.1.0] - 2026-11-17
+
+The first release of the Go rewrite: everything in [docs/roadmap.md](docs/roadmap.md) phases 1 to 6 and the work
+listed there beyond the plan.
 
 ### Added
 
@@ -254,6 +256,8 @@ ships.
 
 ### Fixed
 
+- A merge test meant to prove the base workspace is left untouched compared a value with itself and could never
+  fail; it now compares the workspace before and after, and was seen failing when the merge changed it.
 - Extension 0.1.8: with two copies of one browser open, both pages prompted for both copies' requests, and the copy
   not connected kept asking. The server now refuses a second copy asking by itself while another is connected (it
   stops; Connect in its popup or **Use this browser** still asks), and with strict approvals a request prompts only
@@ -363,6 +367,10 @@ ships.
 
 ### Changed
 
+- go-notifykit is on its tagged release, `src/v0.1.0`, instead of an untagged commit two commits behind it.
+- The Go code is lint clean under golangci-lint's standard set (`src/.golangci.yml`), and CI lints every pull request.
+  Writes to a terminal and deferred closes follow golangci-lint's own exclusions; transactions roll back explicitly.
+- Tests now fail when an API route is missing from `docs/` or a published event from the events table.
 - The SQLite store keeps each tree snapshot gzipped, about a tenth of the size: a 5,400-bookmark history of 30 trees
   takes 14 MB rather than about 45 MB. Stores written before still read; their old rows stay as they are.
 - Each tab snapshot lists its pool, so Open tabs, the Timeline, counts, deletes and purges skip other workspaces'

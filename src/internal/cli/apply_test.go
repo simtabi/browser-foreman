@@ -230,7 +230,7 @@ func TestAskExtensionToReadWaitsForItsAnswer(t *testing.T) {
 		mux.HandleFunc("POST /api/v1/extension/commands", func(w http.ResponseWriter, r *http.Request) {
 			_ = json.NewDecoder(r.Body).Decode(&posted)
 			if r.Header.Get("Authorization") != "Bearer tok" {
-				http.Error(w, `{"error":"no token"}`, 401)
+				http.Error(w, `{"error":"no token"}`, http.StatusUnauthorized)
 				return
 			}
 			_, _ = w.Write([]byte(`{"command":{"id":"cmd_1","state":"queued"}}`))

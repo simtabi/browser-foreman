@@ -1,6 +1,7 @@
 package merge
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -66,6 +67,7 @@ func find(n *store.Node, path ...string) *store.Node {
 func TestExistingBookmarksAlwaysWin(t *testing.T) {
 	base := tree(folder("bar", "Bookmarks Bar", bm("keep", "Go", "https://go.dev/", 500)))
 	src := tree(folder("x", "Bookmarks Bar", folder("y", "Deep", folder("z", "Deeper", bm("n1", "Go docs", "https://www.go.dev", 100)))))
+	before, _ := json.Marshal(base)
 	r, err := Merge(base, []Source{{Name: "Bookmarks.html", Tree: src}}, false, 42)
 	if err != nil {
 		t.Fatal(err)
@@ -83,8 +85,8 @@ func TestExistingBookmarksAlwaysWin(t *testing.T) {
 	if from := find(r.Tree.Root, "Bookmarks Bar", "Deep", "Deeper"); from == nil || x.From != from.ID {
 		t.Fatal("the copy's folder must exist, so put back has somewhere to go")
 	}
-	if base.Root.Children[0].Children[0] != base.Root.Children[0].Children[0] || len(base.Trash) != 0 {
-		t.Fatal("base was changed")
+	if after, _ := json.Marshal(base); string(after) != string(before) {
+		t.Fatalf("base was changed:\n%s\n%s", before, after)
 	}
 }
 
