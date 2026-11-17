@@ -95,12 +95,15 @@ Added while the phases above were built, each with tests and docs:
 - The browser extension found and connected from the page in one click, one connected copy per browser, and
   *Set it up* opening in the very browser copy the page is in.
 
-## Phase 7 — Landing page and release (next)
+## Phase 7 — Landing page and release (done, except publishing the site)
 
-- Done: the landing page in `site/` (no screenshots yet); a full documentation pass, kept in step with the code by
-  tests that fail on an undocumented route or event; lint clean, and linted in CI.
-- Left: screenshots on the landing page; publishing it and the hosted docs at the product URL; the GitHub repository
-  (it does not exist yet, so neither CI nor the release workflow has run); the owner's go for the v0.1.0 tag.
+- Done: the landing page in `site/` with real screenshots (`make screenshots`, [screenshots](screenshots.md)); a full
+  documentation pass, kept in step with the code by tests that fail on an undocumented route or event; lint clean,
+  and linted in CI.
+- Done: the public repository `simtabi/browser-foreman`, with CI on every pull request, `main` protected (a pull
+  request with the `go` and `web` checks green) and release tags locked; v0.1.0-rc.1, then v0.1.0, published on the
+  GitHub release with notes, checksums and build provenance.
+- Left: publishing the landing page and the hosted docs at the product URL; the extensions' store listings (phase 6).
 
 ---
 [← Docs index](../README.md#documentation)
