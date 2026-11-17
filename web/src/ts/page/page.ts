@@ -6,6 +6,7 @@ import { Dom } from "../dom";
 import { PlaceMemory } from "../place";
 import { HistoryAccessPanel } from "../history";
 import { SnapshotSettingsPanel } from "../snapshot-settings";
+import { ServerSettingsPanel } from "../server-settings";
 import { Pager } from "../pager";
 import { RangePicker } from "../rangepick";
 import { FoldCenter } from "../fold";
@@ -631,7 +632,7 @@ addEventListener("resize", () => { if (tourAt >= 0) paintTour(); });
 // Welcome, shown once: what this is, how to get bookmarks in and out, and an offer of the tour.
 async function welcome() {
   const go = await askConfirm({title: `Welcome to ${APP.name}`, ok: "Take the 1-minute tour", no: "Not now", danger: false,
-    body: `${APP.name} keeps your bookmarks clean and your tabs safe. This workspace holds ${liveItems().length.toLocaleString()} of your bookmarks, checked and sorted into one structure built on your own folders (${trashCount().toLocaleString()} more wait in the Trash), and Open tabs saves your browser windows so a crash never loses them. ` +
+    body: `${APP.name} keeps your bookmarks clean and your tabs safe. This workspace holds ${liveItems().length.toLocaleString()} of your bookmarks, checked and sorted into one structure built on your own folders${trashCount() ? ` (${trashCount().toLocaleString()} more wait in the Trash)` : ""}, and Open tabs saves your browser windows so a crash never loses them. ` +
       "Review and edit here; nothing changes in your browser until you download the import file and import it, or write it back with the browser extension (Browsers › Browser extensions…)."});
   try { localStorage.setItem(STORE + ":onboarded", "1"); } catch {}
   if (go) tour(0);
@@ -1311,6 +1312,9 @@ function openSettings() {
   const extra = [ha];
   // Page snapshots: window size, wait and folder (server preferences; owner only).
   if (WS) extra.push(new SnapshotSettingsPanel().element);
+  // The server's own settings: its config files and .env (owner only; secrets write-only).
+  const v1 = window.BM_WS as { call?: <T>(m: string, p: string, b?: unknown) => Promise<T> } | undefined;
+  if (v1?.call) extra.push(new ServerSettingsPanel((m, p, b) => v1.call!(m, p, b)).element);
   // Assistants: where Claude can reach Browser Foreman, and whether it may change things.
   if (wsUI()?.mcpAccess) extra.push(settingsGroup("Assistants", [
     actionRow("MCP access (Claude)", "Where Claude can reach Browser Foreman, and whether it may change things. Off by default.", "Open…", "ti-plug-connected", "", closing(() => wsUI().mcpAccess()))]));

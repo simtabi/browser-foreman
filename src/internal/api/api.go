@@ -20,6 +20,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	notifykit "github.com/simtabi/go-notifykit/src"
@@ -68,8 +69,15 @@ type Server struct {
 	// ExtensionRoot is where the built extensions are (web/dist/extension); "" finds them beside the binary.
 	ExtensionRoot string
 	// AI answers AI jobs (tags, duplicate verdicts) as they are made; nil leaves them for an MCP client to take.
-	AI ai.Provider
-	ai aiState
+	// Read it through provider(): Settings can replace it while the server runs.
+	AI     ai.Provider
+	aiProv sync.RWMutex
+	// NewAI makes the provider for an AI configuration, so a change in Settings applies without a restart.
+	NewAI func(config.AI) ai.Provider
+	// ConfigPaths and Getenv locate and read the configuration Settings edits; nil Getenv leaves Settings read-only.
+	ConfigPaths config.Paths
+	Getenv      func(string) string
+	ai          aiState
 	// Notifier shows desktop notifications (a scheduled re-check's result); nil shows none.
 	Notifier *notifykit.Notifier
 	snaps    snapRunner
@@ -153,6 +161,8 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/backup", s.require(store.RoleOwner, s.backup))
 	m.HandleFunc("POST /api/v1/restore", s.require(store.RoleOwner, s.restore))
 	m.HandleFunc("GET /api/v1/settings", s.require(store.RoleOwner, s.settings))
+	m.HandleFunc("GET /api/v1/settings/fields", s.require(store.RoleOwner, s.settingsFields))
+	m.HandleFunc("PUT /api/v1/settings", s.require(store.RoleOwner, s.saveSettings))
 	m.HandleFunc("GET /api/v1/browsers", s.require(store.RoleViewer, s.listBrowsers))
 	m.HandleFunc("GET /api/v1/browsers/icon", s.browserIcon)      // public: an <img> cannot send a token; guard refuses cross-site loads
 	m.HandleFunc("GET /favicons/{name}", s.servePicture("icons")) // pictures for the page's <img>: see servePicture

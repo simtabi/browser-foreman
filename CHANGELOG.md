@@ -12,6 +12,14 @@ listed there beyond the plan.
 
 ### Added
 
+- `make screenshots`: every feature at 1440 x 900 and twice the pixel density, grouped and numbered in
+  `docs/screenshots/`, with `docs/screenshots.md` listing them. It runs the built binary on a throwaway store of
+  public sites and never reads this computer's browsers.
+- Settings › *Server settings* edits the server's config files and `.env` from the page: owner only, from this
+  computer only, every change checked by the same loader the server starts with before anything is written. Secrets
+  (API keys, the token) are write-only. `settings.edit` (files only) decides how much the page may change: `safe` by
+  default, or `all` to include the address, mode, storage and token, each after a confirmation. AI settings apply
+  at once. `config init` now makes `.env` from a shipped `env.example`.
 - *Browser extensions…* tells copies of one browser apart by the process (macOS): **Set it up** opens the extensions
   page as a new tab in the window of the copy the page is open in, instead of whichever copy the system picks (with
   your Chrome and an automated Chrome running, it went to the automated one, so the extension was loaded where the
@@ -256,6 +264,7 @@ listed there beyond the plan.
 
 ### Fixed
 
+- The welcome message no longer says "0 more wait in the Trash" when the Trash is empty.
 - A merge test meant to prove the base workspace is left untouched compared a value with itself and could never
   fail; it now compares the workspace before and after, and was seen failing when the merge changed it.
 - Extension 0.1.8: with two copies of one browser open, both pages prompted for both copies' requests, and the copy
@@ -372,7 +381,8 @@ listed there beyond the plan.
 
 ### Changed
 
-- go-notifykit is on its tagged release, `src/v0.1.0`, instead of an untagged commit two commits behind it.
+- go-notifykit is on its tagged release `src/v0.1.1`, instead of an untagged commit; 0.1.1 lets `notify ping` wait
+  for a slow first delivery on macOS instead of reporting a timeout while the banner still shows.
 - The Go code is lint clean under golangci-lint's standard set (`src/.golangci.yml`), and CI lints every pull request.
   Writes to a terminal and deferred closes follow golangci-lint's own exclusions; transactions roll back explicitly.
 - Tests now fail when an API route is missing from `docs/` or a published event from the events table.

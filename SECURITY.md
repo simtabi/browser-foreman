@@ -5,9 +5,9 @@ applies.
 
 ## Reporting a vulnerability
 
-Once the repository is public, the preferred channel is GitHub private vulnerability reporting: open a private report
-at <https://github.com/simtabi/browser-foreman/security/advisories/new>. Email **security@simtabi.com** if you do not
-use GitHub, or before then.
+The preferred channel is GitHub private vulnerability reporting: open a private report at
+<https://github.com/simtabi/browser-foreman/security/advisories/new>. Email **security@simtabi.com** if you do not
+use GitHub.
 
 Do **not** open a public issue for a security report.
 

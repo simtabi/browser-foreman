@@ -8,6 +8,24 @@ Homebrew, Scoop, Winget, image or `go install` path.
 Semantic versioning. Tags are `vX.Y.Z` and are final: never moved, deleted or reused. Testing uses `vX.Y.Z-rc.N`.
 A bad version is retracted and the fix ships as the next number.
 
+## The first push of a new repository
+
+Every change reaches `main` through a pull request, and the pre-push guard refuses any push that creates
+`main`. A brand-new, empty repository has no `main` for a pull request to target, so its first push is the one
+exception, made once by the owner with the guard's own override:
+
+```bash
+SIMTABI_ALLOW_MAIN_PUSH=1 git -C ~/Artisan/projects/opensource/simtabi/packages/browser-foreman push -u origin main
+```
+
+- Only a person sets `SIMTABI_ALLOW_MAIN_PUSH=1`, for that one push; an agent is refused it.
+- If a feature branch was pushed first, GitHub made it the default branch: set it back with
+  `gh api -X PATCH repos/simtabi/browser-foreman -f default_branch=main`.
+- sange scans the whole history on that first push. A value it flags that is not a secret needs an exception,
+  which only a person at an interactive terminal can confirm (`sange compliance exceptions add …`, then type
+  `add exception`). Browser Foreman has two, added 2026-11-17: the ID character set in an early `store.go`, and a
+  placeholder password in early test URLs.
+
 ## Before tagging
 
 Every one of these holds, read back rather than assumed:

@@ -98,6 +98,8 @@ github.com/simtabi/go-notifykit/src v0.0.0-20261108151612-b1d96c3bd177 h1:V0TMYW
 github.com/simtabi/go-notifykit/src v0.0.0-20261108151612-b1d96c3bd177/go.mod h1:IMAhQveOoAMdIbFmXUvHc4hj68YtQIYs4P2DDjDeE20=
 github.com/simtabi/go-notifykit/src v0.1.0 h1:19t3f9+Nk5mg1vfcVBx/KtFWQS1DIzdgNzaye3m3Yd8=
 github.com/simtabi/go-notifykit/src v0.1.0/go.mod h1:IMAhQveOoAMdIbFmXUvHc4hj68YtQIYs4P2DDjDeE20=
+github.com/simtabi/go-notifykit/src v0.1.1 h1:HhE2t6cSkGpGha7YxWkfRPK/2G4mmO1Fk0p2QStvNUo=
+github.com/simtabi/go-notifykit/src v0.1.1/go.mod h1:IMAhQveOoAMdIbFmXUvHc4hj68YtQIYs4P2DDjDeE20=
 github.com/spf13/cobra v1.10.2 h1:DMTTonx5m65Ic0GOoRY2c16WCbHxOOw6xxezuLaBpcU=
 github.com/spf13/cobra v1.10.2/go.mod h1:7C1pvHqHw5A4vrJfjNwvOdzYu0Gml16OCs2GRiTUUS4=
 github.com/spf13/pflag v1.0.9 h1:9exaQaMOCwffKiiiYk6/BndUBv+iRViNW+4lEMi0PvY=

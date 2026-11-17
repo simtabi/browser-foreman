@@ -8,7 +8,7 @@ DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -s -w -X $(PKG)/internal/version.Version=$(VERSION) -X $(PKG)/internal/version.Commit=$(COMMIT) -X $(PKG)/internal/version.Date=$(DATE)
 HOST_OS := $(shell go env GOOS | sed 's/darwin/macos/')
 
-.PHONY: help build test vet fmt lint universal cross web check
+.PHONY: help build test vet fmt lint universal cross web check screenshots
 help:  ## list targets
 	@grep -E '^[a-z-]+:.*##' Makefile | sed 's/:.*## /\t/'
 
@@ -53,6 +53,9 @@ web:  ## build the web interface (TypeScript) and stage it for embedding in the 
 
 extension:  ## build the browser extension into web/dist/extension/{chromium,firefox,safari}
 	cd web && npm install --no-audit --no-fund && npm run build:extension
+
+screenshots: build  ## every feature, grouped and numbered, into docs/screenshots (a throwaway demo store; CHECK=1 checks its links first)
+	cd web && npm install --no-audit --no-fund && node src/screenshots/capture.mjs $(if $(CHECK),--check)
 
 extension-safari: extension  ## wrap the Safari build in an Xcode project (needs Xcode; you sign and enable it)
 	xcrun safari-web-extension-converter web/dist/extension/safari --project-location web/dist/extension/safari-xcode \
