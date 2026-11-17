@@ -66,6 +66,19 @@ it is installed, and the server connects one copy per browser name:
 - with strict approvals, a request prompts only in Browser Foreman open in the very copy that asks, not in every
   page of a browser with the same name.
 
+**Which running copy** (macOS). Two copies of Chrome both answer to *Google Chrome*, so asking the system to open
+Chrome picks one of them, often not the one you are looking at. The server instead finds the copy behind a page's
+connection (the process holding it, then its parents up to the browser's main process) and:
+
+- **Set it up** opens the extensions page as a new tab in the window of the copy this page is open in, by handing
+  the address to that copy (its own executable, with its own profile folder); a page in another browser opens it in
+  the one copy of that browser you started, and only when that cannot be told does the system pick;
+- the setup guide lists every running copy (app folder, automated or not, its own profile or not) when there are
+  several, and says which one the page is in: each copy has extensions of its own, so the extension goes in that one;
+- a request to connect says which copy it came from, and whether that is the copy this page is open in.
+
+Many windows of one copy are one browser: the extension and the page bridge work the same in each.
+
 Reloading or updating the extension cuts it off from pages already open; *Browser extensions…* then says to reload
 the page, with a button.
 

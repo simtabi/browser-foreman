@@ -130,8 +130,12 @@ func (m *Mac) Launch(ctx context.Context, argv []string) error {
 	if len(argv) == 0 || argv[0] != "open" {
 		return errors.New("only open(1) is run") // the one command this ever needs
 	}
+	return m.start(ctx, exec.Command(argv[0], argv[1:]...))
+}
+
+// start runs cmd and waits at most LaunchWait for it (see Launch).
+func (m *Mac) start(ctx context.Context, cmd *exec.Cmd) error {
 	var stderr bytes.Buffer
-	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
 		return err

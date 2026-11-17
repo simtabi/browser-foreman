@@ -41,7 +41,8 @@ type pairRequest struct {
 	ID       string
 	Browser  string
 	Version  string
-	Instance string // the asking copy's own id (made once by it); "" from extensions before 0.1.7
+	Instance string             // the asking copy's own id (made once by it); "" from extensions before 0.1.7
+	Where    *browsers.Instance // the running browser it asked from, where the platform can tell
 	Match    string
 	pollHash string
 	Created  time.Time
@@ -133,7 +134,7 @@ func (s *Server) requestPairing(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	q := &pairRequest{ID: "rq_" + newID()[3:], Browser: in.Browser, Version: in.Version, Instance: in.Instance, Match: newMatch(),
+	q := &pairRequest{ID: "rq_" + newID()[3:], Browser: in.Browser, Version: in.Version, Instance: in.Instance, Where: s.locate(r), Match: newMatch(),
 		pollHash: auth.HashSecret(poll), Created: now.UTC(), Expires: now.Add(requestTTL), State: "pending"}
 	s.ext.mu.Lock()
 	s.ext.init()
@@ -208,6 +209,9 @@ func (s *Server) listPairingRequests(w http.ResponseWriter, r *http.Request) {
 		if q.State == "pending" {
 			x := map[string]any{"id": q.ID, "browser": q.Browser, "version": q.Version, "match": q.Match, "created": q.Created, "expires": q.Expires,
 				"instance": shortInstance(q.Instance)}
+			if q.Where != nil {
+				x["where"] = whereView(q.Where)
+			}
 			// Another copy of this browser is the connected one: approving this one moves the browser here.
 			if pin, ok := pins[q.Browser]; ok && pin.Instance != q.Instance {
 				x["replaces"] = shortInstance(pin.Instance)
@@ -365,15 +369,29 @@ func dirIfBuilt(d string) string {
 
 // extensionGuide lists, for each installed browser, which build it takes, whether that build is here, and where its
 // extensions page is: what the Browser extensions dialog shows.
-func (s *Server) extensionGuide(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) extensionGuide(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
+	here := s.locate(r)
+	var hereBrowser string
 	if s.Browsers != nil {
+		loc := s.locator()
 		for _, b := range s.Browsers.Installed() {
 			target, page := extensionBuild(b)
 			if target == "" {
 				continue
 			}
-			out = append(out, map[string]any{"browser": b.Name, "target": target, "page": page, "built": s.extensionDir(target) != ""})
+			x := map[string]any{"browser": b.Name, "target": target, "page": page, "built": s.extensionDir(target) != ""}
+			if here != nil && b.Path != "" && browsers.ExeName(here.App) == browsers.ExeName(b.Path) {
+				hereBrowser = b.Name
+			}
+			if loc != nil {
+				running := []map[string]any{}
+				for _, in := range loc.Running(b) {
+					running = append(running, whereView(&in))
+				}
+				x["running"] = running
+			}
+			out = append(out, x)
 		}
 	}
 	s.ext.mu.Lock()
@@ -382,7 +400,14 @@ func (s *Server) extensionGuide(w http.ResponseWriter, _ *http.Request) {
 		seen[k] = v
 	}
 	s.ext.mu.Unlock()
-	writeJSON(w, 200, map[string]any{"browsers": out, "seen": seen})
+	res := map[string]any{"browsers": out, "seen": seen}
+	if here != nil {
+		// The browser this page runs in: Set it up for that browser opens here.
+		v := whereView(here)
+		v["browser"] = hereBrowser
+		res["here"] = v
+	}
+	writeJSON(w, 200, res)
 }
 
 // openExtensionSetup opens a browser's extensions page and shows the build folder in Finder (owner). The page is the
@@ -417,15 +442,31 @@ func (s *Server) openExtensionSetup(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
+	// Open the extensions page as a tab in the copy of the browser this page runs in (its frontmost window), not in
+	// whichever copy the system would pick: two copies (yours and an automated one) both answer to the app's name.
+	var copyIn *browsers.Instance
 	if page != "" && b.Path != "" {
-		if err := s.Browsers.Platform.Launch(ctx, []string{"open", "-a", b.Path, page}); err != nil {
-			writeErr(w, 502, "could not open "+b.Name+": "+err.Error())
-			return
+		if loc := s.locator(); loc != nil {
+			if copyIn = setupInstance(*b, s.locate(r), loc.Running(*b)); copyIn != nil {
+				if err := loc.OpenIn(ctx, *copyIn, page); err != nil {
+					copyIn = nil // fall back to the system's pick
+				}
+			}
+		}
+		if copyIn == nil {
+			if err := s.Browsers.Platform.Launch(ctx, []string{"open", "-a", b.Path, page}); err != nil {
+				writeErr(w, 502, "could not open "+b.Name+": "+err.Error())
+				return
+			}
 		}
 	}
 	if err := s.Browsers.Platform.Launch(ctx, []string{"open", "-R", filepath.Join(dir, "manifest.json")}); err != nil {
 		writeErr(w, 502, "could not show the folder: "+err.Error())
 		return
 	}
-	writeJSON(w, 200, map[string]any{"opened": page, "folder": dir})
+	res := map[string]any{"opened": page, "folder": dir}
+	if copyIn != nil {
+		res["in"] = whereView(copyIn)
+	}
+	writeJSON(w, 200, res)
 }

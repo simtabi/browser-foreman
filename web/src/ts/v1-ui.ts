@@ -610,9 +610,13 @@ function install(W: V1): void {
   type Ext = { id: string; name: string; created: string; last_used?: string; instance?: string };
   // What the server knows (GET extension/guide): which build each installed browser takes, whether it is built, its
   // extensions page; and each extension's last reported version.
-  type Guide = { browsers: { browser: string; target: "chromium" | "firefox" | "safari"; page: string; built: boolean }[]; seen: Record<string, { version: string; at: string }> };
+  // A running copy of a browser (macOS): its app folder, its own profile folder if any, and whether automation
+  // started it. here is the copy this page runs in; running, every copy of that browser.
+  type Where = { app: string; profile?: string; automated: boolean };
+  type Guide = { browsers: { browser: string; target: "chromium" | "firefox" | "safari"; page: string; built: boolean; running?: Where[] }[];
+    seen: Record<string, { version: string; at: string }>; here?: Where & { browser: string } };
   // instance: the asking copy's short id; replaces: the connected copy of the same browser that approving it disconnects.
-  type Waiting = { id: string; browser: string; version: string; match: string; expires: string; instance?: string; replaces?: string };
+  type Waiting = { id: string; browser: string; version: string; match: string; expires: string; instance?: string; replaces?: string; where?: Where };
   const EXT_MAJOR = ["Google Chrome", "Microsoft Edge", "Firefox", "Safari", "Brave Browser"];
   const extSteps = (target: string | undefined, page: string): [string, string?][] => {
     if (target === "firefox") return [["Open about:debugging, then This Firefox", page], ["Click Load Temporary Add-on…"],
@@ -644,6 +648,10 @@ function install(W: V1): void {
   let pageCopy: string | null = null;
   const learnCopy = (h: ExtensionHello | null) => { pageCopy = h?.instance ?? null; };
   // Where a request can be approved, in words: the asking copy when two copies share the browser's name.
+  // whereLabel names a running copy so two of one browser can be told apart: "~/Desktop/Google Chrome.app",
+  // "/Applications/Google Chrome.app, automated, its own profile".
+  const whereLabel = (w: Where): string => [w.app.replace(/^\/Users\/[^/]+/, "~"), w.automated ? "automated" : "", w.profile ? "its own profile" : ""].filter(Boolean).join(", ");
+  const sameCopy = (a?: Where, b?: Where): boolean => !!a && !!b && a.app === b.app && (a.profile ?? "") === (b.profile ?? "");
   const approveWhere = (q: Waiting): string => q.instance ? `the copy of ${q.browser} that asks (copy ${q.instance})` : q.browser;
   const approvableHere = (q: Waiting): boolean => document.documentElement.dataset.extApprove === "loose" ||
     (q.browser === pageBrowser && (q.instance ? q.instance === pageCopy : true));
@@ -741,6 +749,7 @@ function install(W: V1): void {
         txt.append(el("div", "fw-semibold", `${q.browser}${copy} asks to connect`),
           el("div", "small text-secondary", approvableHere(q) ? "Connect only if the extension's toolbar icon (or its popup) shows these same letters. Not you? Deny it."
             : `To approve it, open Browser Foreman in ${approveWhere(q)} (approvals are strict: Settings › Browser extensions). You can still deny it here.`));
+        if (q.where) txt.append(el("div", "small text-secondary", `Asked from ${whereLabel(q.where)}${sameCopy(q.where, guide.here) ? " (the copy this page is open in)" : guide.here ? " (not the copy this page is open in)" : ""}.`));
         if (q.replaces) txt.append(el("div", "small text-warning", `Copy ${q.replaces} of ${q.browser} is connected now. Approving this one moves ${q.browser} here and disconnects copy ${q.replaces}: only one copy of a browser is connected at a time.`));
         const letters = lettersWithCopy(q.match);
         const acts = el("div", "ext-ask-acts");
@@ -793,10 +802,14 @@ function install(W: V1): void {
         act.append(b);
       } else if (!c && !asking && !lv && g?.built) {
         const b = el("button", "btn btn-sm btn-primary"); b.type = "button"; b.append(icon("ti-player-play", "me-1"), "Set it up");
-        b.dataset.tip = g.page ? `Opens ${g.page} in ${name} and shows the extension's folder in Finder` : "Shows the extension's folder in Finder";
+        b.dataset.tip = g.page ? `Opens ${g.page} in a new tab of ${guide.here?.browser === name ? "this window's " : ""}${name} and shows the extension's folder in Finder` : "Shows the extension's folder in Finder";
         b.onclick = async () => {
           openSteps.add(name); if (!started.has(name)) started.set(name, Date.now()); paintRows();
-          try { await W.call("POST", "extension/setup", { browser: name }); toast("Follow the steps under the browser. It asks to connect by itself once it is loaded.", "info", `Setting up ${name}`); }
+          try {
+            const res = await W.call<{ opened?: string; in?: Where }>("POST", "extension/setup", { browser: name });
+            const where = res.in ? ` The extensions page opened in a new tab of ${sameCopy(res.in, guide.here) ? "this browser" : whereLabel(res.in)}.` : "";
+            toast(`Follow the steps under the browser. It asks to connect by itself once it is loaded.${where}`, "info", `Setting up ${name}`);
+          }
           catch (e) { fail(e); }
         };
         act.append(b);
@@ -846,6 +859,17 @@ function install(W: V1): void {
         f.here ? { state: "done", title: `${name} is installed`, detail: [] }
           : { state: "todo", title: `${name} is not installed`, detail: [note("Nothing to do here unless you use it: install it first, then set the extension up.")] },
       ];
+      // Several copies running (yours and an automated one, or the app in two folders): the extension belongs in the
+      // copy this page is open in, and each copy has extensions of its own.
+      const running = f.g?.running ?? [];
+      if (running.length > 1) {
+        const list = el("ul", "ext-check-note mb-0");
+        running.forEach(w => list.append(el("li", null, whereLabel(w) + (sameCopy(w, guide.here) ? " — this page is open in it" : ""))));
+        const pageIn = guide.here?.browser === name;
+        machine.push({ state: f.c ? "done" : "now", title: `${running.length} copies of ${name} are running`, detail: [
+          note(pageIn ? `Each copy has its own extensions. Load it in the copy this page is open in: Set it up opens its extensions page there, in a new tab of this window.`
+            : `Each copy has its own extensions. Open Browser Foreman in the copy you use and set it up from there.`), list] });
+      }
       if (f.g?.built || loaded) machine.push({ state: "done", title: "The extension is built", detail: [] });
       else { const line = el("div", "ext-check-note"); line.append("In the project folder, run ", el("code", null, "make extension"), copyBtn("make extension")); machine.push({ state: "problem", title: "The extension is not built yet", detail: [line] }); }
 

@@ -10,6 +10,11 @@ ships.
 
 ### Added
 
+- *Browser extensions…* tells copies of one browser apart by the process (macOS): **Set it up** opens the extensions
+  page as a new tab in the window of the copy the page is open in, instead of whichever copy the system picks (with
+  your Chrome and an automated Chrome running, it went to the automated one, so the extension was loaded where the
+  page could never see it). The setup guide lists every running copy and says which one the page is in, and each
+  request to connect says which copy asked.
 - Extension 0.1.7: one connected copy per browser. Each installed copy makes an id of its own; approving a copy (or
   pairing it by code) pins it in the server's settings (`extension_pins`) and revokes the other copies of that
   browser, which stop asking. Two Chromes on one computer, your own and another, no longer race for one identity,
