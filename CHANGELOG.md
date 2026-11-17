@@ -374,6 +374,11 @@ listed there beyond the plan.
   header counts log their errors instead of hiding them.
 - The Timeline's All range showed no tab snapshots: `days=0` now means every snapshot kept.
 
+### Removed
+
+- `legacy/`, the Python implementation Browser Foreman started as: the Go binary does everything it did. Its data
+  exporter is one file, fetched from the last commit that has it ([Move from the Python tool](docs/recipes/migrate-from-python.md)).
+
 ### Changed
 
 - go-notifykit is on its tagged release `src/v0.1.1`, instead of an untagged commit; 0.1.1 lets `notify ping` wait
