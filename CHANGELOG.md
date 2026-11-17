@@ -5,6 +5,11 @@ All notable changes are recorded here, following [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-17
+
+Server settings you can read at a glance: AI is one nested choice with the model picked from the provider's own
+list, and the other groups fold to a one-line summary.
+
 ### Changed
 
 - Settings › *Server settings*, redesigned. AI comes first as one nested choice: *Who answers AI jobs* (your

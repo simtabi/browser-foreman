@@ -105,5 +105,10 @@ Added while the phases above were built, each with tests and docs:
   GitHub release with notes, checksums and build provenance.
 - Left: publishing the landing page and the hosted docs at the product URL; the extensions' store listings (phase 6).
 
+## After v0.1.0
+
+- v0.2.0: Settings › *Server settings* redesigned, with AI as one nested choice and the model picked from the
+  provider's own list (`GET /api/v1/ai/models`); `make check` lints at CI's version.
+
 ---
 [← Docs index](../README.md#documentation)

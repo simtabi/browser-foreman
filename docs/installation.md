@@ -55,7 +55,8 @@ SHA-256 sums in `build/checksums.txt`. Verify them with `cd build && shasum -a 2
 
 ## Pin a version
 
-Check out a tag before building: `git -C ~/src/browser-foreman checkout v0.1.0` (once it exists).
+Check out a tag before building: `git -C ~/src/browser-foreman checkout v0.2.0`, or the newest tag on the
+[releases page](https://github.com/simtabi/browser-foreman/releases).
 
 ## Releases
 
