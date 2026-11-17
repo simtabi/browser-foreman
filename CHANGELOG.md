@@ -5,6 +5,11 @@ All notable changes are recorded here, following [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+### Changed
+
+- The README carries its release, CI and licence badges, and the README, installation guide and roadmap say
+  that v0.1.0 is released.
+
 ## [0.1.0] - 2026-11-17
 
 The first release of the Go rewrite: everything in [docs/roadmap.md](docs/roadmap.md) phases 1 to 6 and the work

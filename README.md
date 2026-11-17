@@ -1,7 +1,11 @@
 # simtabi/browser-foreman
 
-No badges yet: the project is unreleased and not yet on GitHub, so there is no registry version, CI run or release to
-point at. They are added with the first public release.
+[![Release](https://img.shields.io/github/v/release/simtabi/browser-foreman?sort=semver)](https://github.com/simtabi/browser-foreman/releases)
+[![CI](https://github.com/simtabi/browser-foreman/actions/workflows/ci.yml/badge.svg)](https://github.com/simtabi/browser-foreman/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+Three badges, not four: a Go binary is published on its GitHub release only, so there is no registry version to show,
+and static analysis (golangci-lint, CodeQL) runs inside the CI badge's checks.
 
 > Clean bookmarks, safe tabs: a local server and web interface that keeps your browsers' bookmarks tidy and your open tabs safe from a crash.
 
@@ -10,8 +14,8 @@ Runs on macOS, Linux and Windows from one Go binary (macOS ships as one universa
 ## Install
 
 Download the binary for your platform from the
-[GitHub release](https://github.com/simtabi/browser-foreman/releases) once one is published, and check it against
-that release's `checksums.txt`. Or build from source (Go 1.26 or newer):
+[GitHub release](https://github.com/simtabi/browser-foreman/releases), and check it against that release's
+`checksums.txt`. Or build from source (Go 1.26 or newer):
 
 ```bash
 git clone https://github.com/simtabi/browser-foreman.git ~/src/browser-foreman
@@ -61,7 +65,7 @@ The full walkthrough is in [getting started](docs/getting-started.md); everythin
 
 ## <a name="documentation"></a>Documentation
 
-Hosted at <https://opensource.simtabi.com/documentation/simtabi/browser-foreman/> once released.
+The hosted site at <https://opensource.simtabi.com/documentation/simtabi/browser-foreman/> is not published yet; these pages are the documentation.
 
 ### Guides
 
