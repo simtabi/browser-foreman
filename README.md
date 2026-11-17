@@ -72,6 +72,7 @@ Hosted at <https://opensource.simtabi.com/documentation/simtabi/browser-foreman/
 - [Security](docs/security.md) — what the server protects and how
 - [Roadmap](docs/roadmap.md) — what ships in v0.1.0 and in what order
 - [Release](docs/release.md) — how a version is cut
+- [Screenshots](docs/screenshots.md) — every feature, grouped and numbered; `make screenshots` makes them again
 
 ### Reference
 

@@ -12,6 +12,9 @@ listed there beyond the plan.
 
 ### Added
 
+- `make screenshots`: every feature at 1440 x 900 and twice the pixel density, grouped and numbered in
+  `docs/screenshots/`, with `docs/screenshots.md` listing them. It runs the built binary on a throwaway store of
+  public sites and never reads this computer's browsers.
 - Settings › *Server settings* edits the server's config files and `.env` from the page: owner only, from this
   computer only, every change checked by the same loader the server starts with before anything is written. Secrets
   (API keys, the token) are write-only. `settings.edit` (files only) decides how much the page may change: `safe` by
