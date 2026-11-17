@@ -146,3 +146,20 @@ func TestGoReleaserPublishesNowhereElse(t *testing.T) {
 		}
 	}
 }
+
+// The release carries the tag's CHANGELOG section, which the shared workflow passes with --release-notes, and a
+// pre-release tag (v0.1.0-rc.1) is published as a pre-release. `changelog: disable: true` drops those notes, and
+// without `prerelease: auto` an rc tag becomes the latest release: v0.1.0-rc.1 shipped with both faults.
+func TestGoReleaserKeepsTheNotesAndMarksPreReleases(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", ".goreleaser.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := string(b)
+	if regexp.MustCompile(`(?m)^changelog:\s*\n\s+disable:\s*true`).MatchString(cfg) {
+		t.Error("src/.goreleaser.yaml disables the changelog, which also drops the release notes the shared workflow passes")
+	}
+	if !regexp.MustCompile(`(?m)^release:\s*\n(?:\s+.*\n)*?\s+prerelease:\s*auto\b`).MatchString(cfg) {
+		t.Error("src/.goreleaser.yaml's release block needs `prerelease: auto`, so an rc tag is not published as the latest release")
+	}
+}
