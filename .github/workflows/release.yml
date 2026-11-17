@@ -36,7 +36,7 @@ jobs:
       contents: write
       id-token: write
       attestations: write
-    uses: simtabi/.github/.github/workflows/go-release.yml@767e0c01251dbbfc695d03dfdd73db48733e852e  # v1.0.0
+    uses: simtabi/.github/.github/workflows/go-release.yml@c885f55754d34ea11efd603cdf2a6bd32a8aee86  # v0.1.1
     with:
       tag: ${{ inputs.tag || github.ref_name }}
       # GoReleaser's `make web` hook builds the web interface; the same Node as ci.yml's web job.

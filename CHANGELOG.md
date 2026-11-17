@@ -264,6 +264,8 @@ listed there beyond the plan.
 
 ### Fixed
 
+- The release workflow could not load: it pinned simtabi/.github's shared go-release.yml to a commit that history
+  reset left on no branch, so GitHub answered "workflow was not found" on every push. It now pins `v0.1.1`.
 - The welcome message no longer says "0 more wait in the Trash" when the Trash is empty.
 - A merge test meant to prove the base workspace is left untouched compared a value with itself and could never
   fail; it now compares the workspace before and after, and was seen failing when the merge changed it.
