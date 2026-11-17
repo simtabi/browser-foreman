@@ -6,6 +6,7 @@ import { Dom } from "../dom";
 import { PlaceMemory } from "../place";
 import { HistoryAccessPanel } from "../history";
 import { SnapshotSettingsPanel } from "../snapshot-settings";
+import { ServerSettingsPanel } from "../server-settings";
 import { Pager } from "../pager";
 import { RangePicker } from "../rangepick";
 import { FoldCenter } from "../fold";
@@ -1311,6 +1312,9 @@ function openSettings() {
   const extra = [ha];
   // Page snapshots: window size, wait and folder (server preferences; owner only).
   if (WS) extra.push(new SnapshotSettingsPanel().element);
+  // The server's own settings: its config files and .env (owner only; secrets write-only).
+  const v1 = window.BM_WS as { call?: <T>(m: string, p: string, b?: unknown) => Promise<T> } | undefined;
+  if (v1?.call) extra.push(new ServerSettingsPanel((m, p, b) => v1.call!(m, p, b)).element);
   // Assistants: where Claude can reach Browser Foreman, and whether it may change things.
   if (wsUI()?.mcpAccess) extra.push(settingsGroup("Assistants", [
     actionRow("MCP access (Claude)", "Where Claude can reach Browser Foreman, and whether it may change things. Off by default.", "Open…", "ti-plug-connected", "", closing(() => wsUI().mcpAccess()))]));

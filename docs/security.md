@@ -87,8 +87,10 @@ What Browser Foreman protects, and how. Report a weakness privately: see [SECURI
   renaming or archiving it. Only unlocking is accepted.
 - Backups hold no accounts, tokens, sessions or webhook secrets ([backup](tools/backup.md)), and restoring never
   replaces an existing workspace.
-- Settings are read-only through the API (`GET /api/v1/settings`, owner): a token that could change the server's
-  mode or address could open it to the network. Change them in the config files and restart.
+- Settings are changed through the API only by the owner, only from this computer (a loopback connection), and only
+  within `settings.edit`, which the API itself cannot change. With the default `safe`, the server's mode, address,
+  storage and token stay file-only, because a token that could change them could open the server to the network.
+  With `all`, each of those needs an explicit confirmation. Secrets are write-only: no answer contains them.
 
 ## Releases
 

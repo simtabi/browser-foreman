@@ -95,7 +95,9 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `POST`, `GET` | `/api/v1/snapshots`, `/api/v1/snapshots/{id}`, `/api/v1/snapshots/{id}/cancel` | editor, viewer | pictures of pages in the background; see [page snapshots](page-snapshots.md) |
 | `POST` | `/api/v1/writeback/preview`, `/api/v1/writeback/apply` | owner | a workspace back into a browser profile, previewed first; see [write-back](write-back.md) |
 | `POST`, `GET` | `/api/v1/ai/jobs`, `/api/v1/ai/jobs/next`, `/api/v1/ai/jobs/{id}/results` | owner | tag suggestions and duplicate verdicts by a model; see [AI](ai.md) |
-| `GET` | `/api/v1/settings` | owner | the configuration in force, without secrets; read-only |
+| `GET` | `/api/v1/settings` | owner | the configuration in force, without secrets |
+| `GET` | `/api/v1/settings/fields` | owner | every setting: `key`, `group`, `type`, `choices`, `value` (never a secret's), `set`, `source`, `editable` and why not, `risky`, `live`; plus `edit` (`safe` or `all`) and the config `folder`; see [editing from the page](../configuration.md#editing-from-the-page) |
+| `PUT` | `/api/v1/settings` | owner, from this computer | `{values: {key: value}, confirm?}`: all or nothing; `403` for a setting the page may not change, `409` for a risky one without `confirm`; answers `result.changed`, `result.restart` (needs a restart) and `result.files` |
 | `POST` | `/api/v1/workspaces/{id}/rollback` | editor | body `{to}`: the state after entry `to` becomes the newest, as an entry you can undo |
 
 Every change answers `201 {"entry", "events"}` with the new head as its `ETag`.

@@ -15,7 +15,24 @@ Later layers override earlier ones:
 4. Environment variables.
 
 `browser-foreman config show` prints the result and the files it read (never the token). `browser-foreman config init`
-writes a starting `config.json` and a `.env` with a fresh token, both `0600`, and never overwrites.
+writes a starting `config.json`, and a `.env` made from the `env.example` the app ships (every variable it reads,
+empty, with what each is for) with a fresh token. Both are `0600`, and neither is ever overwritten.
+
+## Editing from the page
+
+Settings › *Server settings* edits these same files: owner only, and saved only from the computer the server runs
+on. Each setting shows where its value comes from (the default, a config file, `.env` or the environment).
+
+- **Secrets are write-only.** API keys and the token go to `.env`; the page shows whether one is set, never its value,
+  and can replace or remove it.
+- **Where a change lands.** A value already in `.env` stays there; any other goes to the last config file that sets
+  it, else `config.json`. Comments and other lines in `.env` are kept. The whole change is checked by the same
+  loader the server starts with, and nothing is written unless all of it passes.
+- **The environment wins.** A setting a `BROFO_*` variable sets in the shell is shown, not editable.
+- **What the page may change** is `settings.edit`, set in the files only. `safe` (the default) leaves the server's
+  address and mode, storage, and the API token to the files. `all` lets the page change those too, each after a
+  confirmation.
+- **When it applies.** AI settings and keys take effect at once. The rest take effect when the server restarts.
 
 ## Keys
 
@@ -44,6 +61,7 @@ writes a starting `config.json` and a `.env` with a fresh token, both `0600`, an
 | `ai.openai_url` | — | `https://api.openai.com/v1` | where the OpenAI API is |
 | — | `OPENAI_API_KEY` | none | OpenAI's key, `.env` or the environment only |
 | — | `ANTHROPIC_API_KEY` | none | Anthropic's key, `.env` or the environment only; without it, an `ant auth login` profile |
+| `settings.edit` | `BROFO_SETTINGS_EDIT` | `safe` | what the page's Settings may change: `safe`, or `all` (address, mode, storage and token too, after a confirmation); files and environment only |
 | — | `BROFO_API_TOKEN` | none | the owner's token in `local` mode; `.env` or the environment only, never JSON |
 
 ## Example

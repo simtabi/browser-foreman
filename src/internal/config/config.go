@@ -12,6 +12,7 @@ package config
 
 import (
 	"bufio"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,37 +36,37 @@ const (
 )
 
 type Server struct {
-	Addr string `json:"addr"` // host:port; 127.0.0.1 unless you choose otherwise
-	Mode Mode   `json:"mode"`
+	Addr string `json:"addr" env:"BROFO_SERVER_ADDR" ui:"risky" help:"Address and port the server listens on."` // host:port; 127.0.0.1 unless you choose otherwise
+	Mode Mode   `json:"mode" env:"BROFO_SERVER_MODE" ui:"risky" choices:"local,accounts" help:"local: one owner on this computer, no sign-in. accounts: people sign in."`
 	// Open says whether serve opens its page in the default browser when it starts: auto (when started from a
 	// terminal), always or never.
-	Open string `json:"open"`
+	Open string `json:"open" env:"BROFO_SERVER_OPEN" choices:"auto,always,never" help:"Open the page in your browser when the server starts."`
 }
 
 type Storage struct {
-	Driver string `json:"driver"` // sqlite or json
-	Path   string `json:"path"`   // empty: the state directory
+	Driver string `json:"driver" env:"BROFO_STORAGE_DRIVER" ui:"risky" choices:"sqlite,json" help:"Where data is kept. Move it first with storage migrate."` // sqlite or json
+	Path   string `json:"path" env:"BROFO_STORAGE_PATH" ui:"risky" help:"The data folder; empty uses the state folder."`                                     // empty: the state directory
 }
 
 type Webhooks struct {
-	Timeout  Duration `json:"timeout"`  // per delivery attempt
-	Attempts int      `json:"attempts"` // tries before a delivery is marked failed
+	Timeout  Duration `json:"timeout" env:"BROFO_WEBHOOK_TIMEOUT" help:"How long one delivery attempt may take (1s to 2m)."`    // per delivery attempt
+	Attempts int      `json:"attempts" env:"BROFO_WEBHOOK_ATTEMPTS" help:"Tries before a delivery counts as failed (1 to 20)."` // tries before a delivery is marked failed
 }
 
 // Auth settings: how long a sign-in lasts.
 type Auth struct {
-	SessionTTL Duration `json:"session_ttl"`
+	SessionTTL Duration `json:"session_ttl" env:"BROFO_SESSION_TTL" help:"How long a sign-in lasts (5m to 720h)."`
 }
 
 // MCP is the Model Context Protocol server (`browser-foreman mcp`): off unless Enabled, read-only unless Writes.
 type MCP struct {
-	Enabled bool `json:"enabled"`
-	Writes  bool `json:"writes"`
+	Enabled bool `json:"enabled" env:"BROFO_MCP" help:"Let an assistant reach Browser Foreman over MCP."`
+	Writes  bool `json:"writes" env:"BROFO_MCP_WRITES" help:"Let it change bookmarks too, not only read them."`
 	// Folders limits writes to what is inside these folders (paths like "Bookmarks Bar/Inbox"); empty: anywhere.
-	Folders []string `json:"folders,omitempty"`
+	Folders []string `json:"folders,omitempty" help:"Limit its changes to these folders, one per line, like Bookmarks Bar/Inbox."`
 	// Clients gives one MCP client, by the name it reports (clientInfo.name, such as "claude-code"), its own writes
 	// and folders in place of the two above.
-	Clients map[string]MCPScope `json:"clients,omitempty"`
+	Clients map[string]MCPScope `json:"clients,omitempty" ui:"file" help:"Per-client rights; edit this in the file."`
 }
 
 // MCPScope is what one MCP client may change.
@@ -77,30 +78,37 @@ type MCPScope struct {
 // Writeback is how `browser-foreman apply` writes a cleaned workspace into a browser: each choice is a value, or
 // "ask" (the default) to be asked every time.
 type Writeback struct {
-	Read  string `json:"read"`  // where the dry run reads the profile now: file, extension or ask
-	Route string `json:"route"` // how the write reaches it: file, extension or ask
-	Mode  string `json:"mode"`  // merge, replace or ask
+	Read  string `json:"read" choices:"ask,file,extension" help:"Where a write-back reads the browser's bookmarks first."` // where the dry run reads the profile now: file, extension or ask
+	Route string `json:"route" choices:"ask,file,extension" help:"How a write-back reaches the browser."`                  // how the write reaches it: file, extension or ask
+	Mode  string `json:"mode" choices:"ask,merge,replace" help:"Merge into the browser's bookmarks, or replace them."`     // merge, replace or ask
 }
 
 // AI is who answers AI jobs (suggested tags, duplicate verdicts) as soon as they are made: nobody (none, the
 // default: an MCP client takes them), Anthropic's API (anthropic), OpenAI's API (openai) or a local Ollama (ollama). Jobs are made only when
 // the owner asks, and only then does anything about the bookmarks leave this computer.
 type AI struct {
-	Provider  string `json:"provider"`             // none, anthropic, openai or ollama
-	Model     string `json:"model,omitempty"`      // anthropic: claude-opus-5-5 when empty; openai and ollama: required
-	Effort    string `json:"effort,omitempty"`     // anthropic: low, medium or high; empty: low
-	OllamaURL string `json:"ollama_url,omitempty"` // http://127.0.0.1:11434 when empty
-	OpenAIURL string `json:"openai_url,omitempty"` // https://api.openai.com/v1 when empty; any server speaking the same API
+	Provider  string `json:"provider" env:"BROFO_AI_PROVIDER" ui:"live" choices:"none,anthropic,openai,ollama" help:"Who answers AI jobs. none leaves them for your assistant."` // none, anthropic, openai or ollama
+	Model     string `json:"model,omitempty" env:"BROFO_AI_MODEL" ui:"live" help:"The model. Needed for OpenAI and Ollama; Anthropic uses claude-opus-5-5 when empty."`          // anthropic: claude-opus-5-5 when empty; openai and ollama: required
+	Effort    string `json:"effort,omitempty" ui:"live" choices:"low,medium,high" help:"How hard Anthropic's model thinks."`                                                     // anthropic: low, medium or high; empty: low
+	OllamaURL string `json:"ollama_url,omitempty" ui:"live" help:"Ollama's address."`                                                                                            // http://127.0.0.1:11434 when empty
+	OpenAIURL string `json:"openai_url,omitempty" ui:"live" help:"OpenAI's address, or any server with the same API."`                                                           // https://api.openai.com/v1 when empty; any server speaking the same API
 	// OpenAIKey is OPENAI_API_KEY, from .env or the environment only.
-	OpenAIKey string `json:"-"`
+	OpenAIKey string `json:"-" env:"OPENAI_API_KEY" ui:"secret,live" help:"Your OpenAI API key. Kept in .env, never shown again."`
 	// AnthropicKey is ANTHROPIC_API_KEY, from .env or the environment only; empty lets the SDK use `ant auth login`.
-	AnthropicKey string `json:"-"`
+	AnthropicKey string `json:"-" env:"ANTHROPIC_API_KEY" ui:"secret,live" help:"Your Anthropic API key. Kept in .env, never shown again."`
 }
 
 // Notify is desktop notifications (through go-notifykit): one banner when a scheduled link re-check finds links
 // that stopped working or work again. BROFO_NOTIFY_DESKTOP=0 turns them off for one run; go-notifykit reads it.
 type Notify struct {
-	Desktop bool `json:"desktop"`
+	Desktop bool `json:"desktop" help:"A notification when a scheduled re-check finds links newly dead or fixed."`
+}
+
+// Settings is how much the web page's Settings may change: safe (the default) leaves the server's address, mode,
+// storage and API token to the files; all lets the page change those too, each after a confirmation. Only the
+// files and the environment can set this one.
+type Settings struct {
+	Edit string `json:"edit" env:"BROFO_SETTINGS_EDIT" ui:"file" choices:"safe,all" help:"safe: the page cannot change the address, mode, storage or token. all: it can, after a confirmation."`
 }
 
 // Config is the whole configuration. APIToken is never read from a JSON file: secrets come from .env or the
@@ -114,7 +122,8 @@ type Config struct {
 	Writeback Writeback `json:"writeback"`
 	Notify    Notify    `json:"notify"`
 	AI        AI        `json:"ai"`
-	APIToken  string    `json:"-"`
+	Settings  Settings  `json:"settings"`
+	APIToken  string    `json:"-" env:"BROFO_API_TOKEN" ui:"secret,risky" help:"The token the page and the CLI use. Changing it signs out every page."`
 	// Sources lists what was read, in order, for `browser-foreman config show`.
 	Sources []string `json:"-"`
 }
@@ -152,6 +161,7 @@ func Defaults() Config {
 		Writeback: Writeback{Read: "ask", Route: "ask", Mode: "ask"},
 		Notify:    Notify{Desktop: true},
 		AI:        AI{Provider: "none", Effort: "low", OllamaURL: "http://127.0.0.1:11434", OpenAIURL: "https://api.openai.com/v1"},
+		Settings:  Settings{Edit: "safe"},
 	}
 }
 
@@ -174,28 +184,53 @@ func ResolvePaths(getenv func(string) string) (Paths, error) {
 
 // Load reads the configuration: defaults, then *.json in the config directory, then .env, then the environment.
 func Load(p Paths, getenv func(string) string) (Config, error) {
-	c := Defaults()
-	files, _ := filepath.Glob(filepath.Join(p.Config, "*.json"))
-	sort.Strings(files)
-	for _, f := range files {
+	files, err := readJSONFiles(p.Config)
+	if err != nil {
+		return Defaults(), err
+	}
+	envFile := filepath.Join(p.Config, ".env")
+	env, err := readDotEnv(envFile)
+	hasEnv := err == nil
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return Defaults(), err
+	}
+	return build(p, files, env, hasEnv, getenv)
+}
+
+// jsonFile is one *.json file of the config directory: its name and contents.
+type jsonFile struct {
+	Name string
+	Body []byte
+}
+
+// readJSONFiles reads every *.json in dir, in name order.
+func readJSONFiles(dir string) ([]jsonFile, error) {
+	names, _ := filepath.Glob(filepath.Join(dir, "*.json"))
+	sort.Strings(names)
+	out := make([]jsonFile, 0, len(names))
+	for _, f := range names {
 		b, err := os.ReadFile(f)
 		if err != nil {
-			return c, err
+			return nil, err
 		}
-		dec := json.NewDecoder(strings.NewReader(string(b)))
+		out = append(out, jsonFile{Name: filepath.Base(f), Body: b})
+	}
+	return out, nil
+}
+
+// build is Load on contents already read: so a change can be checked before it is written.
+func build(p Paths, files []jsonFile, env map[string]string, hasEnv bool, getenv func(string) string) (Config, error) {
+	c := Defaults()
+	for _, f := range files {
+		dec := json.NewDecoder(strings.NewReader(string(f.Body)))
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(&c); err != nil {
-			return c, fmt.Errorf("%s: %w", f, err)
+			return c, fmt.Errorf("%s: %w", filepath.Join(p.Config, f.Name), err)
 		}
-		c.Sources = append(c.Sources, f)
+		c.Sources = append(c.Sources, filepath.Join(p.Config, f.Name))
 	}
-	env := map[string]string{}
-	envFile := filepath.Join(p.Config, ".env")
-	if kv, err := readDotEnv(envFile); err == nil {
-		env = kv
-		c.Sources = append(c.Sources, envFile)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return c, err
+	if hasEnv {
+		c.Sources = append(c.Sources, filepath.Join(p.Config, ".env"))
 	}
 	get := func(k string) string {
 		if v := getenv(k); v != "" {
@@ -224,6 +259,7 @@ func apply(c *Config, get func(string) string) error {
 		"BROFO_AI_MODEL":         func(v string) error { c.AI.Model = v; return nil },
 		"ANTHROPIC_API_KEY":      func(v string) error { c.AI.AnthropicKey = v; return nil },
 		"OPENAI_API_KEY":         func(v string) error { c.AI.OpenAIKey = v; return nil },
+		"BROFO_SETTINGS_EDIT":    func(v string) error { c.Settings.Edit = v; return nil },
 		"BROFO_WEBHOOK_ATTEMPTS": func(v string) error { n, err := strconv.Atoi(v); c.Webhooks.Attempts = n; return err },
 		"BROFO_MCP":              func(v string) error { b, err := strconv.ParseBool(v); c.MCP.Enabled = b; return err },
 		"BROFO_MCP_WRITES":       func(v string) error { b, err := strconv.ParseBool(v); c.MCP.Writes = b; return err },
@@ -300,6 +336,9 @@ func (c Config) Validate() error {
 	default:
 		return fmt.Errorf("ai.provider %q: use none, anthropic, openai or ollama", c.AI.Provider)
 	}
+	if c.Settings.Edit != "safe" && c.Settings.Edit != "all" {
+		return fmt.Errorf("settings.edit %q: use safe or all", c.Settings.Edit)
+	}
 	if e := c.AI.Effort; e != "" && e != "low" && e != "medium" && e != "high" {
 		return fmt.Errorf("ai.effort %q: use low, medium or high", e)
 	}
@@ -368,7 +407,14 @@ func readDotEnv(path string) (map[string]string, error) {
 	return out, sc.Err()
 }
 
-// Init writes a starting config.json and an .env with a fresh API token, refusing to overwrite either.
+// EnvExample is the .env the app ships: every variable it reads, empty, with what each is for. Init creates the
+// real .env from it, with a fresh API token.
+//
+//go:embed env.example
+var EnvExample string
+
+// Init writes a starting config.json, and an .env made from EnvExample with a fresh API token, refusing to
+// overwrite either.
 func Init(p Paths, token string) ([]string, error) {
 	if err := os.MkdirAll(p.Config, 0o700); err != nil {
 		return nil, err
@@ -380,9 +426,13 @@ func Init(p Paths, token string) ([]string, error) {
 		Webhooks Webhooks `json:"webhooks"`
 		Auth     Auth     `json:"auth"`
 	}{d.Server, d.Storage, d.Webhooks, d.Auth}, "", "  ")
+	env, err := setEnvLine(EnvExample, "BROFO_API_TOKEN", token)
+	if err != nil {
+		return nil, err
+	}
 	files := map[string][]byte{
 		"config.json": append(body, '\n'),
-		".env":        []byte("# Secrets for Browser Foreman. Keep this file private (it is created 0600).\nBROFO_API_TOKEN=" + token + "\n"),
+		".env":        []byte(env),
 	}
 	var wrote []string
 	for _, name := range []string{"config.json", ".env"} {

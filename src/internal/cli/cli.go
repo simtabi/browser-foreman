@@ -97,6 +97,7 @@ func serveCmd() *cobra.Command {
 			}
 			defer data.Close()
 			srv := newServer(c, data, time.Now)
+			srv.ConfigPaths, srv.Getenv = p, os.Getenv
 			srv.Listener = l
 			srv.Console = cmd.OutOrStdout()
 			if err := writeRuntime(c, c.Server.Addr, time.Now()); err != nil {
@@ -183,15 +184,21 @@ func newServer(c config.Config, data store.Store, now func() time.Time) *api.Ser
 			},
 		}}
 	srv.Tabs = &tabs.Service{Data: data, Browsers: bs, Reader: tabReader, Closer: tabReader, Now: now}
-	switch c.AI.Provider { // validated on load: none leaves jobs for an MCP client
-	case "anthropic":
-		srv.AI = ai.NewAnthropic(c.AI.AnthropicKey, c.AI.Model, c.AI.Effort)
-	case "ollama":
-		srv.AI = &ai.Ollama{URL: c.AI.OllamaURL, Model: c.AI.Model}
-	case "openai":
-		srv.AI = &ai.OpenAI{URL: c.AI.OpenAIURL, Key: c.AI.OpenAIKey, Model: c.AI.Model}
-	}
+	srv.AI, srv.NewAI = aiProvider(c.AI), aiProvider
 	return srv
+}
+
+// aiProvider is who answers AI jobs for a (validated) AI configuration; nil, for none, leaves them for an MCP client.
+func aiProvider(c config.AI) ai.Provider {
+	switch c.Provider {
+	case "anthropic":
+		return ai.NewAnthropic(c.AnthropicKey, c.Model, c.Effort)
+	case "ollama":
+		return &ai.Ollama{URL: c.OllamaURL, Model: c.Model}
+	case "openai":
+		return &ai.OpenAI{URL: c.OpenAIURL, Key: c.OpenAIKey, Model: c.Model}
+	}
+	return nil
 }
 
 func versionCmd() *cobra.Command {

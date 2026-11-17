@@ -22,6 +22,10 @@ and the server publishes what changed as events. If the bookmarks changed somewh
 save is refused and the page offers *Reload* or *Keep my change*, so nothing is overwritten. A locked workspace opens
 read-only.
 
+Settings (`,`) holds the page's own preferences and, under *Server settings*, the server's config files and `.env`:
+AI provider and keys, notifications, webhooks, MCP and more, grouped as the files are
+([editing from the page](../configuration.md#editing-from-the-page)).
+
 ## The layout
 
 One header holds everything that applies everywhere: the workspace switcher, the three views (with counts), one

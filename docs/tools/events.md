@@ -64,6 +64,7 @@ of that buffer, the stream starts with `: some events were missed; reload the st
 | `tabs.deleted` | `{deleted}` |
 | `tabs.purged` | `{level, snapshots, windows}` |
 | `links.opened` | `{count, how, browsers, ok}`; never the links |
+| `settings.updated` | `{changed, restart, files}`: setting keys only, never a value |
 | `preferences.updated` | `{open_with, autosave}` |
 | `extension.requested` | an extension asked to connect: `{browser, request}` |
 | `extension.paired` | `{browser, token, instance, replaced}`: the token's id (never the secret), the connected copy's short id, and how many other copies' keys were revoked |

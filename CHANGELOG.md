@@ -12,6 +12,11 @@ listed there beyond the plan.
 
 ### Added
 
+- Settings › *Server settings* edits the server's config files and `.env` from the page: owner only, from this
+  computer only, every change checked by the same loader the server starts with before anything is written. Secrets
+  (API keys, the token) are write-only. `settings.edit` (files only) decides how much the page may change: `safe` by
+  default, or `all` to include the address, mode, storage and token, each after a confirmation. AI settings apply
+  at once. `config init` now makes `.env` from a shipped `env.example`.
 - *Browser extensions…* tells copies of one browser apart by the process (macOS): **Set it up** opens the extensions
   page as a new tab in the window of the copy the page is open in, instead of whichever copy the system picks (with
   your Chrome and an automated Chrome running, it went to the automated one, so the extension was loaded where the

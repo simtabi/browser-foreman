@@ -83,7 +83,7 @@ func (s *Server) aiFile() string {
 
 // resumeAIJobs answers the jobs a restart left waiting, when a provider is configured.
 func (s *Server) resumeAIJobs(ctx context.Context) {
-	if s.AI == nil {
+	if s.provider() == nil {
 		return
 	}
 	s.aiLock()
@@ -146,8 +146,8 @@ func (s *Server) createAIJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	s.aiSaveUnlock()
 	answeredBy := "an MCP client: it calls next_ai_jobs, or use the process-queue prompt"
-	if s.AI != nil {
-		answeredBy = s.AI.Name()
+	if p := s.provider(); p != nil {
+		answeredBy = p.Name()
 		go s.runJobs(context.WithoutCancel(r.Context()), jobs)
 	}
 	_, _ = s.Bus.Publish("ai.jobs.created", map[string]any{"workspace": in.Workspace, "kind": in.Kind, "jobs": len(jobs)})
@@ -289,12 +289,19 @@ func (s *Server) runJobs(ctx context.Context, jobs []*ai.Job) {
 		j.State, j.Lease = ai.Working, s.Now().Add(jobLease)
 		snap := *j
 		s.aiSaveUnlock()
-		res, err := s.AI.Answer(ctx, snap)
+		p := s.provider()
+		if p == nil { // turned off in Settings while the jobs waited: an MCP client takes them
+			s.aiLock()
+			j.State = ai.Pending
+			s.aiSaveUnlock()
+			continue
+		}
+		res, err := p.Answer(ctx, snap)
 		if err != nil {
 			s.failJob(j, err)
 			continue
 		}
-		_ = s.finishJob(ctx, j.ID, res, s.AI.Name())
+		_ = s.finishJob(ctx, j.ID, res, p.Name())
 	}
 }
 
@@ -500,4 +507,18 @@ func (s *Server) submitAIResults(w http.ResponseWriter, r *http.Request) {
 	j := *s.ai.jobs[r.PathValue("id")]
 	s.ai.mu.Unlock()
 	writeJSON(w, 200, map[string]any{"job": summaries([]*ai.Job{&j})[0]})
+}
+
+// provider is the AI provider now in force: nil when jobs wait for an MCP client.
+func (s *Server) provider() ai.Provider {
+	s.aiProv.RLock()
+	defer s.aiProv.RUnlock()
+	return s.AI
+}
+
+// setProvider replaces it, as Settings does.
+func (s *Server) setProvider(p ai.Provider) {
+	s.aiProv.Lock()
+	s.AI = p
+	s.aiProv.Unlock()
 }
