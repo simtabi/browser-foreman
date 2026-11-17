@@ -9,7 +9,6 @@ needs.
 |---|---|
 | `src/` | the Go module (`go.mod` is here, not at the root). `cmd/browser-foreman` is the entrypoint; everything else is under `internal/` |
 | `web/` | the web interface: TypeScript + Alpine sources in `web/src`, built with esbuild into `web/dist` |
-| `legacy/` | the Python implementation the project started as; the reference for behaviour until the Go binary reaches parity |
 | `site/` | the landing page |
 | `docs/` | the documentation (the README's Documentation section is the index) |
 | `build/` | build output, one folder per OS; only `targets.txt` is tracked |

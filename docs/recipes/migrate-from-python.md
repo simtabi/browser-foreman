@@ -3,8 +3,12 @@
 Bring everything the Python tool kept into Browser Foreman: every workspace with its whole history, link results,
 tab snapshots and settings. The Python checkout is only read.
 
+The exporter is one Python file with no dependencies. It shipped with the Python implementation, which left this
+repository before 0.1.0; take it from the last commit that has it:
+
 ```bash
-python3 legacy/tools/export_for_go.py --root ~/path/to/the/python/checkout --out ~/from-python.json.gz
+curl -fsSLO https://raw.githubusercontent.com/simtabi/browser-foreman/03a2fd4/legacy/tools/export_for_go.py
+python3 export_for_go.py --root ~/path/to/the/python/checkout --out ~/from-python.json.gz
 browser-foreman restore ~/from-python.json.gz
 ```
 
