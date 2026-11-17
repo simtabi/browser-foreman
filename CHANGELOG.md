@@ -13,6 +13,10 @@ All notable changes are recorded here, following [Keep a Changelog](https://keep
   address under *Advanced*. One button saves provider and model together, which ends the "needs ai.model" refusal
   when a provider was chosen on its own. The other groups fold, each with its current values in its summary.
 
+- `make check` runs golangci-lint at the version CI runs (`GOLANGCI_VERSION`, fetched with `go run` when it is not
+  installed), so a local pass is a CI pass; it used to skip lint where the tool was missing.
+  `TestLocalLintIsCIsLint` fails if the Makefile and `ci.yml` versions differ.
+
 ### Added
 
 - `GET /api/v1/ai/models?provider=`: the models Anthropic, OpenAI (chat models only) or a local Ollama offers.

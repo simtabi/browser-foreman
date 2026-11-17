@@ -19,7 +19,8 @@ needs.
 make check
 ```
 
-That is gofmt, `go vet` and the Go tests. For the web interface:
+That is gofmt, `go vet`, golangci-lint (the version CI runs, fetched by `go run` when it is not installed) and the
+Go tests. For the web interface:
 
 ```bash
 cd web && npm install && npm run check:web && npm run test:web

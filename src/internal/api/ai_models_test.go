@@ -36,7 +36,7 @@ func TestAIModelsForSettings(t *testing.T) {
 	key := strings.Repeat("o", 16)
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+key {
-			http.Error(w, "no", 401)
+			http.Error(w, "no", http.StatusUnauthorized)
 			return
 		}
 		_, _ = w.Write([]byte(`{"data":[{"id":"gpt-5"},{"id":"tts-1"}]}`))
