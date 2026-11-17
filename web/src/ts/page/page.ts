@@ -631,7 +631,7 @@ addEventListener("resize", () => { if (tourAt >= 0) paintTour(); });
 // Welcome, shown once: what this is, how to get bookmarks in and out, and an offer of the tour.
 async function welcome() {
   const go = await askConfirm({title: `Welcome to ${APP.name}`, ok: "Take the 1-minute tour", no: "Not now", danger: false,
-    body: `${APP.name} keeps your bookmarks clean and your tabs safe. This workspace holds ${liveItems().length.toLocaleString()} of your bookmarks, checked and sorted into one structure built on your own folders (${trashCount().toLocaleString()} more wait in the Trash), and Open tabs saves your browser windows so a crash never loses them. ` +
+    body: `${APP.name} keeps your bookmarks clean and your tabs safe. This workspace holds ${liveItems().length.toLocaleString()} of your bookmarks, checked and sorted into one structure built on your own folders${trashCount() ? ` (${trashCount().toLocaleString()} more wait in the Trash)` : ""}, and Open tabs saves your browser windows so a crash never loses them. ` +
       "Review and edit here; nothing changes in your browser until you download the import file and import it, or write it back with the browser extension (Browsers › Browser extensions…)."});
   try { localStorage.setItem(STORE + ":onboarded", "1"); } catch {}
   if (go) tour(0);

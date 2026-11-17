@@ -256,6 +256,7 @@ listed there beyond the plan.
 
 ### Fixed
 
+- The welcome message no longer says "0 more wait in the Trash" when the Trash is empty.
 - A merge test meant to prove the base workspace is left untouched compared a value with itself and could never
   fail; it now compares the workspace before and after, and was seen failing when the merge changed it.
 - Extension 0.1.8: with two copies of one browser open, both pages prompted for both copies' requests, and the copy
@@ -367,7 +368,8 @@ listed there beyond the plan.
 
 ### Changed
 
-- go-notifykit is on its tagged release, `src/v0.1.0`, instead of an untagged commit two commits behind it.
+- go-notifykit is on its tagged release `src/v0.1.1`, instead of an untagged commit; 0.1.1 lets `notify ping` wait
+  for a slow first delivery on macOS instead of reporting a timeout while the banner still shows.
 - The Go code is lint clean under golangci-lint's standard set (`src/.golangci.yml`), and CI lints every pull request.
   Writes to a terminal and deferred closes follow golangci-lint's own exclusions; transactions roll back explicitly.
 - Tests now fail when an API route is missing from `docs/` or a published event from the events table.
