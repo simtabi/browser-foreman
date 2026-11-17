@@ -25,7 +25,8 @@ list, and the other groups fold to a one-line summary.
 
 ### Added
 
-- `GET /api/v1/ai/models?provider=`: the models Anthropic, OpenAI (chat models only) or a local Ollama offers.
+- `GET /api/v1/ai/models?provider=`: the models Anthropic, OpenAI (chat models only) or a local Ollama offers. A
+  gateway error from the provider (502, 503 or 504) is asked once more before it is shown.
 
 ## [0.1.0] - 2026-11-17
 

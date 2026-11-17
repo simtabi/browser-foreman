@@ -94,19 +94,35 @@ func (o *Ollama) Models(ctx context.Context) ([]Model, error) {
 	return out, nil
 }
 
-// doJSON runs a short request (a list, not a job) and decodes its JSON answer.
+// retryWait is how long doJSON waits before asking again after a gateway error.
+var retryWait = time.Second
+
+// doJSON runs a short request (a list, not a job) and decodes its JSON answer. A gateway error (502, 503 or 504),
+// which a provider's edge gives when it is briefly overloaded, is asked once more before it is reported.
 func doJSON(c *http.Client, req *http.Request, v any) error {
 	if c == nil {
 		c = &http.Client{Timeout: 15 * time.Second}
 	}
-	resp, err := c.Do(req)
-	if err != nil {
-		return err
+	for attempt := 0; ; attempt++ {
+		resp, err := c.Do(req.Clone(req.Context()))
+		if err != nil {
+			return err
+		}
+		if gateway := resp.StatusCode == http.StatusBadGateway || resp.StatusCode == http.StatusServiceUnavailable ||
+			resp.StatusCode == http.StatusGatewayTimeout; gateway && attempt == 0 {
+			resp.Body.Close()
+			select {
+			case <-req.Context().Done():
+				return req.Context().Err()
+			case <-time.After(retryWait):
+			}
+			continue
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+			return fmt.Errorf("%s answered %d: %s", req.URL.Host, resp.StatusCode, strings.TrimSpace(string(b)))
+		}
+		return json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(v)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("%s answered %d: %s", req.URL.Host, resp.StatusCode, strings.TrimSpace(string(b)))
-	}
-	return json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(v)
 }
