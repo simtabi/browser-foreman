@@ -147,6 +147,8 @@ const SHOTS = [
     async () => { await open(); await key(","); }],
   ["05-settings", "02-server-settings-ai", "Server settings: AI provider, model and keys, written to the config files and .env. Keys are never shown back.",
     async () => { await open(); await key(","); await page.evaluate(() => document.querySelector('#settingsBody [data-group="ai"]')?.scrollIntoView({ block: "start" })); await sleep(500); }],
+  ["05-settings", "03-server-settings-provider", "Server settings: a provider chosen. Only its key, its models (listed by the provider) and its effort show, saved together.",
+    async () => { await open(); await key(","); await page.evaluate(() => { const s = document.querySelector('#settingsBody select[aria-label="Who answers AI jobs"]'); if (s) { s.value = "anthropic"; s.dispatchEvent(new Event("change")); } document.querySelector('#settingsBody [data-group="ai"]')?.scrollIntoView({ block: "start" }); }); await sleep(900); }],
   ["06-commands", "01-command-palette", "The command palette: every action, searchable, with its shortcut.",
     async () => { await open(); await key("k", cmd); }],
   ["06-commands", "02-keyboard-shortcuts", "Keyboard shortcuts.",

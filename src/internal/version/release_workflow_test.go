@@ -163,3 +163,27 @@ func TestGoReleaserKeepsTheNotesAndMarksPreReleases(t *testing.T) {
 		t.Error("src/.goreleaser.yaml's release block needs `prerelease: auto`, so an rc tag is not published as the latest release")
 	}
 }
+
+// make lint runs the golangci-lint version CI runs, so a local pass means a CI pass.
+func TestLocalLintIsCIsLint(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	mk, err := os.ReadFile(filepath.Join(root, "Makefile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ci, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	local := regexp.MustCompile(`(?m)^GOLANGCI_VERSION := (v\S+)$`).FindSubmatch(mk)
+	remote := regexp.MustCompile(`golangci-lint-action@\S+[^\n]*\n(?:[^\n]*\n){0,4}?\s+version: (v\S+)`).FindSubmatch(ci)
+	if local == nil || remote == nil {
+		t.Fatalf("version not found: Makefile %q, ci.yml %q", local, remote)
+	}
+	if string(local[1]) != string(remote[1]) {
+		t.Fatalf("make lint runs %s, CI runs %s", local[1], remote[1])
+	}
+	if !strings.Contains(string(mk), "golangci-lint@$(GOLANGCI_VERSION) run") {
+		t.Fatal("make lint does not run the pinned version")
+	}
+}

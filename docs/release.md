@@ -30,7 +30,7 @@ SIMTABI_ALLOW_MAIN_PUSH=1 git -C ~/Artisan/projects/opensource/simtabi/packages/
 
 Every one of these holds, read back rather than assumed:
 
-- `make check lint` passes, and so does `npm run check:web && npm run test:web` in `web/`.
+- `make check` passes (it includes lint, at CI's version), and so does `npm run check:web && npm run test:web` in `web/`.
 - The pull request's CI is green on the commit to be tagged, and local `main` equals `origin/main`.
 - Every Go dependency of our own is on a tagged version, not a pseudo-version (`grep simtabi src/go.mod`).
 - `goreleaser check --config src/.goreleaser.yaml` passes, and the snapshot below builds every target.

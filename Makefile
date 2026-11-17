@@ -7,6 +7,8 @@ COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -s -w -X $(PKG)/internal/version.Version=$(VERSION) -X $(PKG)/internal/version.Commit=$(COMMIT) -X $(PKG)/internal/version.Date=$(DATE)
 HOST_OS := $(shell go env GOOS | sed 's/darwin/macos/')
+# The golangci-lint CI runs (.github/workflows/ci.yml); a test keeps the two equal.
+GOLANGCI_VERSION := v2.15.0
 
 .PHONY: help build test vet fmt lint universal cross web check screenshots
 help:  ## list targets
@@ -25,8 +27,8 @@ vet:  ## go vet
 fmt:  ## gofmt check (fails when a file needs formatting)
 	@test -z "$$(gofmt -l src)" || (gofmt -l src; exit 1)
 
-lint:  ## golangci-lint, when installed
-	cd src && golangci-lint run ./...
+lint:  ## golangci-lint at the version CI runs, fetched by go run when not installed
+	cd src && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION) run ./...
 
 universal: web  ## one macOS binary for Apple silicon and Intel: build/macos/browser-foreman_macos_universal
 	mkdir -p build/macos
@@ -61,4 +63,4 @@ extension-safari: extension  ## wrap the Safari build in an Xcode project (needs
 	xcrun safari-web-extension-converter web/dist/extension/safari --project-location web/dist/extension/safari-xcode \
 	  --app-name "Browser Foreman" --bundle-identifier com.simtabi.browser-foreman --no-open --force
 
-check: fmt vet test  ## what CI runs
+check: fmt vet lint test  ## what CI runs for Go; then cd web && npm run check:web && npm run test:web

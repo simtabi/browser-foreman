@@ -61,6 +61,10 @@ Every feature, from a demo store of public sites, at 1440 x 900 and twice the pi
 
 ![Server settings: AI provider, model and keys, written to the config files and .env. Keys are never shown back.](screenshots/05-settings/02-server-settings-ai.png)
 
+**05.03** Server settings: a provider chosen. Only its key, its models (listed by the provider) and its effort show, saved together.
+
+![Server settings: a provider chosen. Only its key, its models (listed by the provider) and its effort show, saved together.](screenshots/05-settings/03-server-settings-provider.png)
+
 ## 06. Commands
 
 **06.01** The command palette: every action, searchable, with its shortcut.

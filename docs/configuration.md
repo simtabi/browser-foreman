@@ -32,6 +32,11 @@ on. Each setting shows where its value comes from (the default, a config file, `
 - **What the page may change** is `settings.edit`, set in the files only. `safe` (the default) leaves the server's
   address and mode, storage, and the API token to the files. `all` lets the page change those too, each after a
   confirmation.
+- **AI is one choice, not five fields.** *Who answers AI jobs* picks the provider (your assistant over MCP,
+  Anthropic, OpenAI or a local Ollama), and only that provider's settings show beneath it: its key, a model chosen
+  from the models the provider itself lists (or *Other…* for one it does not), effort for Anthropic, and the address
+  under *Advanced*. One button saves provider and model together, so a provider is never saved without the model it
+  needs. Every other group is folded, with its current values in the summary line.
 - **When it applies.** AI settings and keys take effect at once. The rest take effect when the server restarts.
 
 ## Keys

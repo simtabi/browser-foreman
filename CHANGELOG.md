@@ -5,6 +5,22 @@ All notable changes are recorded here, following [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+### Changed
+
+- Settings › *Server settings*, redesigned. AI comes first as one nested choice: *Who answers AI jobs* (your
+  assistant, Anthropic, OpenAI or Ollama), then only that provider's key, a model picked from the provider's own
+  list (prefilled with the current or default model, with *Other…* for any other), effort for Anthropic, and the
+  address under *Advanced*. One button saves provider and model together, which ends the "needs ai.model" refusal
+  when a provider was chosen on its own. The other groups fold, each with its current values in its summary.
+
+- `make check` runs golangci-lint at the version CI runs (`GOLANGCI_VERSION`, fetched with `go run` when it is not
+  installed), so a local pass is a CI pass; it used to skip lint where the tool was missing.
+  `TestLocalLintIsCIsLint` fails if the Makefile and `ci.yml` versions differ.
+
+### Added
+
+- `GET /api/v1/ai/models?provider=`: the models Anthropic, OpenAI (chat models only) or a local Ollama offers.
+
 ## [0.1.0] - 2026-11-17
 
 The first release of the Go rewrite: everything in [docs/roadmap.md](docs/roadmap.md) phases 1 to 6 and the work

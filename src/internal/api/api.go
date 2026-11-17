@@ -207,6 +207,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/writeback/apply", s.require(store.RoleOwner, s.applyWriteback))
 	m.HandleFunc("POST /api/v1/ai/jobs", s.require(store.RoleOwner, s.createAIJobs))
 	m.HandleFunc("GET /api/v1/ai/jobs", s.require(store.RoleOwner, s.listAIJobs))
+	m.HandleFunc("GET /api/v1/ai/models", s.require(store.RoleOwner, s.aiModels))
 	m.HandleFunc("POST /api/v1/ai/jobs/next", s.require(store.RoleOwner, s.nextAIJobs))
 	m.HandleFunc("POST /api/v1/ai/jobs/{id}/results", s.require(store.RoleOwner, s.submitAIResults))
 	m.HandleFunc("GET /api/v1/extension/commands/{id}", s.require(store.RoleViewer, s.getCommand))

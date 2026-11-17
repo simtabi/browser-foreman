@@ -88,6 +88,7 @@ All owner only:
 | `GET /api/v1/ai/jobs` | the newest 100 jobs, with their state and checked answers |
 | `POST /api/v1/ai/jobs/next` | takes waiting jobs: `{max?, by?}` |
 | `POST /api/v1/ai/jobs/{id}/results` | answers one: `{results: {tags?, verdicts?}, by?}` |
+| `GET /api/v1/ai/models?provider=` | the models a provider offers, as Settings lists them: `{provider, models: [{id, name?}], default?, key_set?, error?}`. Anthropic and OpenAI ask with the saved key (OpenAI's list leaves out embedding, speech and image models); Ollama lists what is pulled. A provider that cannot answer gives `error`, not a failure |
 
 Events: `ai.jobs.created`, `ai.job.done` and `ai.job.failed`. The newest 500 jobs are kept in `ai-jobs.json` in the
 state folder, readable only by you since it holds bookmark titles and addresses. After a restart, jobs still waiting

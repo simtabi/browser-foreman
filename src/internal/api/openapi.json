@@ -1722,6 +1722,20 @@
         "description": "Body: {kind: tag|dedupe, workspace, folder?, apply?, limit?, retag?}. With ai.provider set the server answers them at once; otherwise they wait for next_ai_jobs."
       }
     },
+    "/api/v1/ai/models": {
+      "get": {
+        "summary": "The models a provider offers (?provider=anthropic|openai|ollama), asked with the saved key",
+        "tags": [
+          "AI"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
+    },
     "/api/v1/ai/jobs/next": {
       "post": {
         "summary": "Take waiting AI jobs (up to 5) for 15 minutes",
