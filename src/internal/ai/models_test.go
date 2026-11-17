@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sync/atomic"
 	"testing"
 )
 
@@ -43,5 +44,32 @@ func TestOllamaModelsListsWhatIsPulled(t *testing.T) {
 	srv.Close()
 	if _, err := (&Ollama{URL: srv.URL}).Models(context.Background()); err == nil {
 		t.Fatal("a stopped Ollama answered")
+	}
+}
+
+func TestModelListsAskOnceMoreAfterAGatewayError(t *testing.T) {
+	retryWait = 0
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			http.Error(w, "error code: 504", http.StatusGatewayTimeout)
+			return
+		}
+		_, _ = w.Write([]byte(`{"models":[{"name":"qwen3:8b"}]}`))
+	}))
+	defer srv.Close()
+	got, err := (&Ollama{URL: srv.URL}).Models(context.Background())
+	if err != nil || len(got) != 1 || calls.Load() != 2 {
+		t.Fatalf("%v %+v after %d calls", err, got, calls.Load())
+	}
+	// A second gateway error is reported, not retried for ever.
+	var down atomic.Int32
+	dead := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		down.Add(1)
+		http.Error(w, "error code: 504", http.StatusGatewayTimeout)
+	}))
+	defer dead.Close()
+	if _, err := (&Ollama{URL: dead.URL}).Models(context.Background()); err == nil || down.Load() != 2 {
+		t.Fatalf("%v after %d calls", err, down.Load())
 	}
 }
