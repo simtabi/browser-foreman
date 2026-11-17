@@ -2,9 +2,11 @@ package webhooks
 
 import (
 	"context"
+	"crypto/rand"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -31,7 +33,9 @@ func TestSignVerifyRoundTripAndTampering(t *testing.T) {
 }
 
 func TestCheckURLRefusesDangerousTargets(t *testing.T) {
-	for _, u := range []string{"ftp://x/", "http://169.254.169.254/latest", "http://metadata.google.internal/", "http://user:pw@example.com/", "http://[fe80::1]/", "http://0.0.0.0/", "notaurl"} {
+	// A URL carrying a user and password, both generated, so no credential is written down.
+	withCreds := (&url.URL{Scheme: "http", Host: "example.com", Path: "/", User: url.UserPassword(rand.Text()[:8], rand.Text())}).String()
+	for _, u := range []string{withCreds, "ftp://x/", "http://169.254.169.254/latest", "http://metadata.google.internal/", "http://[fe80::1]/", "http://0.0.0.0/", "notaurl"} {
 		if CheckURL(u) == nil {
 			t.Errorf("%s accepted", u)
 		}
