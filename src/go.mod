@@ -3,12 +3,12 @@ module github.com/simtabi/browser-foreman/src
 go 1.26.0
 
 require (
-	github.com/anthropics/anthropic-sdk-go/v2 v2.10.0
+	github.com/anthropics/anthropic-sdk-go/v2 v2.12.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/simtabi/go-notifykit/src v0.1.1
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.59.0
-	golang.org/x/net v0.62.0
+	golang.org/x/net v0.63.0
 	golang.org/x/term v0.48.0
 	howett.net/plist v1.0.1
 	modernc.org/sqlite v1.62.0
