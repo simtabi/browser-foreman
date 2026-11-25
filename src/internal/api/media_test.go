@@ -40,7 +40,7 @@ func TestIconsSnapshotsAndTheirRoutes(t *testing.T) {
 			if host == "intranet.example" {
 				return []net.IP{net.ParseIP("10.0.0.2")}, nil
 			}
-			return []net.IP{net.ParseIP("93.184.216.34")}, nil
+			return []net.IP{net.ParseIP("203.0.113.10")}, nil
 		},
 		Run: func(_ context.Context, argv []string) error {
 			shots++

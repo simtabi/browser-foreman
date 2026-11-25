@@ -332,7 +332,7 @@ func TestBlockedLinksAreSettledInChrome(t *testing.T) {
 	var mu sync.Mutex // Render runs the fake from several goroutines at once
 	var opened []string
 	s.Snapper = &media.Snapper{Chrome: "/x/chrome",
-		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("93.184.216.34")}, nil },
+		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("203.0.113.10")}, nil },
 		Dump: func(_ context.Context, argv []string) ([]byte, error) {
 			u := argv[len(argv)-1]
 			mu.Lock()
@@ -384,7 +384,7 @@ func TestARunSettlesBlockedLinksInChrome(t *testing.T) {
 	})
 	words := strings.Repeat("Plenty of real words on this page. ", 10)
 	s.Snapper = &media.Snapper{Chrome: "/x/chrome",
-		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("93.184.216.34")}, nil },
+		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("203.0.113.10")}, nil },
 		Dump: func(context.Context, []string) ([]byte, error) {
 			return []byte("<html><head><title>Item</title></head><body>" + words + "</body></html>"), nil
 		}}
