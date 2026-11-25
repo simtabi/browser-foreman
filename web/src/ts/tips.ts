@@ -76,6 +76,17 @@ export function showPop(target: HTMLElement, title: string, body: string): void 
   place(popEl, target, "popover");
 }
 
+/** Gives every button with a tooltip but no text of its own (an icon) that tooltip as its accessible name, unless it
+ *  has a name already. */
+export function nameIconButtons(root: ParentNode): void {
+  const named = (b: HTMLElement) => b.hasAttribute("aria-label") && b.dataset.tipName !== "1";
+  const scope = root instanceof Element && root.matches("button[data-tip]") ? [root as HTMLElement] : [];
+  for (const b of [...scope, ...Array.from(root.querySelectorAll<HTMLElement>("button[data-tip]"))]) {
+    if (named(b) || (b.textContent ?? "").trim()) continue;
+    b.setAttribute("aria-label", b.dataset.tip ?? ""); b.dataset.tipName = "1"; // kept in step when the tip changes
+  }
+}
+
 /** Plain title attributes on buttons become proper tooltips. */
 export function tipsFromTitles(root: ParentNode = document): void {
   for (const b of Array.from(root.querySelectorAll<HTMLElement>(".btn[title], a[title].dropdown-item"))) { b.dataset.tip = b.title; b.removeAttribute("title"); }
@@ -85,6 +96,15 @@ export function tipsFromTitles(root: ParentNode = document): void {
  *  on it); any press, scroll, key or blur hides it. */
 export function installTips(o: TipOptions = {}): void {
   opts = o;
+  // An icon-only button says nothing to a screen reader; its tooltip is what it does, so that becomes its name too.
+  nameIconButtons(document);
+  new MutationObserver(ms => {
+    for (const m of ms) { // only what changed: the nodes added, or the button whose tip changed
+      if (m.type === "attributes" && m.target instanceof Element) nameIconButtons(m.target);
+      else for (const n of Array.from(m.addedNodes)) if (n instanceof Element) nameIconButtons(n);
+    }
+  })
+    .observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-tip"] });
   document.addEventListener("pointermove", e => {
     usingKeyboard = false;
     const t = (e.target as Element | null)?.closest?.<HTMLElement>("[data-tip]");

@@ -42,10 +42,10 @@ function install(W: V1): void {
   /** A dialog: its title carries an icon, as every dialog in the page does (template.html). */
   function modal(id: string, title: string, size: "lg" | "xl" = "lg", ic = ""): { body: HTMLElement; foot: HTMLElement; dock: HTMLElement } {
     document.getElementById(id)?.remove();
-    const m = el("div", "modal modal-blur"); m.id = id; m.tabIndex = -1; m.setAttribute("role", "dialog"); m.setAttribute("aria-label", title);
+    const m = el("div", "modal modal-blur"); m.id = id; m.tabIndex = -1; m.setAttribute("role", "dialog"); m.setAttribute("aria-label", title); m.setAttribute("aria-modal", "true");
     const dlg = el("div", `modal-dialog modal-dialog-top modal-dialog-scrollable modal-${size}`), box = el("div", "modal-content");
     const head = el("div", "modal-header"), close = el("button", "btn-close");
-    close.type = "button"; close.setAttribute("aria-label", "Close"); close.onclick = () => hideModal("#" + id);
+    close.type = "button"; close.setAttribute("aria-label", "Close"); close.dataset.close = ""; close.onclick = () => hideModal("#" + id);
     const h = el("h5", "modal-title"); if (ic) h.append(icon(ic, "me-2")); h.append(title);
     head.append(h, close);
     // dock: a strip between the scrolling body and the footer buttons, for a list's pager, so it is always in view.

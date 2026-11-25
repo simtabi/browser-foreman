@@ -1490,11 +1490,16 @@ function paintSel(old) {
     e.classList.toggle("sel", k === sel); e.setAttribute("aria-selected", String(k === sel || marked.has(rows[k].node)));
   }
   rowEl(sel)?.scrollIntoView({block: "nearest"});
+  markActive();
 }
+// The tree keeps the focus while the arrows move a highlight inside it: aria-activedescendant names the row, so a screen
+// reader announces each move.
+function markActive() { if (rows[sel]) list.setAttribute("aria-activedescendant", `bm-row-${sel}`); else list.removeAttribute("aria-activedescendant"); }
 function rowNodes(r, idx) {
     const out = [];
     // The row's element is built by src/web/ts/views/tree-rows.ts; selection, clicks, menus and drag are wired here.
     const {row: d, twisty} = rowElement(r, idx, {selected: idx === sel, marked: marked.has(r.node), draggable: !readOnly() && !r.trash && !grouped()}, ROW_DEPS);
+    if (idx === sel) markActive();
     if (twisty) twisty.onclick = e => { e.stopPropagation(); sel = idx; toggle(r, !r.open); };
     d.onclick = e => {
       if (!(e.metaKey || e.ctrlKey || e.shiftKey) && !marked.size) { const old = sel; anchor = idx; sel = idx; paintSel(old); show(); list.focus(); return; }
