@@ -28,7 +28,7 @@ browser-foreman serve
 ```
 
 ```text
-Browser Foreman 0.1.0-dev on http://127.0.0.1:8765 (config …/.config/browser-foreman, state …/.local/state/browser-foreman)
+Browser Foreman 0.2.0 on http://127.0.0.1:8765 (config …/.config/browser-foreman, state …/.local/state/browser-foreman)
 Open Browser Foreman: http://127.0.0.1:8765/open/…
 ```
 
@@ -71,7 +71,7 @@ To keep one port, set `server.addr`.
 Every change is an event. Follow them live:
 
 ```bash
-curl -N http://127.0.0.1:8765/api/v1/events
+curl -N http://127.0.0.1:8765/api/v1/events -H "Authorization: Bearer $BROFO_API_TOKEN"
 ```
 
 A client that reconnects sends `Last-Event-ID` and receives what it missed. See [events](tools/events.md).
@@ -79,9 +79,10 @@ A client that reconnects sends `Last-Event-ID` and receives what it missed. See 
 ## Add a webhook
 
 ```bash
+BROFO_WEBHOOK_SECRET=$(openssl rand -hex 32)  # keep it: the receiver checks signatures with it
 curl -X POST http://127.0.0.1:8765/api/v1/webhooks \
   -H "Authorization: Bearer $BROFO_API_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"url": "https://example.com/brofo", "events": ["*"], "secret": "a-long-random-secret-value"}'
+  -d '{"url": "https://example.com/brofo", "events": ["*"], "secret": "'"$BROFO_WEBHOOK_SECRET"'"}'
 ```
 
 Send it a test event, using the `id` the call returned:

@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Three badges, not four: a Go binary is published on its GitHub release only, so there is no registry version to show,
-and static analysis (golangci-lint, CodeQL) runs inside the CI badge's checks.
+and static analysis (golangci-lint, govulncheck) runs inside the CI badge's checks.
 
 > Clean bookmarks, safe tabs: a local server and web interface that keeps your browsers' bookmarks tidy and your open tabs safe from a crash.
 
@@ -74,7 +74,7 @@ The hosted site at <https://opensource.simtabi.com/documentation/simtabi/browser
 - [Configuration](docs/configuration.md) — `~/.config/browser-foreman/{.env,*.json}`, every key and variable
 - [Architecture](docs/architecture.md) — how the pieces fit, and why Go
 - [Security](docs/security.md) — what the server protects and how
-- [Roadmap](docs/roadmap.md) — what ships in v0.1.0 and in what order
+- [Roadmap](docs/roadmap.md) — what each release shipped, and what comes next
 - [Release](docs/release.md) — how a version is cut
 - [Screenshots](docs/screenshots.md) — every feature, grouped and numbered; `make screenshots` makes them again
 
