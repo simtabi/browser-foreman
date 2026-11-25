@@ -21,7 +21,11 @@ What Browser Foreman protects, and how. Report a weakness privately: see [SECURI
   it works once within two minutes, and it sets an `HttpOnly`, `SameSite=Strict` cookie signed with the token, good
   for 30 days and void once the token changes. Another program or person on this computer that loads the page gets
   only how to open it (the Host and Origin checks keep other sites out); in `accounts` mode it needs a session and
-  carries only its CSRF token.
+  carries only its CSRF token. One limit: browsers send a cookie to every port of a host, so a page you open from
+  another server on `127.0.0.1` (any port) receives this one, and a hostile server could replay it to read the token.
+  A program running as you can already read `.env`, so this adds exposure only toward another user's server you
+  visit there. Changing the token (`BROFO_API_TOKEN` in `.env`, or Settings › Server settings) voids every such
+  cookie.
 - **Other sites' pages get nothing.** Besides the Origin check, a request a browser marks `Sec-Fetch-Site:
   cross-site` is refused unless it is following a link, so another site cannot even load an image from here.
 - **This computer's browsers.** Opening links, restoring a session and closing tabs need the owner role, open only
