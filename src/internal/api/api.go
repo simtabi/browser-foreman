@@ -437,12 +437,20 @@ func (s *Server) testHook(w http.ResponseWriter, r *http.Request) {
 	writeErr(w, 404, "no webhook with that id")
 }
 
+// httpServer is the server Run listens with. A slow client cannot hold a connection open for ever: headers must
+// arrive in 10 s, a whole request (up to a 256 MB backup) in 10 minutes, and an idle keep-alive closes after 2. There
+// is no write timeout on purpose: the event stream, the extension's long poll and large exports write for longer.
+func (s *Server) httpServer() *http.Server {
+	return &http.Server{Addr: s.Cfg.Server.Addr, Handler: s.Handler(),
+		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 10 * time.Minute, IdleTimeout: 2 * time.Minute}
+}
+
 // Run serves until ctx ends, delivering every published event to the webhooks in the background.
 func (s *Server) Run(ctx context.Context) error {
 	ch, stop := s.Bus.Subscribe(256)
 	defer stop()
 	go s.Dispatch.Run(ctx, ch) // one queue per webhook: a dead receiver holds up only itself
-	srv := &http.Server{Addr: s.Cfg.Server.Addr, Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	srv := s.httpServer()
 	errc := make(chan error, 1)
 	if s.Listener != nil { // bound by the caller, which handles a port already in use
 		go func() { errc <- srv.Serve(s.Listener) }()

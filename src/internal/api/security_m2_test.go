@@ -47,3 +47,13 @@ func TestOnlyThisComputerMayAskToConnect(t *testing.T) {
 	}
 }
 
+// Every phase of a request has a limit, so slow clients cannot pile up connections.
+func TestTheServerTimesOutSlowClients(t *testing.T) {
+	srv := newServer(t, "tok").httpServer()
+	if srv.ReadHeaderTimeout <= 0 || srv.ReadTimeout <= 0 || srv.IdleTimeout <= 0 {
+		t.Fatalf("header %v, read %v, idle %v", srv.ReadHeaderTimeout, srv.ReadTimeout, srv.IdleTimeout)
+	}
+	if srv.WriteTimeout != 0 {
+		t.Fatal("a write timeout would cut the event stream and long polls")
+	}
+}
