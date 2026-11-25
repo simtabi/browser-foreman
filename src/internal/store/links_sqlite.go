@@ -106,9 +106,9 @@ func (s *SQLiteStore) scanLinks(ctx context.Context, out map[string]LinkResult, 
 		if err := rows.Scan(&r.URL, &r.Status, &r.Code, &r.Final, &r.Note, &r.Kind, &checked, &dead, &r.Confirmed, &r.Frame, &meta, &r.Archive); err != nil {
 			return err
 		}
-		r.Checked, _ = time.Parse(ts, checked)
+		r.Checked, _ = time.Parse(tsRead, checked)
 		if dead != "" {
-			r.DeadSince, _ = time.Parse(ts, dead)
+			r.DeadSince, _ = time.Parse(tsRead, dead)
 		}
 		r.Meta = decodeMeta(meta)
 		out[r.URL] = r
