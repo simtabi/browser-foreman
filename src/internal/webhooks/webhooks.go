@@ -229,6 +229,76 @@ func (d *Dispatcher) Deliver(ctx context.Context, e events.Event) []Delivery {
 	return out
 }
 
+// queueSize is how many events wait for one webhook while its receiver is busy or down.
+const queueSize = 64
+
+type job struct {
+	sub  Subscription
+	e    events.Event
+	body []byte
+}
+
+// Run delivers the events from ch until ctx ends or ch closes. Each webhook gets its own queue and worker, so a slow
+// or dead receiver delays only its own deliveries, retries included. When its queue is full, the event is recorded
+// (through Log) as not sent rather than dropped without a trace.
+func (d *Dispatcher) Run(ctx context.Context, ch <-chan events.Event) {
+	queues := map[string]chan job{}
+	var wg sync.WaitGroup
+	defer func() {
+		for _, q := range queues {
+			close(q)
+		}
+		wg.Wait()
+	}()
+	for {
+		var e events.Event
+		var ok bool
+		select {
+		case <-ctx.Done():
+			return
+		case e, ok = <-ch:
+			if !ok {
+				return
+			}
+		}
+		subs, err := d.Store.List()
+		if err != nil {
+			d.log(Delivery{Event: e.ID, Type: e.Type, Error: err.Error(), At: d.Now()})
+			continue
+		}
+		body, _ := json.Marshal(e)
+		for _, s := range subs {
+			if !s.Active || !s.Matches(e.Type) {
+				continue
+			}
+			q := queues[s.ID]
+			if q == nil {
+				q = make(chan job, queueSize)
+				queues[s.ID] = q
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for j := range q {
+						d.log(d.send(ctx, j.sub, j.e, j.body))
+					}
+				}()
+			}
+			select {
+			case q <- job{s, e, body}:
+			default:
+				d.log(Delivery{Subscription: s.ID, Event: e.ID, Type: e.Type, At: d.Now(),
+					Error: "not sent: this webhook's queue is full (its receiver is slow or down)"})
+			}
+		}
+	}
+}
+
+func (d *Dispatcher) log(rec Delivery) {
+	if d.Log != nil {
+		d.Log(rec)
+	}
+}
+
 // SendOne delivers one event to one subscription, whatever its event patterns (the API's test button).
 func (d *Dispatcher) SendOne(ctx context.Context, s Subscription, e events.Event) Delivery {
 	body, _ := json.Marshal(e)
