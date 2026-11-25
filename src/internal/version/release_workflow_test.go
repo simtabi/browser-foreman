@@ -1,9 +1,11 @@
 package version
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -248,4 +250,58 @@ func TestChecksCoverEverySystemAndTheModuleFile(t *testing.T) {
 			t.Errorf("CI does not run make %s", step)
 		}
 	}
+}
+
+// make cross builds build/targets.txt and the release builds src/.goreleaser.yaml's goos x goarch less its ignores.
+// The two must name the same systems, or a release ships a binary nobody built and tested locally, or misses one.
+func TestReleaseTargetsMatchTheLocalBuild(t *testing.T) {
+	local, err := os.ReadFile(filepath.Join("..", "..", "..", "build", "targets.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	release, err := os.ReadFile(filepath.Join("..", "..", ".goreleaser.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, got := localTargets(string(local)), releaseTargets(string(release))
+	if len(want) < 6 || len(got) < 6 {
+		t.Fatalf("read %d local and %d release targets; a parser has lost its way", len(want), len(got))
+	}
+	if !maps.Equal(want, got) {
+		t.Errorf("build/targets.txt %v and src/.goreleaser.yaml %v name different targets", slices.Sorted(maps.Keys(want)), slices.Sorted(maps.Keys(got)))
+	}
+}
+
+func localTargets(s string) map[string]bool {
+	out := map[string]bool{}
+	for _, line := range strings.Split(s, "\n") {
+		if f := strings.Fields(line); len(f) >= 2 && !strings.HasPrefix(f[0], "#") {
+			out[f[0]+"/"+f[1]] = true
+		}
+	}
+	return out
+}
+
+func releaseTargets(s string) map[string]bool {
+	list := func(key string) []string {
+		m := regexp.MustCompile(`(?m)^\s+` + key + `:\s*\[([^\]]*)\]`).FindStringSubmatch(s)
+		if m == nil {
+			return nil
+		}
+		var out []string
+		for _, v := range strings.Split(m[1], ",") {
+			out = append(out, strings.TrimSpace(v))
+		}
+		return out
+	}
+	out := map[string]bool{}
+	for _, goos := range list("goos") {
+		for _, goarch := range list("goarch") {
+			out[goos+"/"+goarch] = true
+		}
+	}
+	for _, m := range regexp.MustCompile(`\{\s*goos:\s*(\w+),\s*goarch:\s*(\w+)\s*\}`).FindAllStringSubmatch(s, -1) {
+		delete(out, m[1]+"/"+m[2])
+	}
+	return out
 }
