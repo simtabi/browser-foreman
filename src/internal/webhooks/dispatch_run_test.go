@@ -117,3 +117,46 @@ func TestAFullQueueIsRecordedNotLost(t *testing.T) {
 		t.Fatalf("recorded %d not-sent deliveries, want 2 (events %d and %d): %+v", len(notSent), queueSize+2, queueSize+3, notSent)
 	}
 }
+
+// Events queued for a webhook that is then removed are not sent to it.
+func TestARemovedWebhookGetsNothingMoreFromItsQueue(t *testing.T) {
+	st := NewStore(t.TempDir())
+	stuck := newStuck(t)
+	if _, err := st.Add(Subscription{ID: "gone", URL: stuck.srv.URL, Events: []string{"*"}, Secret: rand.Text(), Active: true}); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var logged []Delivery
+	ch := runDispatcher(t, st, func(d Delivery) { mu.Lock(); logged = append(logged, d); mu.Unlock() })
+	for i := 1; i <= 3; i++ {
+		ch <- event(i)
+	}
+	<-stuck.arrived // the first is in flight; the other two wait in its queue
+	if ok, err := st.Remove("gone"); !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	stuck.release <- struct{}{} // lets the first one finish
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		mu.Lock()
+		n := len(logged)
+		mu.Unlock()
+		if n >= 3 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(logged) != 3 {
+		t.Fatalf("%d deliveries logged", len(logged))
+	}
+	for _, d := range logged[1:] {
+		if !strings.Contains(d.Error, "removed or turned off") || d.Attempts != 0 {
+			t.Errorf("queued after removal: %+v", d)
+		}
+	}
+	if len(stuck.arrived) != 0 {
+		t.Errorf("%d more requests reached the removed webhook", len(stuck.arrived))
+	}
+}

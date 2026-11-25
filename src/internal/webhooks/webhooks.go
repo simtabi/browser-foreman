@@ -157,6 +157,17 @@ func (s *Store) List() ([]Subscription, error) {
 	return s.read()
 }
 
+// Get returns one subscription by id, and whether there is one.
+func (s *Store) Get(id string) (Subscription, bool, error) {
+	all, err := s.List()
+	for _, x := range all {
+		if x.ID == id {
+			return x, true, err
+		}
+	}
+	return Subscription{}, false, err
+}
+
 func (s *Store) read() ([]Subscription, error) {
 	b, err := os.ReadFile(s.path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -253,7 +264,7 @@ func (d *Dispatcher) Deliver(ctx context.Context, e events.Event) []Delivery {
 		if !s.Active || !s.Matches(e.Type) {
 			continue
 		}
-		rec := d.send(ctx, s, e, body)
+		rec := d.send(ctx, s, e, body, true)
 		if d.Log != nil {
 			d.Log(rec)
 		}
@@ -315,7 +326,7 @@ func (d *Dispatcher) Run(ctx context.Context, ch <-chan events.Event) {
 				go func() {
 					defer wg.Done()
 					for j := range q {
-						d.log(d.send(ctx, j.sub, j.e, j.body))
+						d.log(d.send(ctx, j.sub, j.e, j.body, true))
 					}
 				}()
 			}
@@ -338,17 +349,31 @@ func (d *Dispatcher) log(rec Delivery) {
 // SendOne delivers one event to one subscription, whatever its event patterns (the API's test button).
 func (d *Dispatcher) SendOne(ctx context.Context, s Subscription, e events.Event) Delivery {
 	body, _ := json.Marshal(e)
-	rec := d.send(ctx, s, e, body)
+	rec := d.send(ctx, s, e, body, false) // the test button: s was just read
 	if d.Log != nil {
 		d.Log(rec)
 	}
 	return rec
 }
 
-func (d *Dispatcher) send(ctx context.Context, s Subscription, e events.Event, body []byte) Delivery {
+// send delivers one event to s. queued: it waited in s's queue, so s is read again before each attempt.
+func (d *Dispatcher) send(ctx context.Context, s Subscription, e events.Event, body []byte, queued bool) Delivery {
 	rec := Delivery{Subscription: s.ID, Event: e.ID, Type: e.Type}
 	wait := d.Backoff
 	for attempt := 1; attempt <= d.Attempts; attempt++ {
+		// The webhook as it is now: an event queued before it was removed or turned off is not sent, and one queued
+		// before its address or secret changed goes to the new address, signed with the new secret.
+		if queued && d.Store != nil {
+			cur, ok, err := d.Store.Get(s.ID)
+			if err != nil || !ok || !cur.Active {
+				rec.Error = "not sent: the webhook was removed or turned off"
+				if err != nil {
+					rec.Error = "not sent: " + err.Error()
+				}
+				break
+			}
+			s = cur
+		}
 		rec.Attempts = attempt
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.URL, bytes.NewReader(body))
 		if err != nil {

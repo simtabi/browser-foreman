@@ -51,6 +51,9 @@ A `2xx` answer is success. A network error, a `5xx` or a `429` is retried with e
 up to `webhooks.attempts` tries (default 5), each limited to `webhooks.timeout` (default 10 s). Any other `4xx` means the
 receiver refused it, so it is not retried. Failed deliveries are reported in the server's log.
 
+Each attempt uses the webhook as it is then: an event still waiting when its webhook is removed or turned off is not
+sent, and one waiting when its address or secret changes goes to the new address, signed with the new secret.
+
 ## The delivery log
 
 The latest 1,000 deliveries are kept in `deliveries.jsonl` in the state folder (`0600`), each with its event type,
