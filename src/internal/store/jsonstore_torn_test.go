@@ -66,3 +66,27 @@ func TestADamagedMiddleLineIsStillAnError(t *testing.T) {
 		t.Fatal("a damaged middle line was ignored")
 	}
 }
+
+// A workspace folder left without its workspace.json (a create that failed halfway) neither hides the others nor
+// blocks creating that workspace again.
+func TestAHalfMadeWorkspaceFolderIsNotFatal(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	s, _ := OpenJSON(dir)
+	if _, err := s.CreateWorkspace(ctx, "ok", "ok", t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "json", "workspaces", "half"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ws, err := s.Workspaces(ctx)
+	if err != nil || len(ws) != 1 || ws[0].ID != "ok" {
+		t.Fatalf("%v %+v", err, ws)
+	}
+	if _, err := s.CreateWorkspace(ctx, "half", "Half", t0); err != nil {
+		t.Fatalf("creating it again: %v", err)
+	}
+	if _, err := s.CreateWorkspace(ctx, "ok", "again", t0); err == nil {
+		t.Fatal("a real workspace was created twice")
+	}
+}

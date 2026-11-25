@@ -62,14 +62,22 @@ func (s *JSONStore) CreateWorkspace(_ context.Context, id, name string, at time.
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	made := true
 	if err := os.Mkdir(s.wsDir(id), 0o700); err != nil {
-		if errors.Is(err, os.ErrExist) {
+		if !errors.Is(err, os.ErrExist) {
+			return Workspace{}, err
+		}
+		// A folder with no workspace.json is a create that failed halfway: it may be made again.
+		if _, err := os.Stat(filepath.Join(s.wsDir(id), "workspace.json")); !errors.Is(err, os.ErrNotExist) {
 			return Workspace{}, fmt.Errorf("workspace %q already exists", id)
 		}
-		return Workspace{}, err
+		made = false
 	}
 	b, _ := json.Marshal(wsFile{Name: name, Created: at.UTC()})
 	if err := writeAtomic(filepath.Join(s.wsDir(id), "workspace.json"), b); err != nil {
+		if made {
+			_ = os.Remove(s.wsDir(id)) // the empty folder this call made, so a retry starts clean
+		}
 		return Workspace{}, err
 	}
 	return Workspace{ID: id, Name: name, Created: at.UTC()}, nil
@@ -86,6 +94,9 @@ func (s *JSONStore) Workspaces(ctx context.Context) ([]Workspace, error) {
 			continue
 		}
 		w, err := s.Workspace(ctx, e.Name())
+		if errors.Is(err, ErrNotFound) {
+			continue // a folder with no workspace.json: a create that failed halfway, not a workspace
+		}
 		if err != nil {
 			return nil, err
 		}
