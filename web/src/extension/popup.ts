@@ -58,7 +58,9 @@ $("pair").onclick = async () => {
     await show();
   } catch (e) { say("pairMsg", (e as Error).message, true); }
 };
-$("send").onclick = async () => { await ask({ kind: "report" }).catch(() => {}); await show(); };
+// The popup shows what went wrong rather than going quiet: a failed call says so in the section it came from.
+const shown = () => show().catch(e => say("askMsg", (e as Error).message, true));
+$("send").onclick = async () => { await ask({ kind: "report" }).catch(() => {}); await shown(); };
 $("read").onclick = async () => {
   try { say("readMsg", "Reading…"); say("readMsg", (await ask({ kind: "read" })).summary); await show(); }
   catch (e) { say("readMsg", (e as Error).message, true); }
@@ -86,5 +88,8 @@ $("apply").onclick = async () => {
   try { say("planMsg", "Writing…"); const r = await ask({ kind: "apply", ...previewed }); previewed = null; say("planMsg", `Done. Saved first: ${r.backup}`); }
   catch (e) { say("planMsg", (e as Error).message, true); }
 };
-$("unpair").onclick = async () => { await ask({ kind: "unpair" }); await show(); };
-void show().then(waitForAnswer);  // reopening the popup while a request waits shows its code again
+$("unpair").onclick = async () => {
+  try { await ask({ kind: "unpair" }); } catch (e) { say("readMsg", (e as Error).message, true); }
+  await shown();
+};
+void shown().then(waitForAnswer);  // reopening the popup while a request waits shows its code again

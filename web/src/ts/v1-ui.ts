@@ -680,7 +680,11 @@ function install(W: V1): void {
       let list: Waiting[];
       learnCopy(await extensionHello());
       try { list = (await W.call<{ requests: Waiting[] }>("GET", "extension/requests")).requests; }
-      catch { watching = false; clearInterval(timer); return; }  // not the owner (or the server is gone): stop asking
+      catch (e) {
+        // Not the owner: stop asking. Anything else (the server restarting, a dropped connection) is tried next tick.
+        if (/owner role|sign in/i.test(String((e as Error)?.message))) { watching = false; clearInterval(timer); }
+        return;
+      }
       const q = list.find(x => !answered.has(x.id) && approvableHere(x)); if (!q) return; // strict: only this browser's own
       answered.add(q.id); asking = true;
       try { await answerRequest(q); } finally { asking = false; }
@@ -1010,8 +1014,15 @@ function install(W: V1): void {
     foot.append(close, make);
     list.append(el("div", "text-secondary small py-2", "Asking which browsers are connected…"));
     showModal("#v1Extensions"); await load();
-    // While the dialog is open, a browser being set up or asking to connect shows up by itself.
-    const refresh = setInterval(() => { if (!document.getElementById("v1Extensions")?.classList.contains("show")) clearInterval(refresh); else void load(); }, 3000);
+    // While this dialog is open, a browser being set up or asking to connect shows up by itself. The timer belongs to
+    // this dialog: reopened, the old one is gone and its timer stops, instead of refreshing beside the new one's.
+    const me = document.getElementById("v1Extensions");
+    let refreshing = false;
+    const refresh = setInterval(() => {
+      if (!me?.isConnected || !me.classList.contains("show")) { clearInterval(refresh); return; }
+      if (refreshing) return; // the last refresh is still answering
+      refreshing = true; void load().finally(() => { refreshing = false; });
+    }, 3000);
   }
 
   function menu(): HTMLElement {
