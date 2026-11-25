@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/simtabi/browser-foreman/src/internal/atomicfile"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -68,10 +69,7 @@ func (s *Server) aiSaveUnlock() {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return
 	}
-	tmp := path + ".tmp"
-	if os.WriteFile(tmp, b, 0o600) == nil {
-		_ = os.Rename(tmp, path)
-	}
+	_ = atomicfile.Write(path, b, 0o600)
 }
 
 func (s *Server) aiFile() string {

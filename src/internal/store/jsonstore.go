@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/simtabi/browser-foreman/src/internal/atomicfile"
 	"os"
 	"path/filepath"
 	"sort"
@@ -42,13 +43,7 @@ func (s *JSONStore) Close() error { return nil }
 
 func (s *JSONStore) wsDir(id string) string { return filepath.Join(s.root, "workspaces", id) }
 
-func writeAtomic(path string, b []byte) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
-}
+func writeAtomic(path string, b []byte) error { return atomicfile.Write(path, b, 0o600) }
 
 type wsFile struct {
 	Name     string    `json:"name"`

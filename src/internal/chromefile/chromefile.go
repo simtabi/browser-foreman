@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/simtabi/browser-foreman/src/internal/atomicfile"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -262,9 +263,5 @@ func Replace(path string, data []byte, keep string) error {
 	if err := os.WriteFile(keep, old, 0o600); err != nil {
 		return fmt.Errorf("keeping the file as it was: %w", err)
 	}
-	tmp := path + ".browser-foreman-tmp"
-	if err := os.WriteFile(tmp, data, info.Mode().Perm()); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return atomicfile.Write(path, data, info.Mode().Perm())
 }

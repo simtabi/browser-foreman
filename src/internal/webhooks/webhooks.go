@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/simtabi/browser-foreman/src/internal/atomicfile"
 	"net"
 	"net/http"
 	"net/url"
@@ -173,11 +174,7 @@ func (s *Store) write(all []Subscription) error {
 		return err
 	}
 	b, _ := json.MarshalIndent(all, "", "  ")
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, s.path)
+	return atomicfile.Write(s.path, append(b, '\n'), 0o600)
 }
 
 // Add stores a new subscription after checking its URL and event patterns.
