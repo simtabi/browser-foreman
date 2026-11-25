@@ -15,7 +15,7 @@ GOVULNCHECK_VERSION := v1.10.0
 # release tag is built, where a mistake burns the tag.
 VET_OSES := darwin linux windows freebsd
 
-.PHONY: help build test vet fmt lint tidy vuln universal cross web check screenshots
+.PHONY: help build test vet fmt lint tidy vuln notices universal cross web check screenshots
 help:  ## list targets
 	@grep -E '^[a-z-]+:.*##' Makefile | sed 's/:.*## /\t/'
 
@@ -35,6 +35,9 @@ tidy:  ## go.mod and go.sum hold exactly what the code needs (fails when go mod 
 
 vuln:  ## known vulnerabilities in code the binary calls (govulncheck at GOVULNCHECK_VERSION)
 	cd src && go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
+
+notices:  ## rewrite THIRD_PARTY_NOTICES from the linked Go modules and bundled npm packages (needs web/node_modules)
+	go -C src test -count=1 -run TestThirdPartyNoticesAreCurrent ./internal/version -update-notices
 
 fmt:  ## gofmt check (fails when a file needs formatting)
 	@test -z "$$(gofmt -l src)" || (gofmt -l src; exit 1)
