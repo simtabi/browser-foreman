@@ -325,3 +325,33 @@ func releaseTargets(s string) map[string]bool {
 	}
 	return out
 }
+
+// The postgres driver is tested against one Postgres: CI's service and test/postgres/compose.yaml name the same image,
+// and the compose file's version appears in its three places (image, PGDATA, tmpfs) alike.
+func TestCIAndTheLocalTestDatabaseAreTheSamePostgres(t *testing.T) {
+	ci, err := os.ReadFile(filepath.Join("..", "..", "..", ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	local, err := os.ReadFile(filepath.Join("..", "..", "..", "test", "postgres", "compose.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	image := regexp.MustCompile(`image:\s*(postgres:(\d+)[\w.-]*)`)
+	c, l := image.FindSubmatch(ci), image.FindSubmatch(local)
+	if c == nil || l == nil {
+		t.Fatalf("no postgres image in ci.yml (%v) or compose.yaml (%v)", c != nil, l != nil)
+	}
+	if string(c[1]) != string(l[1]) {
+		t.Errorf("ci.yml runs %s, compose.yaml %s", c[1], l[1])
+	}
+	major := string(l[2])
+	for _, want := range []string{"PGDATA: /var/lib/postgresql/" + major + "/", "- /var/lib/postgresql/" + major + "/"} {
+		if !strings.Contains(string(local), want) {
+			t.Errorf("compose.yaml lacks %q: the version changes in all three places at once", want)
+		}
+	}
+	if !strings.Contains(string(ci), "BROFO_TEST_POSTGRES_DSN:") {
+		t.Error("ci.yml does not hand the tests BROFO_TEST_POSTGRES_DSN, so the postgres lane cannot run there")
+	}
+}

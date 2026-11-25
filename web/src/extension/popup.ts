@@ -14,6 +14,8 @@ const say = (id: string, text: string, bad = false) => { const el = $(id); el.te
 
 async function show(): Promise<void> {
   const s = await ask({ kind: "status" });
+  ($("keep") as HTMLInputElement).checked = !!s.sync;
+  if (s.sync) say("keepMsg", `In sync with ${s.sync.workspace}` + (s.lastSync ? `, last at ${new Date(s.lastSync).toLocaleTimeString()}` : "") + (s.lastSyncNote ? ` (${s.lastSyncNote})` : "") + ".");
   $("unpaired").hidden = s.paired; $("paired").hidden = !s.paired; $("save").hidden = !s.paired; $("write").hidden = !s.paired || !s.bookmarks; $("foot").hidden = !s.paired;
   $("read").hidden = !s.bookmarks; // Safari: no bookmarks API for extensions
   ($("server") as HTMLInputElement).value = s.offer && !s.paired ? s.offer : s.server;
@@ -89,6 +91,16 @@ $("apply").onclick = async () => {
   if (!previewed) return;
   try { say("planMsg", "Writing…"); const r = await ask({ kind: "apply", ...previewed }); previewed = null; say("planMsg", `Done. Saved first: ${r.backup}`); }
   catch (e) { say("planMsg", (e as Error).message, true); }
+};
+// Keep in sync: changes on either side reach the other; where both changed one bookmark, the later change wins, and
+// what is removed in the browser goes to the workspace's Trash.
+$("keep").onchange = async () => {
+  const on = ($("keep") as HTMLInputElement).checked;
+  try {
+    say("keepMsg", on ? "Syncing…" : "");
+    const r = await ask({ kind: "keepInSync", workspace: on ? ($("ws") as HTMLSelectElement).value : "" });
+    if (on && r.error) say("keepMsg", r.error, true); else await show();
+  } catch (e) { say("keepMsg", (e as Error).message, true); ($("keep") as HTMLInputElement).checked = false; }
 };
 $("saveBtn").onclick = async () => {
   try {

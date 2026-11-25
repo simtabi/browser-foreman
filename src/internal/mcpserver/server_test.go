@@ -45,7 +45,7 @@ func serve(t *testing.T, o Options, inProcess bool, client string) (*mcp.ClientS
 	}
 	c := config.Defaults()
 	c.APIToken = token
-	data, err := store.Open("json", t.TempDir())
+	data, err := store.Open("json", t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

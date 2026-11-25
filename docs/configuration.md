@@ -49,8 +49,9 @@ on. Each setting shows where its value comes from (the default, a config file, `
 | `server.tls_cert` | `BROFO_SERVER_TLS_CERT` | — | a PEM certificate file: serve `https` directly (with `server.tls_key`); for `accounts` mode reached from other computers |
 | `server.tls_key` | `BROFO_SERVER_TLS_KEY` | — | the certificate's PEM private key file; both or neither |
 | `server.trusted_proxy` | — | — | addresses or CIDR ranges of a TLS proxy in front of the server; only from them are `X-Forwarded-Proto` (for the `Secure` cookie) and `X-Forwarded-For` (for sign-in limits) believed |
-| `storage.driver` | `BROFO_STORAGE_DRIVER` | `sqlite` | `sqlite` or `json`; see [storage](tools/storage.md) |
-| `storage.path` | `BROFO_STORAGE_PATH` | the state folder | where data is kept |
+| `storage.driver` | `BROFO_STORAGE_DRIVER` | `sqlite` | `sqlite`, `json` or `postgres`; see [storage](tools/storage.md) |
+| `storage.path` | `BROFO_STORAGE_PATH` | the state folder | where data is kept (`sqlite`, `json`) |
+| — | `BROFO_STORAGE_DSN` | — | the `postgres` driver's connection string; `.env` or the environment only, never a JSON file |
 | `webhooks.timeout` | `BROFO_WEBHOOK_TIMEOUT` | `10s` | per delivery attempt, `1s`–`2m` |
 | `webhooks.attempts` | `BROFO_WEBHOOK_ATTEMPTS` | `5` | tries before a delivery is marked failed, 1–20 |
 | `auth.session_ttl` | `BROFO_SESSION_TTL` | `24h` | how long a sign-in lasts, `5m`–`720h` |

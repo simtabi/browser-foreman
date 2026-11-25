@@ -14,7 +14,8 @@ export interface ExtApi {
   tabGroups?: { query(q: object): Promise<ExtGroup[]>; update(id: number, o: { title?: string; color?: string; collapsed?: boolean }): Promise<ExtGroup>; onUpdated: Hook<() => void> };
   bookmarks?: { getTree(): Promise<ExtBookmark[]>; create(o: { parentId: string; index?: number; title: string; url?: string }): Promise<ExtBookmark>;
     update(id: string, o: { title?: string; url?: string }): Promise<ExtBookmark>; move(id: string, o: { parentId: string; index?: number }): Promise<ExtBookmark>;
-    remove(id: string): Promise<void>; removeTree(id: string): Promise<void> };
+    remove(id: string): Promise<void>; removeTree(id: string): Promise<void>;
+    onCreated?: Hook<() => void>; onRemoved?: Hook<() => void>; onChanged?: Hook<() => void>; onMoved?: Hook<() => void>; onChildrenReordered?: Hook<() => void> };
   storage: { local: { get(keys: string[] | string): Promise<Record<string, any>>; set(o: Record<string, unknown>): Promise<void>; remove(keys: string[] | string): Promise<void> } };
   alarms: { create(name: string, o: { periodInMinutes: number }): void; onAlarm: Hook<(a: { name: string }) => void> };
   action?: { setBadgeText(o: { text: string; tabId?: number }): Promise<void>; setBadgeBackgroundColor(o: { color: string; tabId?: number }): Promise<void>; setTitle(o: { title: string; tabId?: number }): Promise<void> };

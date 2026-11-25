@@ -24,6 +24,19 @@ jobs:
     if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The postgres driver's tests: the same disposable Postgres as `make testdb-up` (test/postgres/compose.yaml).
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: brofo
+          POSTGRES_DB: brofo_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["55433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U brofo -d brofo_test" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      BROFO_TEST_POSTGRES_DSN: postgres://brofo@127.0.0.1:55433/brofo_test?sslmode=disable
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7

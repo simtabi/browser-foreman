@@ -48,7 +48,7 @@ func sortCmd() *cobra.Command {
 			} else if err != nil {
 				return err
 			}
-			s, err := store.Open(c.Storage.Driver, c.Storage.Path)
+			s, err := store.Open(c.Storage.Driver, c.Storage.Path, c.Storage.DSN)
 			if err != nil {
 				return err
 			}

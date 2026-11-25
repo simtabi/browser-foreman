@@ -73,7 +73,7 @@ func TestBackupCarriesTabsAndPrefs(t *testing.T) {
 		raw, _ := json.Marshal(b)
 		var back Backup
 		_ = json.Unmarshal(raw, &back)
-		fresh, _ := Open("json", t.TempDir())
+		fresh, _ := Open("json", t.TempDir(), "")
 		defer fresh.Close()
 		res, err := Restore(ctx, fresh, back, t0)
 		if err != nil || res.Tabs != 1 || !res.Prefs {
@@ -86,7 +86,7 @@ func TestBackupCarriesTabsAndPrefs(t *testing.T) {
 		// Into a store with its own preferences and that snapshot already: nothing is replaced.
 		mine := Defaults()
 		mine.KeepDays = 3
-		other, _ := Open("json", t.TempDir())
+		other, _ := Open("json", t.TempDir(), "")
 		defer other.Close()
 		_ = SavePrefs(ctx, other, mine)
 		_ = other.SaveTabs(ctx, TabSnapshot{ID: "2026-11-12_072137", At: t0, Reason: "mine", Windows: json.RawMessage(`{}`)})

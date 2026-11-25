@@ -11,9 +11,9 @@ import (
 const accountsSchema = `
 CREATE TABLE IF NOT EXISTS users (name TEXT PRIMARY KEY, role TEXT NOT NULL, password_hash TEXT NOT NULL,
   disabled INTEGER NOT NULL DEFAULT 0, created TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS tokens (id TEXT PRIMARY KEY, user TEXT NOT NULL REFERENCES users(name) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS tokens (id TEXT PRIMARY KEY, "user" TEXT NOT NULL REFERENCES users(name) ON DELETE CASCADE,
   name TEXT NOT NULL, hash TEXT NOT NULL UNIQUE, created TEXT NOT NULL, last_used TEXT NOT NULL DEFAULT '');
-CREATE TABLE IF NOT EXISTS sessions (hash TEXT PRIMARY KEY, user TEXT NOT NULL REFERENCES users(name) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS sessions (hash TEXT PRIMARY KEY, "user" TEXT NOT NULL REFERENCES users(name) ON DELETE CASCADE,
   csrf TEXT NOT NULL, created TEXT NOT NULL, expires TEXT NOT NULL);
 `
 
@@ -102,17 +102,17 @@ func scanToken(row interface{ Scan(...any) error }) (Token, error) {
 }
 
 func (s *SQLiteStore) CreateToken(ctx context.Context, t Token) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO tokens (id, user, name, hash, created) VALUES (?, ?, ?, ?, ?)`,
+	_, err := s.db.ExecContext(ctx, `INSERT INTO tokens (id, "user", name, hash, created) VALUES (?, ?, ?, ?, ?)`,
 		t.ID, t.User, t.Name, t.Hash, t.Created.UTC().Format(ts))
 	return err
 }
 
 func (s *SQLiteStore) TokenByHash(ctx context.Context, hash string) (Token, error) {
-	return scanToken(s.db.QueryRowContext(ctx, `SELECT id, user, name, hash, created, last_used FROM tokens WHERE hash = ?`, hash))
+	return scanToken(s.db.QueryRowContext(ctx, `SELECT id, "user", name, hash, created, last_used FROM tokens WHERE hash = ?`, hash))
 }
 
 func (s *SQLiteStore) Tokens(ctx context.Context, user string) ([]Token, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, user, name, hash, created, last_used FROM tokens WHERE ? = '' OR user = ? ORDER BY created`, user, user)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, "user", name, hash, created, last_used FROM tokens WHERE ? = '' OR "user" = ? ORDER BY created`, user, user)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func (s *SQLiteStore) CreateSession(ctx context.Context, x Session) error {
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires < ?`, time.Now().UTC().Format(ts)); err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO sessions (hash, user, csrf, created, expires) VALUES (?, ?, ?, ?, ?)`,
+	_, err := s.db.ExecContext(ctx, `INSERT INTO sessions (hash, "user", csrf, created, expires) VALUES (?, ?, ?, ?, ?)`,
 		x.Hash, x.User, x.CSRF, x.Created.UTC().Format(ts), x.Expires.UTC().Format(ts))
 	return err
 }
@@ -156,7 +156,7 @@ func (s *SQLiteStore) CreateSession(ctx context.Context, x Session) error {
 func (s *SQLiteStore) SessionByHash(ctx context.Context, hash string, now time.Time) (Session, error) {
 	var x Session
 	var created, expires string
-	err := s.db.QueryRowContext(ctx, `SELECT hash, user, csrf, created, expires FROM sessions WHERE hash = ?`, hash).Scan(&x.Hash, &x.User, &x.CSRF, &created, &expires)
+	err := s.db.QueryRowContext(ctx, `SELECT hash, "user", csrf, created, expires FROM sessions WHERE hash = ?`, hash).Scan(&x.Hash, &x.User, &x.CSRF, &created, &expires)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Session{}, ErrNotFound
 	}
@@ -177,6 +177,6 @@ func (s *SQLiteStore) DeleteSession(ctx context.Context, hash string) error {
 }
 
 func (s *SQLiteStore) DeleteSessions(ctx context.Context, user, keep string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE user = ? AND hash != ?`, user, keep)
+	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE "user" = ? AND hash != ?`, user, keep)
 	return err
 }

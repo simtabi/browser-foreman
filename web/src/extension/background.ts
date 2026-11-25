@@ -55,6 +55,44 @@ for (const h of [ext.tabs.onCreated, ext.tabs.onRemoved, ext.tabs.onMoved, ext.t
 ext.tabs.onUpdated.addListener((_id, change) => { if (change.url || change.title || change.status === "complete") soon(); });
 ext.tabGroups?.onUpdated.addListener(soon);
 
+// ---- two-way sync with one workspace (the popup's Keep in sync) ----
+// A change on either side reaches the other: the browser's own bookmark events (a few seconds after the last one) and
+// each minute's alarm (for changes made in Browser Foreman) send the bookmarks to the server, which merges them with
+// the workspace and answers the merge; the extension writes it into the browser and reads the result back. Its own
+// writes are not taken for the owner's changes (applying), and one sync runs at a time.
+let applying = false, syncing: Promise<void> = Promise.resolve(), syncTimer: ReturnType<typeof setTimeout> | undefined;
+async function syncNow(): Promise<void> {
+  const started = Date.now();
+  const st = await ext.storage.local.get(["sync"]);
+  const sync = st.sync as { workspace: string; base: number; changed?: number } | undefined;
+  const c = await client();
+  if (!sync?.workspace || !c || !ext.bookmarks) return;
+  const r = await c.sync(sync.workspace, sync.base, sync.changed ?? 0, await bookmarksApi().getTree());
+  let seq = r.entry?.seq ?? r.seq ?? sync.base;
+  const p = plan(await bookmarksApi().getTree() as ExtBookmark[], r.tree.root as WsNode);
+  if (p.steps.length) {
+    applying = true;
+    try {
+      await run(p, bookmarksApi());
+      const back = await c.adopt(sync.workspace, seq, await bookmarksApi().getTree());
+      seq = back.entry?.seq ?? back.seq ?? seq;
+    } finally { setTimeout(() => { applying = false; }, 1500); } // the browser's events for this write arrive late
+  }
+  // A change the owner made while this ran is kept for the next sync (its own timer is already set).
+  const now = (await ext.storage.local.get(["sync"])).sync;
+  const later = now?.changed > started ? { changed: now.changed } : {};
+  await ext.storage.local.set({ sync: { workspace: sync.workspace, base: seq, ...later }, lastSync: Date.now(), lastSyncNote: r.conflicts || r.removed ? `${r.conflicts} conflict(s) settled, ${r.removed} removed to the Trash` : "" });
+}
+const queueSync = (): void => { syncing = syncing.then(syncNow).catch(async e => { await ext.storage.local.set({ lastError: (e as Error).message }); await unpairedIf(e); }); };
+const bookmarkChanged = async (): Promise<void> => {
+  if (applying) return;
+  const st = await ext.storage.local.get(["sync"]);
+  if (!st.sync?.workspace) return;
+  await ext.storage.local.set({ sync: { ...st.sync, changed: Date.now() } });
+  clearTimeout(syncTimer); syncTimer = setTimeout(queueSync, 3000);
+};
+for (const h of [ext.bookmarks?.onCreated, ext.bookmarks?.onRemoved, ext.bookmarks?.onChanged, ext.bookmarks?.onMoved, ext.bookmarks?.onChildrenReordered]) h?.addListener(() => background(bookmarkChanged));
+
 // ---- the toolbar badge: "!" on a page Browser Foreman has confirmed dead ----
 async function markTab(tabId: number): Promise<void> {
   const c = await client(); if (!c) return;  // not connected: the icon shows the connecting letters instead
@@ -161,7 +199,7 @@ async function autoConnect(): Promise<void> {
 }
 
 background(async () => { await ext.alarms.create("tick", { periodInMinutes: 1 }); });
-const everything = (): void => { background(report); background(poll); background(autoConnect); };
+const everything = (): void => { background(report); background(poll); background(autoConnect); queueSync(); };
 ext.alarms.onAlarm.addListener(a => { if (a.name === "tick") everything(); });
 ext.runtime.onStartup.addListener(everything);
 ext.runtime.onInstalled.addListener(everything); // after an install, update or reload too: commands waiting are taken at once, not at the next minute
@@ -209,7 +247,7 @@ async function handle(msg: any): Promise<unknown> {
   switch (msg.kind) {
     case "status": {
       const s = await settings();
-      const st = await ext.storage.local.get(["lastReport", "lastError", "offer"]);
+      const st = await ext.storage.local.get(["lastReport", "lastError", "offer", "sync", "lastSync", "lastSyncNote"]);
       return { paired: !!s.token, server: s.server ?? "http://127.0.0.1:8765", browser: s.browser ?? thisBrowser(), bookmarks: !!ext.bookmarks, ...st };
     }
     case "pair": {
@@ -236,6 +274,13 @@ async function handle(msg: any): Promise<unknown> {
     case "report": await report(); return { ok: true };
     case "read": { const c = await client(); if (!c) throw new Error("not paired"); return { summary: await readInto(c, msg.workspace || undefined) }; }
     case "workspaces": { const c = await client(); if (!c) throw new Error("not paired"); return c.workspaces(); }
+    case "keepInSync": { // on: start from when this browser and the workspace last agreed; off: stop
+      if (!msg.workspace) { await ext.storage.local.remove(["sync"]); return { sync: null }; }
+      await ext.storage.local.set({ sync: { workspace: msg.workspace, base: 0 }, lastError: "" });
+      queueSync(); await syncing;
+      const st = await ext.storage.local.get(["lastError", "sync"]);
+      return { sync: st.sync, error: st.lastError };
+    }
     case "save": {
       const c = await client(); if (!c) throw new Error("not paired");
       const [tab] = await ext.tabs.query({ active: true, currentWindow: true });

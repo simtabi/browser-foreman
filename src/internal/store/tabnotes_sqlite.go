@@ -18,7 +18,8 @@ func (s *SQLiteStore) SetTabNote(ctx context.Context, n TabNote) error {
 		return err
 	}
 	tags, _ := json.Marshal(n.Tags)
-	_, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO tab_notes (kind, key, note, tags, updated) VALUES (?, ?, ?, ?, ?)`,
+	_, err := s.db.ExecContext(ctx, `INSERT INTO tab_notes (kind, key, note, tags, updated) VALUES (?, ?, ?, ?, ?)
+		  ON CONFLICT (kind, key) DO UPDATE SET note = excluded.note, tags = excluded.tags, updated = excluded.updated`,
 		n.Kind, n.Key, n.Note, string(tags), n.Updated.UTC().Format(ts))
 	return err
 }
@@ -62,6 +63,5 @@ func (s *SQLiteStore) DeleteTabs(ctx context.Context, ids []string) (int, error)
 }
 
 func (s *SQLiteStore) Scrub(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
-	return err
+	return s.db.scrub(ctx)
 }

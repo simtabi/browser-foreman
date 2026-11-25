@@ -55,7 +55,7 @@ func profile(t *testing.T, sync bool) string {
 
 func stored(t *testing.T) store.Store {
 	t.Helper()
-	s, err := store.Open("json", t.TempDir())
+	s, err := store.Open("json", t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

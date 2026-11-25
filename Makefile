@@ -15,7 +15,7 @@ GOVULNCHECK_VERSION := v1.10.0
 # release tag is built, where a mistake burns the tag.
 VET_OSES := darwin linux windows freebsd
 
-.PHONY: help build test vet fmt lint tidy vuln notices universal cross web check screenshots
+.PHONY: help build test vet fmt lint tidy vuln notices testdb-up testdb-down universal cross web check screenshots
 help:  ## list targets
 	@grep -E '^[a-z-]+:.*##' Makefile | sed 's/:.*## /\t/'
 
@@ -38,6 +38,14 @@ vuln:  ## known vulnerabilities in code the binary calls (govulncheck at GOVULNC
 
 notices:  ## .cache/notices/THIRD_PARTY_NOTICES for the release: licences of the linked Go modules and bundled npm packages (after make web)
 	go -C src test -count=1 -run TestThirdPartyNoticesCanBeWritten ./internal/version -notices-out "$(CURDIR)/.cache/notices/THIRD_PARTY_NOTICES"
+
+TESTDB := test/postgres/compose.yaml
+testdb-up:  ## start the disposable Postgres the postgres driver's tests use (127.0.0.1:55433; waits until it answers)
+	docker compose -f $(TESTDB) up -d --wait
+	@echo 'BROFO_TEST_POSTGRES_DSN=postgres://brofo@127.0.0.1:55433/brofo_test?sslmode=disable'
+
+testdb-down:  ## stop it and drop everything in it
+	docker compose -f $(TESTDB) down -v
 
 fmt:  ## gofmt check (fails when a file needs formatting)
 	@test -z "$$(gofmt -l src)" || (gofmt -l src; exit 1)

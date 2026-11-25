@@ -212,6 +212,9 @@ func TestTagsLoaderAndEnvExampleAgree(t *testing.T) {
 			if f.Key == "ai.provider" && (ch == "openai" || ch == "ollama") {
 				vals["ai.model"] = raw("m")
 			}
+			if f.Key == "storage.driver" && ch == "postgres" {
+				vals["BROFO_STORAGE_DSN"] = raw("postgres://brofo@127.0.0.1:55433/brofo_test")
+			}
 			if f.Key == "server.mode" && ch == "accounts" {
 				continue // needs accounts set up; Validate accepts it, checked in config_test
 			}

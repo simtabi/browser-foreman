@@ -159,6 +159,13 @@ again, so a fresh `make extension` takes effect without visiting the browser's e
   (`<browser>-before-write`), the changes are made, any order a browser placed differently is fixed, and the result is
   read back so the next write matches item for item. A workspace that was not read from this browser is refused,
   because writing it would remove everything; the browser's own top folders are never moved or removed.
+- **Keep in sync.** *Keep this browser and that workspace in sync*, under *Write a workspace into this browser*,
+  carries changes both ways from then on: a few seconds after you change the browser's bookmarks, and each minute for
+  changes made in Browser Foreman. The server merges the two against the last state they agreed on (the last read,
+  write-back or sync). A change made on one side is kept. Where both sides changed one bookmark, the side that changed
+  last wins, and that holds for a removal against an edit too. What the browser removes goes to the workspace's
+  Trash, never gone; notes, ratings and tags stay with the workspace. Only a workspace read from this browser can be
+  kept in sync with it.
 - **Save this page.** The popup's *Save this page* adds the page the tab shows to a workspace you choose, in a top
   folder named *Saved from <browser>* (made the first time), with a picture of the tab as its snapshot. It only adds:
   an address the workspace already holds is left where it is, and nothing else in the workspace changes. The
@@ -186,6 +193,8 @@ again, so a fresh `make extension` takes effect without visiting the browser's e
 | `GET /api/v1/extension/commands?wait=25` | the extension | commands for its browser (long poll) |
 | `POST /api/v1/extension/commands/{id}/done` | the extension | what became of one |
 | `POST /api/v1/extension/pages` | the extension | body `{workspace, url, title, picture?}` (a JPEG or PNG data URL up to 8 MB): add the page to *Saved from <browser>*; `201` with the entry, or `200 {"already": true, "node"}` |
+| `POST /api/v1/extension/sync` | the extension | body `{workspace, base, changed, nodes}` (`base` 0: the last entry this browser and the workspace agreed on; `changed`: the browser's last bookmark change, Unix ms): merges and answers `{tree, conflicts, removed}` with the entry made, or `seq` when nothing changed |
+| `POST /api/v1/extension/sync/adopt` | the extension | body `{workspace, seq, nodes}`: the browser's bookmarks read back after writing the merge, taken under the browser's ids; `409` when the workspace moved on (sync again) |
 | `GET /api/v1/extension/link?url=` | the extension | `{status, confirmed, archive, checked}` for one address, `{"status": "unchecked"}` when never checked |
 | `POST /api/v1/extension/commands` | owner | ask a browser to open links or a tab group, or to reload its extension (`"kind": "reload"`); at most 100 wait per browser, and each is forgotten after an hour |
 | `GET /api/v1/extension/commands/{id}` | viewer | a command and its state |
