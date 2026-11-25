@@ -13,7 +13,8 @@ curl -X POST http://127.0.0.1:8765/api/v1/webhooks \
 - `events`: exact types, a family (`bookmark.*`) or everything (`*`).
 - `secret`: at least 16 characters; only you and Browser Foreman know it. It is never returned.
 - `url`: `http` or `https`, no credentials in it. Link-local, multicast, unspecified and cloud metadata addresses are
-  refused; loopback is fine.
+  refused, both as typed and for whatever address the name resolves to when a delivery connects; loopback and the
+  local network are fine. Redirects are not followed: a `3xx` answer is a failed delivery, not retried.
 
 ## A delivery
 
@@ -33,7 +34,7 @@ X-Brofo-Signature: t=1731434400,v1=5f2b…
 
 ## Retries
 
-A `2xx` answer is success. A network error, a `5xx` or a `429` is retried with exponential backoff (2 s, 4 s, 8 s, …)
+A `2xx` answer is success. A network error, a `5xx` or a `429` is retried with exponential backoff (2 s, 4 s, 8 s, …, at most 5 minutes apart)
 up to `webhooks.attempts` tries (default 5), each limited to `webhooks.timeout` (default 10 s). Any other `4xx` means the
 receiver refused it, so it is not retried. Failed deliveries are reported in the server's log.
 

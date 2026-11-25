@@ -25,6 +25,6 @@ please report any regression in them:
   JSON config file; a `.env` that other users can read is refused; tokens and webhook secrets are never printed or
   returned by the API.
 - **Webhooks cannot reach what they should not.** Targets must be http(s); link-local, multicast, unspecified and
-  cloud metadata addresses are refused. Every delivery is signed (HMAC-SHA256 over the timestamp and body).
+  cloud metadata addresses are refused, checked again on every connection, and redirects are not followed. Every delivery is signed (HMAC-SHA256 over the timestamp and body).
 - **Releases come from a version tag.** The release workflow runs only on a pushed `vX.Y.Z` tag or a request naming
   one, and publishes to the GitHub release only, with `checksums.txt` and a build-provenance attestation.

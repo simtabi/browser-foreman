@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -172,7 +171,7 @@ func newServer(c config.Config, data store.Store, now func() time.Time) *api.Ser
 		Browsers: bs,
 		Media:    media.Store{Dir: filepath.Join(c.Storage.Path, "media")},
 		Dispatch: &webhooks.Dispatcher{
-			Store: hooks, Client: &http.Client{Timeout: c.Webhooks.Timeout.Duration}, Attempts: c.Webhooks.Attempts,
+			Store: hooks, Client: webhooks.NewClient(c.Webhooks.Timeout.Duration), Attempts: c.Webhooks.Attempts,
 			Backoff: 2 * time.Second, Now: now,
 			Log: func(d webhooks.Delivery) {
 				if err := deliveries.Add(d); err != nil {
