@@ -124,40 +124,53 @@ func Restore(ctx context.Context, s Store, b Backup, now time.Time) (Restored, e
 			}
 		}
 	}
-	for _, bw := range b.Workspaces {
-		w := bw.Workspace
-		id := w.ID
-		for n := 1; ; n++ {
-			if _, err := s.Workspace(ctx, id); errors.Is(err, ErrNotFound) {
-				break
-			} else if err != nil {
-				return out, err
+	// A restore that fails partway removes the workspaces it made itself, so a second try starts clean instead of
+	// adding "-restored-1" copies beside half-restored ones. Nothing that was there before is touched.
+	var created []string
+	err := func() error {
+		for _, bw := range b.Workspaces {
+			w := bw.Workspace
+			id := w.ID
+			for n := 1; ; n++ {
+				if _, err := s.Workspace(ctx, id); errors.Is(err, ErrNotFound) {
+					break
+				} else if err != nil {
+					return err
+				}
+				id = fmt.Sprintf("%s-restored-%d", w.ID, n)
+				if len(id) > 64 {
+					id = fmt.Sprintf("restored-%d-%d", now.Unix(), n)
+				}
 			}
-			id = fmt.Sprintf("%s-restored-%d", w.ID, n)
-			if len(id) > 64 {
-				id = fmt.Sprintf("restored-%d-%d", now.Unix(), n)
+			if _, err := s.CreateWorkspace(ctx, id, w.Name, w.Created); err != nil {
+				return err
 			}
-		}
-		if _, err := s.CreateWorkspace(ctx, id, w.Name, w.Created); err != nil {
-			return out, err
-		}
-		for _, e := range bw.History {
-			c := Change{Op: e.Op, Summary: e.Summary, Tree: b.Trees[e.Snap], Undid: e.Undid, Redone: e.Redone}
-			if _, err := s.Commit(ctx, id, e.Seq-1, c, e.At); err != nil {
-				return out, fmt.Errorf("workspace %s entry %d: %w", id, e.Seq, err)
+			created = append(created, id)
+			for _, e := range bw.History {
+				c := Change{Op: e.Op, Summary: e.Summary, Tree: b.Trees[e.Snap], Undid: e.Undid, Redone: e.Redone}
+				if _, err := s.Commit(ctx, id, e.Seq-1, c, e.At); err != nil {
+					return fmt.Errorf("workspace %s entry %d: %w", id, e.Seq, err)
+				}
+				out.Entries++
 			}
-			out.Entries++
-		}
-		for _, x := range bw.Sources {
-			if err := s.AddSource(ctx, id, x.Source, x.Body); err != nil {
-				return out, fmt.Errorf("workspace %s source %s: %w", id, x.Source.ID, err)
+			for _, x := range bw.Sources {
+				if err := s.AddSource(ctx, id, x.Source, x.Body); err != nil {
+					return fmt.Errorf("workspace %s source %s: %w", id, x.Source.ID, err)
+				}
 			}
+			w.ID = id
+			if err := s.UpdateWorkspace(ctx, w); err != nil { // notes, lock and archive last: a lock would refuse the entries
+				return err
+			}
+			out.Workspaces[bw.Workspace.ID] = id
 		}
-		w.ID = id
-		if err := s.UpdateWorkspace(ctx, w); err != nil { // notes, lock and archive last: a lock would refuse the entries
-			return out, err
+		return nil
+	}()
+	if err != nil {
+		for _, id := range created {
+			_ = s.PurgeWorkspace(context.WithoutCancel(ctx), id)
 		}
-		out.Workspaces[bw.Workspace.ID] = id
+		return Restored{Workspaces: map[string]string{}}, err
 	}
 	urls := make([]string, 0, len(b.Links))
 	for u := range b.Links {
