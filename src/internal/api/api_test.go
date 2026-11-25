@@ -161,10 +161,13 @@ func TestWorkspacesAreReadOnlyAndNeedTheToken(t *testing.T) {
 }
 
 func TestCrossSiteLoadsAreRefused(t *testing.T) {
-	h := newServer(t, "tok").Handler()
+	srv := newServer(t, "tok")
+	h := srv.Handler()
+	page := signedIn(t, srv) // the page's own loads carry its sign-in
 	req := func(site, mode string) int {
 		r := httptest.NewRequest("GET", "/api/v1/browsers/icon?name=Google%20Chrome", nil)
 		r.Host = "127.0.0.1:8765"
+		r.AddCookie(page)
 		r.Header.Set("Sec-Fetch-Site", site)
 		r.Header.Set("Sec-Fetch-Mode", mode)
 		w := httptest.NewRecorder()

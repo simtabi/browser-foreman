@@ -57,3 +57,28 @@ func TestTheServerTimesOutSlowClients(t *testing.T) {
 		t.Fatal("a write timeout would cut the event stream and long polls")
 	}
 }
+
+// Another site on this computer (same-site: a dev server on localhost:3000) cannot load the page's pictures to learn
+// which sites are bookmarked: they need the page's sign-in, or a token.
+func TestPicturesNeedTheSignIn(t *testing.T) {
+	s := withUI(seeded(t))
+	h := s.Handler()
+	for _, path := range []string{"/favicons/0123456789abcdef.png", "/api/v1/browsers/icon?name=Google%20Chrome"} {
+		r := httptest.NewRequest("GET", path, nil)
+		r.Host = host
+		r.Header.Set("Sec-Fetch-Site", "same-site")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != 401 {
+			t.Errorf("%s from another site on this computer: %d", path, w.Code)
+		}
+	}
+	r := httptest.NewRequest("GET", "/api/v1/browsers/icon?name=Google%20Chrome", nil)
+	r.Host = host
+	r.AddCookie(signedIn(t, s))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 200 {
+		t.Fatalf("the signed-in page: %d", w.Code)
+	}
+}
