@@ -76,15 +76,17 @@ if (boot) {
     } catch (e) { banner("Not saved", String(e), "danger"); }
   };
 
-  let timer: ReturnType<typeof setTimeout> | undefined, sending: Promise<void> | null = null, dirty = false;
+  let timer: ReturnType<typeof setTimeout> | undefined, sending: Promise<void> | null = null, dirty = false, lastSent = "";
   const send = async (): Promise<void> => {
     dirty = false;
     const body = JSON.stringify(fromPage(state, urls, page, newId));
+    if (body === lastSent) return; // nothing changed since the last save (hiding the tab re-saved the whole tree)
     const r = await fetch(`${base}/tree`, { method: "PUT", headers: { ...headers(), "If-Match": `"${head}"` }, body, keepalive: body.length < 60_000 });
     if (r.status === 412) return banner("Changed somewhere else", "Another window, the extension or the API changed these bookmarks after this page loaded, so your last edit was not saved yet.", "warning",
       [{ label: "Reload", run: () => location.reload(), primary: true }, { label: "Keep my change", run: () => void keepMine() }]);
     const j = await r.json().catch(() => ({})) as { error?: string; entry?: { seq: number; summary: string } | null };
     if (!r.ok) return banner("Not saved", j.error ?? `The server answered ${r.status}.`, "danger", [{ label: "Try again", run: () => flush(), primary: true }]);
+    lastSent = body;
     if (j.entry) { head = j.entry.seq; ws.can = { undo: j.entry.summary, redo: null }; }
     document.getElementById("bfSaveBanner")?.remove();
   };
@@ -93,11 +95,16 @@ if (boot) {
     if (sending) { dirty = true; return; }
     sending = send().catch(e => banner("Not saved", `${unreachable(e).message} Your edit is still on this page.`, "danger", [{ label: "Try again", run: () => flush(), primary: true }])).finally(() => { sending = null; if (dirty) flush(); });
   };
-  const schedule = (): void => { clearTimeout(timer); timer = setTimeout(flush, 400); };
+  // A page being hidden or closed sends at once: a timer does not fire during unload, so an edit made just before
+  // closing used to be lost.
+  const schedule = (): void => { clearTimeout(timer); if (document.visibilityState === "hidden") { flush(); return; } timer = setTimeout(flush, 400); };
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && timer) flush(); });
+  addEventListener("pagehide", () => { if (timer) flush(); });
+  /** Every edit made on this page has reached the server. */
+  const settle = async (): Promise<void> => { if (timer) flush(); while (sending) await sending; };
 
   const step = (verb: "undo" | "redo") => async (): Promise<void> => {
-    if (sending) await sending;
+    await settle(); // an edit still waiting on its timer is sent first, so undo takes back the newest change
     const r = await fetch(`${base}/${verb}`, { method: "POST", headers: headers() });
     if (r.ok) return location.reload();
     const j = await r.json().catch(() => ({})) as { error?: string };
@@ -110,6 +117,8 @@ if (boot) {
     ? Object.assign(new Error(`Browser Foreman is not answering at ${location.origin}: it has stopped, or now runs on another address. Start it (browser-foreman serve, or service install) and this page carries on.`), { status: 0, offline: true })
     : e as Error;
   const call = async <T>(method: string, path: string, body?: unknown): Promise<T> => {
+    // A change to a workspace from a dialog lands on top of this page's own edits, never racing one still on its timer.
+    if (method !== "GET" && path.startsWith("workspaces/")) await settle();
     const r = await fetch(`api/v1/${path}`, { method, headers: headers(), body: body === undefined ? undefined : JSON.stringify(body) }).catch(e => { throw unreachable(e); });
     const j = await r.json().catch(() => ({})) as T & { error?: string };
     if (!r.ok) throw new Error(j.error ?? `the server answered ${r.status}`);
@@ -214,10 +223,7 @@ if (boot) {
     redo: step("redo"),
     /** Resolves once every edit made on this page has reached the server: for a change sent another way (a dialog's
      *  own call), so it lands on top of them rather than racing them. */
-    async saved(): Promise<void> {
-      if (timer) flush();
-      while (sending) await sending;
-    },
+    saved: settle,
   };
   window.BM_WS = ws;
 }
