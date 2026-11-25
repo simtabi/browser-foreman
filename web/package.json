@@ -20,5 +20,8 @@
     "puppeteer-core": "^25.17.0",
     "typescript": "^7.0.2"
   },
+  "engines": {
+    "node": ">=22.12"
+  },
   "private": true
 }

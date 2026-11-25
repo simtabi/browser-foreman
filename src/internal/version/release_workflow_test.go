@@ -124,6 +124,26 @@ func TestReleaseRunsOnAVersionTagOrOnRequest(t *testing.T) {
 	if relNode == nil || relNode[1] != string(ciNode[1]) {
 		t.Errorf("the release job's node-version is %v; want %q, the Node ci.yml's web job uses", relNode, ciNode[1])
 	}
+
+	// web/package.json names the oldest Node the web tools run on, CI tests that major, and the install page says so.
+	pkg, err := os.ReadFile(filepath.Join("..", "..", "..", "web", "package.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	floor := regexp.MustCompile(`"node":\s*">=(([0-9]+)(?:\.[0-9]+)*)"`).FindSubmatch(pkg)
+	if floor == nil {
+		t.Fatal(`web/package.json names no "engines": {"node": ">=..."}`)
+	}
+	if major := strings.SplitN(string(ciNode[1]), ".", 2)[0]; major != string(floor[2]) {
+		t.Errorf("ci.yml tests Node %s, but web/package.json's floor is Node %s", ciNode[1], floor[1])
+	}
+	install, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "installation.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "Node.js " + string(floor[1]); !strings.Contains(string(install), want+" or newer") {
+		t.Errorf("docs/installation.md does not say %q or newer, the floor web/package.json names", want)
+	}
 }
 
 // The GitHub release is the only channel. go.md's list of GoReleaser blocks that publish anywhere else.

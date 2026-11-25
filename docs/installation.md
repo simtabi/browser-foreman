@@ -6,7 +6,7 @@ Browser Foreman is one binary: download it from a GitHub release, or build it fr
 
 - To build from source: Go 1.26 or newer, and `make`. A downloaded binary needs neither.
 - macOS for reading live tabs; every other feature runs on macOS, Linux, Windows and FreeBSD.
-- Node.js 22 or newer only to rebuild the web interface (`make web`).
+- Node.js 22.12 or newer only to rebuild the web interface (`make web`); `web/package.json` names the same floor.
 
 ## Download
 
