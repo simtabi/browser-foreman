@@ -1,10 +1,10 @@
 package api
 
 import (
-	"context"
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
