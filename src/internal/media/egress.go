@@ -113,7 +113,7 @@ func (e *egress) tunnel(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = down.Write([]byte("HTTP/1.1 200 Connection established\r\n\r\n"))
 	if n := buf.Reader.Buffered(); n > 0 { // bytes the client sent right after CONNECT
-		b, _ := buf.Reader.Peek(n)
+		b, _ := buf.Peek(n)
 		_, _ = up.Write(b)
 	}
 	done := make(chan struct{}, 2)

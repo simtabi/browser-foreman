@@ -56,7 +56,12 @@ func TestTheServerServesHTTPSWithACertificate(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- s.Run(ctx) }()
-	defer func() { cancel(); <-done }()
+	defer func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Errorf("the https server stopped with %v", err)
+		}
+	}()
 	c := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}} // our own throwaway cert
 	var resp *http.Response
 	for range 50 {
