@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -232,5 +233,61 @@ func TestInitMakesEnvFromTheExample(t *testing.T) {
 	}
 	if c, err := Load(p, noEnv); err != nil || c.APIToken != tok {
 		t.Fatalf("%v %q", err, c.APIToken)
+	}
+}
+
+// The OpenAI key goes wherever ai.openai_url points, so pointing it elsewhere is as risky as moving the server:
+// otherwise anyone who may edit safe settings could read the write-only key.
+func TestTheOpenAIAddressGuardsItsKey(t *testing.T) {
+	p := setup(t, `{}`, "")
+	addr := map[string]json.RawMessage{"ai.openai_url": raw("https://elsewhere.example/v1")}
+	if _, err := Apply(p, noEnv, addr, true); !errors.Is(err, ErrLocked) {
+		t.Fatalf("safe mode let ai.openai_url through: %v", err)
+	}
+	p = setup(t, `{"settings":{"edit":"all"}}`, "")
+	if _, err := Apply(p, noEnv, addr, false); !errors.Is(err, ErrConfirm) {
+		t.Fatalf("all mode without a confirmation: %v", err)
+	}
+	if _, err := Apply(p, noEnv, addr, true); err != nil {
+		t.Fatal(err)
+	}
+	if f := find(mustDescribe(t, p), "ai.ollama_url"); !f.Editable || f.Risky {
+		t.Fatalf("Ollama's address carries no key and stays an ordinary setting: %+v", f)
+	}
+}
+
+func mustDescribe(t *testing.T, p Paths) []Field {
+	t.Helper()
+	fs, _, err := Describe(p, noEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fs
+}
+
+// A certificate needs its key, and a trusted proxy must be an address or a range.
+func TestTLSAndProxySettingsAreChecked(t *testing.T) {
+	c := Defaults()
+	c.Server.TLSCert = "/no/such/cert.pem"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "together") {
+		t.Fatalf("a certificate without a key: %v", err)
+	}
+	c.Server.TLSKey = "/no/such/key.pem"
+	if err := c.Validate(); err == nil {
+		t.Fatal("unreadable certificate files were accepted")
+	}
+	c = Defaults()
+	c.Server.TrustedProxy = []string{"10.0.0.0/8", "192.0.2.1", "not-an-address"}
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "not-an-address") {
+		t.Fatalf("a bad proxy entry: %v", err)
+	}
+	c.Server.TrustedProxy = c.Server.TrustedProxy[:2]
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for ip, want := range map[string]bool{"10.9.8.7": true, "192.0.2.1": true, "192.0.2.2": false} {
+		if c.Server.Behind(net.ParseIP(ip)) != want {
+			t.Errorf("Behind(%s) != %v", ip, want)
+		}
 	}
 }

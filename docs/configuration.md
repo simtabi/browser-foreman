@@ -30,7 +30,7 @@ on. Each setting shows where its value comes from (the default, a config file, `
   loader the server starts with, and nothing is written unless all of it passes.
 - **The environment wins.** A setting a `BROFO_*` variable sets in the shell is shown, not editable.
 - **What the page may change** is `settings.edit`, set in the files only. `safe` (the default) leaves the server's
-  address and mode, storage, and the API token to the files. `all` lets the page change those too, each after a
+  address and mode, storage, the API token and the OpenAI address (the key is sent there) to the files. `all` lets the page change those too, each after a
   confirmation.
 - **AI is one choice, not five fields.** *Who answers AI jobs* picks the provider (your assistant over MCP,
   Anthropic, OpenAI or a local Ollama), and only that provider's settings show beneath it: its key, a model chosen
@@ -46,6 +46,9 @@ on. Each setting shows where its value comes from (the default, a config file, `
 | `server.addr` | `BROFO_SERVER_ADDR` | `127.0.0.1:8765` | where the server listens |
 | `server.open` | `BROFO_SERVER_OPEN` | `auto` | open the page in the default browser when `serve` starts: `auto` (when started from a terminal), `always` or `never`; `--open` and `--no-open` override it |
 | `server.mode` | `BROFO_SERVER_MODE` | `local` | `local`: one owner, loopback only, no sign-in; `accounts`: people sign in; see [security](security.md#accounts) |
+| `server.tls_cert` | `BROFO_SERVER_TLS_CERT` | — | a PEM certificate file: serve `https` directly (with `server.tls_key`); for `accounts` mode reached from other computers |
+| `server.tls_key` | `BROFO_SERVER_TLS_KEY` | — | the certificate's PEM private key file; both or neither |
+| `server.trusted_proxy` | — | — | addresses or CIDR ranges of a TLS proxy in front of the server; only from them are `X-Forwarded-Proto` (for the `Secure` cookie) and `X-Forwarded-For` (for sign-in limits) believed |
 | `storage.driver` | `BROFO_STORAGE_DRIVER` | `sqlite` | `sqlite` or `json`; see [storage](tools/storage.md) |
 | `storage.path` | `BROFO_STORAGE_PATH` | the state folder | where data is kept |
 | `webhooks.timeout` | `BROFO_WEBHOOK_TIMEOUT` | `10s` | per delivery attempt, `1s`–`2m` |

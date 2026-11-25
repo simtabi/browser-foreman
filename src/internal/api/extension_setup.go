@@ -95,6 +95,12 @@ func (s *Server) requestPairing(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "only the Browser Foreman extension can ask to connect")
 		return
 	}
+	// The Origin header proves nothing on its own (any program can send it), so asking is for this computer only. An
+	// extension on another computer pairs with a one-time code instead (browser-foreman pair).
+	if !fromThisComputer(r) {
+		writeErr(w, http.StatusForbidden, "asking to connect works only from this computer; elsewhere, pair with a code from browser-foreman pair")
+		return
+	}
 	var in struct {
 		Browser  string `json:"browser"`
 		Version  string `json:"version"`
@@ -123,7 +129,7 @@ func (s *Server) requestPairing(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	now := s.Now()
-	key := "pairreq:" + clientKey(r)
+	key := "pairreq:" + s.clientKey(r)
 	if ok, until := s.Limit.Allowed(key, now); !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(int(until.Sub(now).Seconds())+1))
 		writeErr(w, http.StatusTooManyRequests, "too many requests to connect; try again later")

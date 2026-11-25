@@ -51,9 +51,23 @@ func RunCommand(ctx context.Context, argv []string) error {
 var ErrNotPublic = errors.New("not a public web page: only http(s) addresses on the internet are snapped")
 
 // visit checks that raw is a page on the public internet and prepares Chrome for it: a profile made for this page
-// alone (dir; the caller removes it), and the arguments that keep Chrome to the address just checked. timeout covers
-// the whole visit.
-func (s Snapper) visit(ctx context.Context, raw string) (u *url.URL, dir string, args []string, timeout time.Duration, err error) {
+// alone (dir), the arguments that keep Chrome to the address just checked, and a proxy that keeps every other
+// request it makes (redirects, images, scripts, frames) to public addresses. The caller calls stop when Chrome is
+// done: it closes the proxy and removes dir. timeout covers the whole visit.
+func (s Snapper) visit(ctx context.Context, raw string) (u *url.URL, dir string, args []string, timeout time.Duration, stop func(), err error) {
+	u, dir, args, timeout, err = s.prepare(ctx, raw)
+	if err != nil {
+		return nil, "", nil, 0, nil, err
+	}
+	e, err := startEgress(false)
+	if err != nil {
+		os.RemoveAll(dir)
+		return nil, "", nil, 0, nil, err
+	}
+	return u, dir, append(args, chromeEgressArgs(e.addr())...), timeout, func() { e.close(); os.RemoveAll(dir) }, nil
+}
+
+func (s Snapper) prepare(ctx context.Context, raw string) (u *url.URL, dir string, args []string, timeout time.Duration, err error) {
 	u, err = url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
 		return nil, "", nil, 0, ErrNotPublic
@@ -105,11 +119,11 @@ func (s Snapper) visit(ctx context.Context, raw string) (u *url.URL, dir string,
 
 // Snap takes one page's snapshot and keeps it as a small JPEG.
 func (s Snapper) Snap(ctx context.Context, raw string) error {
-	u, dir, args, timeout, err := s.visit(ctx, raw)
+	u, dir, args, timeout, stop, err := s.visit(ctx, raw)
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(dir)
+	defer stop()
 	if s.Store.Dir == "" {
 		return errors.New("no folder is set for snapshots")
 	}
@@ -228,11 +242,11 @@ func (l *limited) Write(p []byte) (int, error) {
 // Render opens raw in headless Chrome, as Snap does (a throwaway profile, the address pinned), lets it run, and
 // returns the page as Chrome built it: what a person would see, where a plain request met a bot check.
 func (s Snapper) Render(ctx context.Context, raw string) ([]byte, error) {
-	u, dir, args, timeout, err := s.visit(ctx, raw)
+	u, _, args, timeout, stop, err := s.visit(ctx, raw)
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(dir)
+	defer stop()
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	dump := s.Dump

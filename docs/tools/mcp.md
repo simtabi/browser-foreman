@@ -56,8 +56,9 @@ An assistant can be held to part of your bookmarks, and each assistant to its ow
 ```
 
 Here every client reads, and only `claude-code` writes, only inside those two folders. A client is named by what it
-reports when it connects (`clientInfo.name`); one with no entry of its own gets `mcp.writes` and `mcp.folders`. Under
-a folder scope:
+reports when it connects (`clientInfo.name`); one with no entry of its own gets `mcp.writes` and `mcp.folders`. A folder
+is named by its path of titles joined with `/`; a `/` inside one title is written `%2F` (and `%` as `%25`), so a
+folder titled `Work/Notes` is `Work%2FNotes` and never counts as inside `Work`. Under a folder scope:
 
 - a bookmark or folder can be changed only when it lies inside an allowed folder, and a write into a folder (moving,
   adding, saving tabs) only goes into an allowed folder or one inside it;

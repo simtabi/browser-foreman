@@ -6,7 +6,7 @@ Every change Browser Foreman makes is published as an event, streamed live at `/
 ## An event
 
 ```json
-{"id": 42, "type": "webhook.created", "at": "2026-11-12T18:00:00Z", "data": {"id": "wh_8f2c1a9e0b7d4c3a", "url": "https://example.com/brofo"}}
+{"id": 42, "type": "webhook.created", "at": "2026-11-12T18:00:00Z", "data": {"id": "wh_8f2c1a9e0b7d4c3a"}}
 ```
 
 `id` increases by one per event for the life of the server process.
@@ -30,7 +30,7 @@ of that buffer, the stream starts with `: some events were missed; reload the st
 | Type | When |
 |---|---|
 | `server.started` | the server began listening |
-| `webhook.created` | a subscription was added |
+| `webhook.created` | a subscription was added (its id only: the address can be a secret, so only `GET /webhooks` shows it) |
 | `webhook.deleted` | a subscription was removed |
 | `webhook.test` | sent by the test endpoint, to one subscription only |
 | `auth.signed_in` | someone signed in (`{"user"}`) |

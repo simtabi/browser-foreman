@@ -183,8 +183,8 @@ func TestServeOpensThePageWhenItShould(t *testing.T) {
 		}
 	}
 	var out bytes.Buffer
-	showPage(context.Background(), &out, "127.0.0.1:8765", false) // false: tests never open a browser
-	if out.String() != "Open Browser Foreman: http://127.0.0.1:8765/\n" {
+	showPage(context.Background(), &out, "http://127.0.0.1:8765/open/abc", false) // false: tests never open a browser
+	if out.String() != "Open Browser Foreman: http://127.0.0.1:8765/open/abc\n" {
 		t.Fatalf("%q", out.String())
 	}
 }

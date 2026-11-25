@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/simtabi/browser-foreman/src/internal/events"
@@ -65,11 +66,46 @@ func CheckURL(raw string) error {
 	if strings.EqualFold(host, "metadata.google.internal") {
 		return fmt.Errorf("webhook url %q is a cloud metadata address", host)
 	}
-	if ip := net.ParseIP(host); ip != nil && (ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast()) {
+	if ip := net.ParseIP(host); ip != nil && refusedIP(ip) {
 		return fmt.Errorf("webhook url %q is a link-local, multicast or unspecified address", host)
 	}
 	return nil
 }
+
+// refusedIP is what a webhook may never reach: link-local addresses (the cloud metadata service lives at
+// 169.254.169.254), multicast and unspecified ones. Loopback and the local network stay allowed.
+func refusedIP(ip net.IP) bool {
+	return ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast()
+}
+
+var errRefusedAddress = errors.New("refused: webhooks may not reach link-local, multicast or unspecified addresses")
+
+// NewClient is the client webhooks are delivered with. CheckURL only sees the address as typed; this applies the same
+// rule to every address actually connected to, so a name that resolves to the metadata service is refused too. It
+// never follows a redirect: the receiver's own answer is the answer.
+func NewClient(timeout time.Duration) *http.Client {
+	dialer := &net.Dialer{Timeout: timeout, Control: func(_, address string, _ syscall.RawConn) error {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			return err
+		}
+		if ip := net.ParseIP(host); ip != nil && refusedIP(ip) {
+			return errRefusedAddress
+		}
+		return nil
+	}}
+	return &http.Client{
+		Timeout:       timeout,
+		Transport:     &http.Transport{DialContext: dialer.DialContext, TLSHandshakeTimeout: timeout, ResponseHeaderTimeout: timeout},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+}
+
+// maxWait is the longest wait between two tries of one delivery.
+const maxWait = 5 * time.Minute
+
+// nextWait doubles a wait, up to maxWait.
+func nextWait(w time.Duration) time.Duration { return min(2*w, maxWait) }
 
 // Sign returns the X-Brofo-Signature value for body at time t.
 func Sign(secret string, t time.Time, body []byte) string {
@@ -336,6 +372,10 @@ func (d *Dispatcher) send(ctx context.Context, s Subscription, e events.Event, b
 				break
 			}
 			rec.Error = "answered " + resp.Status
+			if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+				rec.Error += ": redirects are not followed"
+				break
+			}
 			if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
 				break // the receiver refused it; sending it again will not help
 			}
@@ -350,7 +390,7 @@ func (d *Dispatcher) send(ctx context.Context, s Subscription, e events.Event, b
 				return rec
 			case <-time.After(wait):
 			}
-			wait *= 2
+			wait = nextWait(wait)
 		}
 	}
 	rec.At = d.Now()

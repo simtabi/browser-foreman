@@ -32,6 +32,7 @@ func iconURI(t *testing.T) string {
 
 func TestIconsSnapshotsAndTheirRoutes(t *testing.T) {
 	s := withUI(seeded(t))
+	page := signedIn(t, s) // the page's own <img> loads carry its sign-in
 	s.Media = media.Store{Dir: t.TempDir()}
 	shots := 0
 	s.Snapper = &media.Snapper{Store: s.Media, Chrome: "/x/chrome",
@@ -64,11 +65,11 @@ func TestIconsSnapshotsAndTheirRoutes(t *testing.T) {
 	if icon == "" {
 		t.Fatal("the icon in the export was not kept")
 	}
-	if w := get(h, "/favicons/"+icon, nil); w.Code != 200 || w.Header().Get("Content-Type") != "image/png" || !strings.Contains(w.Header().Get("Content-Security-Policy"), "sandbox") {
+	if w := get(h, "/favicons/"+icon, page); w.Code != 200 || w.Header().Get("Content-Type") != "image/png" || !strings.Contains(w.Header().Get("Content-Security-Policy"), "sandbox") {
 		t.Fatalf("icon %d %v", w.Code, w.Header())
 	}
 	for _, bad := range []string{"/favicons/..%2Fx.png", "/favicons/nothere.png", "/thumbs/" + icon} {
-		if w := get(h, bad, nil); w.Code != 404 {
+		if w := get(h, bad, page); w.Code != 404 {
 			t.Errorf("%s: %d", bad, w.Code)
 		}
 	}
@@ -104,7 +105,7 @@ func TestIconsSnapshotsAndTheirRoutes(t *testing.T) {
 	if !s.Media.HasThumb("https://www.go.dev/") {
 		t.Fatal("no snapshot kept")
 	}
-	if w := get(h, "/thumbs/"+media.ThumbKey("https://www.go.dev/")+".jpg", nil); w.Code != 200 || w.Header().Get("Content-Type") != "image/jpeg" {
+	if w := get(h, "/thumbs/"+media.ThumbKey("https://www.go.dev/")+".jpg", page); w.Code != 200 || w.Header().Get("Content-Type") != "image/jpeg" {
 		t.Fatalf("thumb %d", w.Code)
 	}
 	// Without force, pages that have one are not taken again.
@@ -112,7 +113,7 @@ func TestIconsSnapshotsAndTheirRoutes(t *testing.T) {
 		t.Fatalf("second run %s", w.Body)
 	}
 	// The page is told which pictures there are.
-	if body := get(h, "/?ws=pics", nil).Body.String(); !strings.Contains(body, `"icons":{"go.dev":"`+icon+`"}`) || !strings.Contains(body, media.ThumbKey("https://www.go.dev/")) {
+	if body := get(h, "/?ws=pics", signedIn(t, s)).Body.String(); !strings.Contains(body, `"icons":{"go.dev":"`+icon+`"}`) || !strings.Contains(body, media.ThumbKey("https://www.go.dev/")) {
 		t.Fatalf("boot media missing: %s", body[strings.Index(body, `"media"`):][:200])
 	}
 	// A folder chosen in Preferences is where pictures are then read from: the snapshot in the default folder is no
@@ -122,13 +123,13 @@ func TestIconsSnapshotsAndTheirRoutes(t *testing.T) {
 	if w := send(h, "PUT", "/api/v1/preferences", `{"snapshot_dir":`+strconv.Quote(other)+`}`); w.Code != 200 {
 		t.Fatalf("set the folder: %d %s", w.Code, w.Body)
 	}
-	if w := get(h, "/thumbs/"+key, nil); w.Code != 404 {
+	if w := get(h, "/thumbs/"+key, page); w.Code != 404 {
 		t.Fatalf("still served from the default folder: %d", w.Code)
 	}
 	b, _ := os.ReadFile(filepath.Join(s.Media.Dir, "thumbs", key))
 	_ = os.MkdirAll(filepath.Join(other, "thumbs"), 0o700)
 	_ = os.WriteFile(filepath.Join(other, "thumbs", key), b, 0o600)
-	if w := get(h, "/thumbs/"+key, nil); w.Code != 200 {
+	if w := get(h, "/thumbs/"+key, page); w.Code != 200 {
 		t.Fatalf("not served from the chosen folder: %d", w.Code)
 	}
 	if w := send(h, "PUT", "/api/v1/preferences", `{"snapshot_dir":"relative/x"}`); w.Code != 400 {

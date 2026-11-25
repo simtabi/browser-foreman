@@ -64,15 +64,21 @@ func inside(path string, folders []string) bool {
 	return false
 }
 
+// segment is a title as one step of a path: "/" inside a title is written %2F (and "%" as %25), so a folder named
+// "Work/Notes" at the top is never taken for the folder Notes inside Work, and so never falls inside a "Work" scope.
+func segment(title string) string {
+	return strings.NewReplacer("%", "%25", "/", "%2F").Replace(title)
+}
+
 // paths maps every node of t to its path: a folder's own path, a bookmark's folder path plus its title.
 func paths(t store.Tree) map[string]string {
 	out := map[string]string{}
 	var visit func(n *store.Node, path string)
 	visit = func(n *store.Node, path string) {
 		for _, c := range n.Children {
-			p := c.Title
+			p := segment(c.Title)
 			if path != "" {
-				p = path + "/" + c.Title
+				p = path + "/" + segment(c.Title)
 			}
 			out[c.ID] = p
 			if c.Kind == store.KindFolder {

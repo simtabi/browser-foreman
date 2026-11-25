@@ -16,6 +16,7 @@ import (
 func fromExtension(h http.Handler, method, url, body, token string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, url, strings.NewReader(body))
 	r.Host = host
+	r.RemoteAddr = "127.0.0.1:50000" // the extension runs in a browser on this computer
 	r.Header.Set("Origin", "chrome-extension://abcdefghijklmnopabcdefghijklmnop")
 	r.Header.Set("Sec-Fetch-Site", "cross-site")
 	r.Header.Set("Sec-Fetch-Mode", "cors")

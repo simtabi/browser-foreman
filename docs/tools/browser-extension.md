@@ -161,7 +161,7 @@ again, so a fresh `make extension` takes effect without visiting the browser's e
 |---|---|---|
 | `POST /api/v1/extension/pairings` | owner | a one-time pairing code |
 | `POST /api/v1/extension/pair` | anyone with a code | trade it for the extension's token |
-| `POST /api/v1/extension/requests` | an extension's origin | ask to connect in one click: an id, a poll secret, a match code |
+| `POST /api/v1/extension/requests` | an extension's origin, from this computer | ask to connect in one click: an id, a poll secret, a match code (an extension on another computer pairs with a code instead) |
 | `POST /api/v1/extension/requests/{id}/poll` | the asker (poll secret) | the answer; approved, the token, once |
 | `GET /api/v1/extension/requests` | owner | the requests waiting, with their match codes |
 | `POST /api/v1/extension/requests/{id}/approve`, `…/deny` | owner | answer one |

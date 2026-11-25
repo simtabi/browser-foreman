@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"github.com/simtabi/browser-foreman/src/internal/config"
 	"net/http"
 	"os"
 	"sync"
@@ -18,13 +19,21 @@ import (
 // servePicture answers /favicons/<name> and /thumbs/<name> for the page's <img> tags, which send no token: in local
 // mode the localhost and same-site checks guard them, in accounts mode a signed-in session is needed, since the
 // pictures show which sites are bookmarked.
+// mayViewPictures is for the page's own <img> loads, which carry cookies but no token: a session in accounts mode,
+// the local cookie in local mode. Icon names are a hash of the site's host, so without this another site on this
+// computer (a dev server on localhost:3000 is same-site) could test which sites are bookmarked.
+func (s *Server) mayViewPictures(r *http.Request) bool {
+	if _, ok := s.who(r); ok { // a token, or a session in accounts mode
+		return true
+	}
+	return s.Cfg.Server.Mode == config.ModeLocal && s.localSignedIn(r)
+}
+
 func (s *Server) servePicture(kind string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.Cfg.Server.Mode != "local" {
-			if _, ok := s.who(r); !ok {
-				writeErr(w, 401, "sign in first")
-				return
-			}
+		if !s.mayViewPictures(r) {
+			writeErr(w, 401, "sign in first")
+			return
 		}
 		path, ct, err := s.media(r).Path(kind, r.PathValue("name"))
 		if err != nil {
