@@ -245,13 +245,19 @@ func ValidID(id string) error {
 	return nil
 }
 
-// Open returns the driver the configuration names, keeping its data under dir.
-func Open(driver, dir string) (Store, error) {
+// Open returns the driver the configuration names: json and sqlite keep their data under dir, postgres in the
+// database dsn names.
+func Open(driver, dir, dsn string) (Store, error) {
 	switch driver {
 	case "json":
 		return OpenJSON(dir)
 	case "sqlite":
 		return OpenSQLite(dir)
+	case "postgres":
+		if dsn == "" {
+			return nil, fmt.Errorf("storage driver postgres needs BROFO_STORAGE_DSN, its connection string")
+		}
+		return OpenPostgres(dsn)
 	}
-	return nil, fmt.Errorf("storage driver %q: use sqlite or json", driver)
+	return nil, fmt.Errorf("storage driver %q: use sqlite, json or postgres", driver)
 }

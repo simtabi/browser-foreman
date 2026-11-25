@@ -94,7 +94,7 @@ func serveCmd() *cobra.Command {
 			}
 			defer l.Close()
 			c.Server.Addr = l.Addr().String()
-			data, err := store.Open(c.Storage.Driver, c.Storage.Path)
+			data, err := store.Open(c.Storage.Driver, c.Storage.Path, c.Storage.DSN)
 			if err != nil {
 				return err
 			}

@@ -23,7 +23,7 @@ func openStore() (store.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return store.Open(c.Storage.Driver, c.Storage.Path)
+	return store.Open(c.Storage.Driver, c.Storage.Path, c.Storage.DSN)
 }
 
 func importCmd() *cobra.Command {
@@ -150,7 +150,7 @@ func storageCmd() *cobra.Command {
 	var to string
 	m := &cobra.Command{
 		Use:   "migrate",
-		Short: "Copy every workspace (with its whole history) and tab snapshot to the other driver; the source is left as it was",
+		Short: "Copy every workspace (with its whole history) and tab snapshot to another driver; the source is left as it was",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			_, cfg, err := load()
 			if err != nil {
@@ -159,12 +159,12 @@ func storageCmd() *cobra.Command {
 			if to == cfg.Storage.Driver {
 				return fmt.Errorf("storage is already %s", to)
 			}
-			src, err := store.Open(cfg.Storage.Driver, cfg.Storage.Path)
+			src, err := store.Open(cfg.Storage.Driver, cfg.Storage.Path, cfg.Storage.DSN)
 			if err != nil {
 				return err
 			}
 			defer src.Close()
-			dst, err := store.Open(to, cfg.Storage.Path)
+			dst, err := store.Open(to, cfg.Storage.Path, cfg.Storage.DSN)
 			if err != nil {
 				return err
 			}
@@ -178,7 +178,7 @@ func storageCmd() *cobra.Command {
 			return nil
 		},
 	}
-	m.Flags().StringVar(&to, "to", "", "json or sqlite")
+	m.Flags().StringVar(&to, "to", "", "json, sqlite or postgres (postgres reads BROFO_STORAGE_DSN)")
 	_ = m.MarkFlagRequired("to")
 	c.AddCommand(m)
 	return c

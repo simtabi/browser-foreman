@@ -52,7 +52,7 @@ func mcpCmd() *cobra.Command {
 				}
 				a = mcpserver.NewAPI("http://"+c.Server.Addr, token)
 			} else {
-				data, err := store.Open(c.Storage.Driver, c.Storage.Path)
+				data, err := store.Open(c.Storage.Driver, c.Storage.Path, c.Storage.DSN)
 				if err != nil {
 					return err
 				}

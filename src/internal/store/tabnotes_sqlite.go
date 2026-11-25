@@ -63,6 +63,5 @@ func (s *SQLiteStore) DeleteTabs(ctx context.Context, ids []string) (int, error)
 }
 
 func (s *SQLiteStore) Scrub(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
-	return err
+	return s.db.scrub(ctx)
 }

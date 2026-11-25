@@ -9,7 +9,7 @@ import (
 
 func TestPageDetailsFillOnlyWhatIsMissing(t *testing.T) {
 	ctx := context.Background()
-	s, err := Open("json", t.TempDir())
+	s, err := Open("json", t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

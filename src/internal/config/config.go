@@ -65,8 +65,11 @@ func (s Server) Behind(ip net.IP) bool {
 }
 
 type Storage struct {
-	Driver string `json:"driver" env:"BROFO_STORAGE_DRIVER" ui:"risky" choices:"sqlite,json" help:"Where data is kept. Move it first with storage migrate."` // sqlite or json
-	Path   string `json:"path" env:"BROFO_STORAGE_PATH" ui:"risky" help:"The data folder; empty uses the state folder."`                                     // empty: the state directory
+	Driver string `json:"driver" env:"BROFO_STORAGE_DRIVER" ui:"risky" choices:"sqlite,json,postgres" help:"Where data is kept. Move it first with storage migrate."` // sqlite, json or postgres
+	Path   string `json:"path" env:"BROFO_STORAGE_PATH" ui:"risky" help:"The data folder; empty uses the state folder."`                                              // empty: the state directory
+	// DSN is the postgres driver's connection string. It can hold a password, so it is a secret: read only from .env or
+	// the environment, never from a JSON file, and never shown back.
+	DSN string `json:"-" env:"BROFO_STORAGE_DSN" ui:"secret,risky" help:"The Postgres connection string (postgres driver only)."`
 }
 
 type Webhooks struct {
@@ -277,6 +280,7 @@ func apply(c *Config, get func(string) string) error {
 		"BROFO_SERVER_TLS_KEY":   func(v string) error { c.Server.TLSKey = v; return nil },
 		"BROFO_STORAGE_DRIVER":   func(v string) error { c.Storage.Driver = v; return nil },
 		"BROFO_STORAGE_PATH":     func(v string) error { c.Storage.Path = v; return nil },
+		"BROFO_STORAGE_DSN":      func(v string) error { c.Storage.DSN = v; return nil },
 		"BROFO_API_TOKEN":        func(v string) error { c.APIToken = v; return nil },
 		"BROFO_AI_PROVIDER":      func(v string) error { c.AI.Provider = v; return nil },
 		"BROFO_AI_MODEL":         func(v string) error { c.AI.Model = v; return nil },
@@ -347,8 +351,11 @@ func (c Config) Validate() error {
 	if o := c.Server.Open; o != "auto" && o != "always" && o != "never" {
 		return fmt.Errorf("server.open %q: use auto, always or never", o)
 	}
-	if c.Storage.Driver != "sqlite" && c.Storage.Driver != "json" {
-		return fmt.Errorf("storage.driver %q: use sqlite or json", c.Storage.Driver)
+	if c.Storage.Driver != "sqlite" && c.Storage.Driver != "json" && c.Storage.Driver != "postgres" {
+		return fmt.Errorf("storage.driver %q: use sqlite, json or postgres", c.Storage.Driver)
+	}
+	if c.Storage.Driver == "postgres" && c.Storage.DSN == "" {
+		return errors.New("storage.driver postgres needs BROFO_STORAGE_DSN (in .env): its connection string")
 	}
 	if c.Webhooks.Attempts < 1 || c.Webhooks.Attempts > 20 {
 		return fmt.Errorf("webhooks.attempts %d: use 1-20", c.Webhooks.Attempts)

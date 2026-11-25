@@ -2,25 +2,62 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
 
-// Every driver must pass the same suite: one behaviour, two storage formats.
-var drivers = []string{"json", "sqlite"}
+// Every driver must pass the same suite: one behaviour, three storage formats. postgres runs against the database
+// BROFO_TEST_POSTGRES_DSN names (`make testdb-up` starts a disposable one), each test in a schema of its own.
+var drivers = []string{"json", "sqlite", "postgres"}
 
 func open(t *testing.T, driver string) Store {
 	t.Helper()
-	s, err := Open(driver, t.TempDir())
+	dsn := ""
+	if driver == "postgres" {
+		dsn = postgresSchema(t)
+	}
+	s, err := Open(driver, t.TempDir(), dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
 	return s
+}
+
+// postgresSchema makes an empty schema for one test in the test database and returns a DSN that uses it; it is
+// dropped when the test ends. Without BROFO_TEST_POSTGRES_DSN the test is skipped, except in CI, where the postgres
+// lane must run.
+func postgresSchema(t *testing.T) string {
+	t.Helper()
+	base := os.Getenv("BROFO_TEST_POSTGRES_DSN")
+	if base == "" {
+		if os.Getenv("CI") != "" {
+			t.Fatal("BROFO_TEST_POSTGRES_DSN is not set: CI must run the postgres driver's tests")
+		}
+		t.Skip("no test Postgres: run `make testdb-up` and set BROFO_TEST_POSTGRES_DSN")
+	}
+	admin, err := sql.Open("pgx", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { admin.Close() })
+	name := "t_" + strings.ToLower(rand.Text())
+	if _, err := admin.Exec(`CREATE SCHEMA ` + name); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = admin.Exec(`DROP SCHEMA ` + name + ` CASCADE`) })
+	sep := "?"
+	if strings.Contains(base, "?") {
+		sep = "&"
+	}
+	return base + sep + "search_path=" + name
 }
 
 func tree(titles ...string) Tree {

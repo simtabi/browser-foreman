@@ -28,7 +28,7 @@ func newServer(t *testing.T, token string) *Server {
 	c.APIToken = token
 	c.Storage.Path = t.TempDir()
 	st := webhooks.NewStore(t.TempDir())
-	data, err := store.Open("json", t.TempDir())
+	data, err := store.Open("json", t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
