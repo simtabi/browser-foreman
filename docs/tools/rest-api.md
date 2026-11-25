@@ -76,7 +76,7 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `POST` | `/api/v1/workspaces/{id}/redo` | editor | puts back the last undone change |
 | `GET` | `/api/v1/workspaces/{id}/links` | viewer | `200 {"links": {url: result}}`: what the last checks found for this workspace's links |
 | `POST` | `/api/v1/linkchecks` | editor | body `{workspace, nodes?}`: check the links (under `nodes`, or all) in the background; `202 {"job"}`, `409` while another runs. See [link checks](link-checks.md) |
-| `GET` | `/api/v1/linkchecks/{id}` | viewer | progress; `?results=1` adds every result so far, and `previous`: for each link this run changed, its status before (`""` when never checked) |
+| `GET` | `/api/v1/linkchecks/{id}` | viewer | progress; `?results=1` adds every result so far (with `&from=N`, only those after the first N, and `next` to ask from next time), and `previous`: for each link this run changed, its status before (`""` when never checked) |
 | `POST` | `/api/v1/linkchecks/{id}/pause`, `/api/v1/linkchecks/{id}/resume`, `/api/v1/linkchecks/{id}/cancel` | editor | `200`, or `409` when the check is not in a state to do that |
 | `PATCH` | `/api/v1/workspaces/{id}` | editor | body any of `{name, notes, locked, archived, color, icon}` (`color`: blue, azure, indigo, purple, pink, red, orange, yellow, lime, green, teal or cyan; `icon`: a Tabler icon name; `""` resets either); a locked workspace accepts only `{"locked": false}` and its colour and icon (`423` otherwise) |
 | `GET` | `/api/v1/webhooks/deliveries` | owner | the latest deliveries, newest first; `?subscription=`, `?limit=` (1–1000) |

@@ -1825,7 +1825,28 @@ function trackJob(job, total) {
     $("#jobPause").disabled = $("#jobCancel").disabled = true; $("#jobTitle").textContent = "Stopping…";
     ctl("cancel");
   };
-  let misses = 0;
+  let misses = 0, changed = 0; const kept0 = new Set();  // ids whose earlier status was kept
+  const now = Date.now(), kept = store.get("refreshed") || {}, applied = new Map();  // id -> the result applied
+  // apply takes results as they arrive, while the check runs and at its end; a result already applied is skipped, so
+  // the counts hold, and a later try of the same link (a changed result) applies again.
+  const apply = results => {
+    let any = false;
+    for (const [id, r] of Object.entries(results || {})) {
+      const seen = JSON.stringify(r); if (applied.get(id) === seen) continue;
+      applied.set(id, seen);
+      const i = ITEM.get(+id); if (!i) continue;
+      any = true;
+      // A timeout or a blocked check says nothing new: keep what was known rather than downgrade a link to "could not verify".
+      if (r.s === "unverified" && i.s !== "unverified" && i.s !== "unchecked") { kept0.add(id); if (r.h) { i.h = r.h; thumbVer.set(r.h, now); } continue; }
+      if (i.s !== r.s) changed++;
+      i.s = r.s; i.n = r.n; if (r.h) { i.h = r.h; thumbVer.set(r.h, now); }
+      // Every check field: a newer result clears what an older one set (n is set above).
+      for (const k of LINK_FIELDS) if (k !== "n") { if (k in r) i[k] = r[k]; else delete i[k]; }
+      kept[id] = {s: i.s, h: i.h, ...Object.fromEntries(LINK_FIELDS.map(k => [k, i[k]]))};
+    }
+    if (any) store.set("refreshed", kept);
+    return any;
+  };
   const tick = async () => {
     let j; try { if (WS?.job) j = await WS.job(job); else { const r = await fetch("api/job/" + job); if (r.status === 404) j = {done: true, state: "lost", results: {}, rendered: 0}; else j = await r.json(); } }
     catch { if (++misses > 15) { finish({done: true, state: "lost", results: {}, rendered: 0}); return; } setTimeout(tick, 2000); return; }
@@ -1839,6 +1860,7 @@ function trackJob(job, total) {
     $("#jobBar").classList.toggle("bg-warning", j.state === "paused");
     $("#jobSpin").hidden = j.state === "paused" || j.done;
     if (j.done) return finish(j);
+    if (apply(j.results)) { summary(); build(); }  // links turn as they are checked
     $("#jobTitle").textContent = j.state === "paused" ? "Paused" : j.state === "cancelled" ? "Stopping…" :
       j.phase === "checking" ? `Checking links` : "Taking snapshots";
     $("#jobDetail").textContent = (j.phase === "checking" ? `${j.checked} of ${total} checked` : `${j.rendered} of ${j.render_total} snapshots`) +
@@ -1849,22 +1871,10 @@ function trackJob(job, total) {
     setTimeout(tick, 1200);
   };
   const finish = j => {
-    let changed = 0; const now = Date.now(), kept = store.get("refreshed") || {};
-    let kept0 = 0;
-    for (const [id, r] of Object.entries(j.results)) {
-      const i = ITEM.get(+id); if (!i) continue;
-      // A timeout or a blocked check says nothing new: keep what was known rather than downgrade a link to "could not verify".
-      if (r.s === "unverified" && i.s !== "unverified" && i.s !== "unchecked") { kept0++; if (r.h) { i.h = r.h; thumbVer.set(r.h, now); } continue; }
-      if (i.s !== r.s) changed++;
-      i.s = r.s; i.n = r.n; if (r.h) { i.h = r.h; thumbVer.set(r.h, now); }
-      // Every check field: a newer result clears what an older one set (n is set above).
-      for (const k of LINK_FIELDS) if (k !== "n") { if (k in r) i[k] = r[k]; else delete i[k]; }
-      kept[id] = {s: i.s, h: i.h, ...Object.fromEntries(LINK_FIELDS.map(k => [k, i[k]]))};
-    }
-    store.set("refreshed", kept);
+    apply(j.results);
     jobRunning = false; panel.hidden = true; $("#job").hidden = true; summary(); build();
     const got = j.checked ?? Object.keys(j.results).length, what = `${got.toLocaleString()} of ${total.toLocaleString()} checked · ${changed} changed status · ${j.rendered} new snapshot${j.rendered === 1 ? "" : "s"}` +
-      (kept0 ? ` · ${kept0} could not be reached this time, so their earlier status is kept` : "");
+      (kept0.size ? ` · ${kept0.size} could not be reached this time, so their earlier status is kept` : "");
     if (j.state === "cancelled") toast(what + ". Results so far are applied.", "warning", "Refresh stopped");
     else if (j.state === "failed") toast((j.error || "The refresh failed") + ". Results so far are applied.", "danger", "Refresh failed");
     else if (j.state === "lost") toast("The server stopped answering, or was restarted. Start the refresh again.", "danger", "Refresh interrupted");

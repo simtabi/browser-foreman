@@ -89,6 +89,12 @@ export class Client {
   }
   commands(wait: number): Promise<{ commands: Command[] }> { return this.call("GET", `extension/commands?wait=${wait}`); }
   done(id: string, ok: boolean, error = "", result?: unknown): Promise<unknown> { return this.call("POST", `extension/commands/${encodeURIComponent(id)}/done`, { ok, error, ...(result === undefined ? {} : { result }) }); }
+  /** Save the page this browser is on into a workspace (its "Saved from <browser>" folder), with a picture of it. */
+  savePage(workspace: string, url: string, title: string, picture = ""): Promise<{ already?: boolean; entry?: { seq: number } }> {
+    return this.call("POST", "extension/pages", { workspace, url, title, ...(picture ? { picture } : {}) });
+  }
+  /** What Browser Foreman knows about one address: its status, and whether it is confirmed dead. */
+  link(url: string): Promise<{ status: string; confirmed?: boolean; archive?: string }> { return this.call("GET", `extension/link?url=${encodeURIComponent(url)}`); }
   workspaces(): Promise<{ workspaces: { id: string; name: string; bookmarks: number }[] }> { return this.call("GET", "workspaces"); }
   workspace(id: string): Promise<{ tree: any; workspace: { head: number } }> { return this.call("GET", `workspaces/${encodeURIComponent(id)}`); }
 }
@@ -96,6 +102,12 @@ export class Client {
 export interface PairRequest { id: string; poll: string; match: string; expires: string }
 
 export interface Command { id: string; kind: "open" | "open-group" | "reload" | "read-bookmarks" | "write-bookmarks"; urls: string[]; title?: string; color?: string; incognito?: boolean; workspace?: string; expect?: string }
+
+/** The toolbar badge for the page a tab shows: "!" on a link Browser Foreman has confirmed dead, else nothing. */
+export function linkBadge(l: { status: string; confirmed?: boolean }): { text: string; title: string } {
+  if (l.status === "dead" && l.confirmed) return { text: "!", title: "Browser Foreman: this page stopped working (confirmed by two checks a day apart)" };
+  return { text: "", title: "" };
+}
 
 /** Tab group colours the browsers accept; anything else becomes grey. */
 export const GROUP_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];

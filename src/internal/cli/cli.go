@@ -51,7 +51,7 @@ func Root() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd(), userCmd(), tokenCmd(), backupCmd(), restoreCmd(), pairCmd(), mcpCmd(), mergeCmd(), sortCmd(), applyCmd(), stopCmd(), serviceCmd(), notifyCmd(), aiCmd(), openCmd())
+	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd(), userCmd(), tokenCmd(), backupCmd(), restoreCmd(), pairCmd(), mcpCmd(), mergeCmd(), sortCmd(), applyCmd(), stopCmd(), serviceCmd(), notifyCmd(), aiCmd(), openCmd(), pageDetailsCmd(), webhookCmd(), doctorCmd())
 	return root
 }
 
@@ -120,11 +120,15 @@ func serveCmd() *cobra.Command {
 				fmt.Fprintf(cmd.ErrOrStderr(), "desktop notifications are off: %v\n", err)
 			} else {
 				srv.Notifier = n
-				go func() { // so `browser-foreman notify ping` and scripts can show a notification through this server
-					if err := n.Listen(ctx); err != nil && ctx.Err() == nil {
-						fmt.Fprintf(cmd.ErrOrStderr(), "notification listener: %v\n", err)
-					}
-				}()
+				if why := notify.ListenProblem(n); why != "" {
+					fmt.Fprintf(cmd.ErrOrStderr(), "notification listener off: %s\n", why)
+				} else {
+					go func() { // so `browser-foreman notify ping` and scripts can show a notification through this server
+						if err := n.Listen(ctx); err != nil && ctx.Err() == nil {
+							fmt.Fprintf(cmd.ErrOrStderr(), "notification listener: %v\n", err)
+						}
+					}()
+				}
 			}
 			srv.Background(ctx)
 			go func() { // once it answers, so the page loads at once

@@ -82,12 +82,7 @@ func fakeChrome(t *testing.T, ran *[]string) Runner {
 		*ran = argv
 		for _, a := range argv {
 			if p, ok := strings.CutPrefix(a, "--screenshot="); ok {
-				img := image.NewRGBA(image.Rect(0, 0, 1280, 800))
-				for y := 0; y < 800; y++ {
-					for x := 0; x < 1280; x++ {
-						img.Set(x, y, color.RGBA{200, 10, 10, 255})
-					}
-				}
+				img := striped(1280, 800)
 				f, _ := os.Create(p)
 				defer f.Close()
 				return png.Encode(f, img)
@@ -190,5 +185,78 @@ func TestRenderOpensThePageInAThrowawayProfile(t *testing.T) {
 	sn.Resolve = func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("10.0.0.7")}, nil }
 	if _, err := sn.Render(context.Background(), "https://inside.example/"); err != ErrNotPublic || argv != nil {
 		t.Fatalf("a private address was opened: %v %v", err, argv)
+	}
+}
+
+// striped is a picture that is not blank: red, with a white band every 64 pixels. Tests use it as what Chrome draws.
+func striped(w, h int) image.Image {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := range h {
+		for x := range w {
+			c := color.RGBA{200, 10, 10, 255}
+			if x%64 >= 48 {
+				c = color.RGBA{250, 250, 250, 255}
+			}
+			img.Set(x, y, c)
+		}
+	}
+	return img
+}
+
+func TestBlankIsOneColourNearlyEdgeToEdge(t *testing.T) {
+	one := image.NewRGBA(image.Rect(0, 0, 640, 400))
+	for i := range one.Pix {
+		one.Pix[i] = 255
+	}
+	spinner := image.NewRGBA(image.Rect(0, 0, 640, 400))
+	copy(spinner.Pix, one.Pix)
+	for y := 190; y < 210; y++ { // a small mark in the middle: still a page that drew nothing
+		for x := 310; x < 330; x++ {
+			spinner.Set(x, y, color.Black)
+		}
+	}
+	for name, c := range map[string]struct {
+		img  image.Image
+		want bool
+	}{"one colour": {one, true}, "a spinner": {spinner, true}, "a page": {striped(640, 400), false}, "transparent": {image.NewRGBA(image.Rect(0, 0, 40, 20)), true}} {
+		if got := Blank(c.img); got != c.want {
+			t.Errorf("%s: Blank = %v", name, got)
+		}
+	}
+}
+
+func TestABlankPictureIsTakenAgainAndNeverKept(t *testing.T) {
+	public := func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("203.0.113.10")}, nil }
+	draw := func(pics ...image.Image) (Runner, *[]string) {
+		var waits []string
+		return func(_ context.Context, argv []string) error {
+			for _, a := range argv {
+				if strings.HasPrefix(a, "--virtual-time-budget=") {
+					waits = append(waits, a)
+				}
+			}
+			pic := pics[min(len(waits), len(pics))-1]
+			for _, a := range argv {
+				if p, ok := strings.CutPrefix(a, "--screenshot="); ok {
+					f, _ := os.Create(p)
+					defer f.Close()
+					return png.Encode(f, pic)
+				}
+			}
+			return nil
+		}, &waits
+	}
+	blank := image.NewRGBA(image.Rect(0, 0, 1280, 800))
+	s := Store{Dir: t.TempDir()}
+	run, waits := draw(blank, striped(1280, 800))
+	if err := (Snapper{Store: s, Chrome: "/x/chrome", Run: run, Resolve: public}).Snap(context.Background(), "https://go.dev/"); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"--virtual-time-budget=8000", "--virtual-time-budget=24000"}; strings.Join(*waits, " ") != strings.Join(want, " ") || !s.HasThumb("https://go.dev/") {
+		t.Fatalf("waits %v, kept %v", *waits, s.HasThumb("https://go.dev/"))
+	}
+	run, _ = draw(blank, blank)
+	if err := (Snapper{Store: s, Chrome: "/x/chrome", Run: run, Resolve: public}).Snap(context.Background(), "https://example.org/"); !errors.Is(err, ErrBlank) || s.HasThumb("https://example.org/") {
+		t.Fatalf("%v, kept %v", err, s.HasThumb("https://example.org/"))
 	}
 }

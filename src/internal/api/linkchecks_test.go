@@ -451,3 +451,61 @@ func TestARunAsksStackExchange(t *testing.T) {
 	got, _ := s.Data.Links(ctx, nil)
 	t.Fatalf("%+v", got["https://stackoverflow.com/questions/11/x"])
 }
+
+// A page polling a running check asks for the results that arrived since it last asked: from counts what it has read.
+func TestResultsArriveWhileACheckRuns(t *testing.T) {
+	release := make(chan struct{})
+	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/b" {
+			<-release // B answers only once A's result has been read
+		}
+		_, _ = w.Write([]byte("hello"))
+	}))
+	defer site.Close()
+	defer close(release)
+	s := newServer(t, apiTok)
+	linkWorkspace(t, s, site.URL)
+	h := s.Handler()
+	id := start(t, h, `{"workspace":"links"}`)
+	type page struct {
+		Job     struct{ Done bool }
+		Results map[string]store.LinkResult
+		Next    int
+	}
+	read := func(from string) page {
+		var p page
+		w := send(h, "GET", "/api/v1/linkchecks/"+id+"?results=1&from="+from, "")
+		if w.Code != 200 {
+			t.Fatalf("from=%s: %d %s", from, w.Code, w.Body)
+		}
+		_ = json.Unmarshal(w.Body.Bytes(), &p)
+		return p
+	}
+	var first page
+	for deadline := time.Now().Add(10 * time.Second); len(first.Results) == 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("no result while the check ran")
+		}
+		first = read("0")
+	}
+	if first.Job.Done || first.Next != 1 || first.Results[site.URL+"/a"].Status != "ok" {
+		t.Fatalf("while running: %+v", first)
+	}
+	if again := read("1"); len(again.Results) != 0 || again.Next != 1 {
+		t.Fatalf("nothing new yet: %+v", again)
+	}
+	release <- struct{}{}
+	var rest page
+	for deadline := time.Now().Add(10 * time.Second); len(rest.Results) == 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("B never arrived")
+		}
+		rest = read("1")
+	}
+	if len(rest.Results) != 1 || rest.Results[site.URL+"/b"].Status != "ok" || rest.Next != 2 {
+		t.Fatalf("after: %+v", rest)
+	}
+	if w := send(h, "GET", "/api/v1/linkchecks/"+id+"?results=1&from=-1", ""); w.Code != 400 {
+		t.Fatalf("from=-1: %d", w.Code)
+	}
+}

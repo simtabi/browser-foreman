@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -137,7 +138,8 @@ func (s *Server) job(w http.ResponseWriter, r *http.Request) (*linkcheck.Job, bo
 	return j, true
 }
 
-// getCheck reports progress; ?results=1 adds every result so far, by URL.
+// getCheck reports progress; ?results=1 adds every result so far, by URL, and with &from=N only those after the first
+// N, with "next" to ask from next time.
 func (s *Server) getCheck(w http.ResponseWriter, r *http.Request) {
 	j, ok := s.job(w, r)
 	if !ok {
@@ -145,7 +147,16 @@ func (s *Server) getCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	out := map[string]any{"job": j.View()}
 	if r.URL.Query().Get("results") == "1" {
-		out["results"] = j.Results()
+		if from := r.URL.Query().Get("from"); from != "" {
+			n, err := strconv.Atoi(from)
+			if err != nil || n < 0 {
+				writeErr(w, 400, "from must be a count of results already read")
+				return
+			}
+			out["results"], out["next"] = j.ResultsFrom(n)
+		} else {
+			out["results"] = j.Results()
+		}
 		s.checks.mu.Lock()
 		box := s.checks.stats[j.ID]
 		s.checks.mu.Unlock()

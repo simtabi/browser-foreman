@@ -17,6 +17,18 @@ curl -X POST http://127.0.0.1:8765/api/v1/webhooks \
   refused, both as typed and for whatever address the name resolves to when a delivery connects; loopback and the
   local network are fine. Redirects are not followed: a `3xx` answer is a failed delivery, not retried.
 
+From the command line, against the running server (local mode, with the token from `.env`):
+
+```bash
+browser-foreman webhook add https://example.com/brofo --events 'bookmark.*,tabs.snapshot.saved'
+browser-foreman webhook list
+browser-foreman webhook test wh_0123456789abcdef
+browser-foreman webhook remove wh_0123456789abcdef
+```
+
+`add` signs with `BROFO_WEBHOOK_SECRET` when it is set; otherwise it makes a secret and prints it once, for the
+receiver. `list` never shows a secret.
+
 ## A delivery
 
 ```http

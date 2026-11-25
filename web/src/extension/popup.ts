@@ -14,7 +14,7 @@ const say = (id: string, text: string, bad = false) => { const el = $(id); el.te
 
 async function show(): Promise<void> {
   const s = await ask({ kind: "status" });
-  $("unpaired").hidden = s.paired; $("paired").hidden = !s.paired; $("write").hidden = !s.paired || !s.bookmarks; $("foot").hidden = !s.paired;
+  $("unpaired").hidden = s.paired; $("paired").hidden = !s.paired; $("save").hidden = !s.paired; $("write").hidden = !s.paired || !s.bookmarks; $("foot").hidden = !s.paired;
   $("read").hidden = !s.bookmarks; // Safari: no bookmarks API for extensions
   ($("server") as HTMLInputElement).value = s.offer && !s.paired ? s.offer : s.server;
   if (s.offer && !s.paired) say("askMsg", `A Browser Foreman page at ${s.offer} asked to connect. Press Connect if it is yours.`);
@@ -24,6 +24,7 @@ async function show(): Promise<void> {
     const { workspaces } = await ask({ kind: "workspaces" }).catch(() => ({ workspaces: [] }));
     const sel = $("ws") as HTMLSelectElement;
     sel.replaceChildren(...workspaces.map((w: { id: string; name: string; bookmarks: number }) => new Option(`${w.name} (${w.bookmarks})`, w.id)));
+    ($("saveWs") as HTMLSelectElement).replaceChildren(...workspaces.map((w: { id: string; name: string }) => new Option(w.name, w.id)));
   }
 }
 
@@ -88,6 +89,14 @@ $("apply").onclick = async () => {
   if (!previewed) return;
   try { say("planMsg", "Writing…"); const r = await ask({ kind: "apply", ...previewed }); previewed = null; say("planMsg", `Done. Saved first: ${r.backup}`); }
   catch (e) { say("planMsg", (e as Error).message, true); }
+};
+$("saveBtn").onclick = async () => {
+  try {
+    ($("saveBtn") as HTMLButtonElement).disabled = true; say("saveMsg", "Saving…");
+    const r = await ask({ kind: "save", workspace: ($("saveWs") as HTMLSelectElement).value });
+    say("saveMsg", r.already ? "Already in that workspace: nothing added." : r.pictured ? "Saved, with a picture." : "Saved (this page could not be pictured).");
+  } catch (e) { say("saveMsg", (e as Error).message, true); }
+  finally { ($("saveBtn") as HTMLButtonElement).disabled = false; }
 };
 $("unpair").onclick = async () => {
   try { await ask({ kind: "unpair" }); } catch (e) { say("readMsg", (e as Error).message, true); }

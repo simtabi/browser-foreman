@@ -159,6 +159,14 @@ again, so a fresh `make extension` takes effect without visiting the browser's e
   (`<browser>-before-write`), the changes are made, any order a browser placed differently is fixed, and the result is
   read back so the next write matches item for item. A workspace that was not read from this browser is refused,
   because writing it would remove everything; the browser's own top folders are never moved or removed.
+- **Save this page.** The popup's *Save this page* adds the page the tab shows to a workspace you choose, in a top
+  folder named *Saved from <browser>* (made the first time), with a picture of the tab as its snapshot. It only adds:
+  an address the workspace already holds is left where it is, and nothing else in the workspace changes. The
+  browser's own pages cannot be pictured, and are saved without one. Pressing the toolbar button is what lets the
+  extension picture the tab (the `activeTab` permission, from 0.1.10).
+- **A badge on dead pages.** On a page Browser Foreman has confirmed dead (two checks a day apart), the toolbar
+  button shows a red `!`. The extension asks the server about the page each tab shows; the server already receives
+  those addresses with the tab report.
 
 ## Routes
 
@@ -177,6 +185,8 @@ again, so a fresh `make extension` takes effect without visiting the browser's e
 | `POST /api/v1/extension/bookmarks` | the extension (editor) | its bookmark tree, into a workspace |
 | `GET /api/v1/extension/commands?wait=25` | the extension | commands for its browser (long poll) |
 | `POST /api/v1/extension/commands/{id}/done` | the extension | what became of one |
+| `POST /api/v1/extension/pages` | the extension | body `{workspace, url, title, picture?}` (a JPEG or PNG data URL up to 8 MB): add the page to *Saved from <browser>*; `201` with the entry, or `200 {"already": true, "node"}` |
+| `GET /api/v1/extension/link?url=` | the extension | `{status, confirmed, archive, checked}` for one address, `{"status": "unchecked"}` when never checked |
 | `POST /api/v1/extension/commands` | owner | ask a browser to open links or a tab group, or to reload its extension (`"kind": "reload"`); at most 100 wait per browser, and each is forgotten after an hour |
 | `GET /api/v1/extension/commands/{id}` | viewer | a command and its state |
 

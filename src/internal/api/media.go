@@ -118,6 +118,7 @@ type snapJob struct {
 	Done      int       `json:"done"`
 	Failed    int       `json:"failed"`
 	Skipped   int       `json:"skipped"` // not public pages
+	Kept      int       `json:"kept"`    // had a snapshot that was not blank, so it was kept
 	State     string    `json:"state"`   // running, done, cancelled
 	Started   time.Time `json:"started"`
 	Ended     time.Time `json:"ended,omitzero"`
@@ -128,7 +129,7 @@ type snapJob struct {
 func (j *snapJob) view() snapJob {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	return snapJob{ID: j.ID, Workspace: j.Workspace, Total: j.Total, Done: j.Done, Failed: j.Failed, Skipped: j.Skipped, State: j.State,
+	return snapJob{ID: j.ID, Workspace: j.Workspace, Total: j.Total, Done: j.Done, Failed: j.Failed, Skipped: j.Skipped, Kept: j.Kept, State: j.State,
 		Started: j.Started, Ended: j.Ended, LastError: j.LastError}
 }
 
@@ -201,7 +202,7 @@ func (s *Server) startSnapshots(w http.ResponseWriter, r *http.Request) {
 	var urls []string
 	have := s.media(r).Index()
 	for _, u := range webURLs(t, in.Nodes) {
-		if in.Force || !have.HasThumb(u) {
+		if in.Force || !have.HasThumb(u) || have.MayBeBlank(u) { // the job keeps a small one that is not blank
 			urls = append(urls, u)
 		}
 	}
@@ -225,11 +226,13 @@ func (s *Server) startSnapshots(w http.ResponseWriter, r *http.Request) {
 	j := &snapJob{ID: "sn_" + hex.EncodeToString(b), Workspace: x.ID, Total: len(urls), State: "running", Started: s.Now(), cancel: cancel}
 	s.snaps.jobs[j.ID], s.snaps.live = j, j
 	s.forgetOldSnapJobs()
-	go s.runSnapshots(ctx, j, sn, urls)
+	go s.runSnapshots(ctx, j, sn, urls, func(u string) bool { return !in.Force && have.HasThumb(u) && !have.BlankThumb(u) })
 	writeJSON(w, 202, map[string]any{"job": j.view()})
 }
 
-func (s *Server) runSnapshots(ctx context.Context, j *snapJob, sn *media.Snapper, urls []string) {
+// runSnapshots snaps urls, two at a time; keep says a page's kept snapshot is good as it is (read here, in the
+// background, since telling a blank one means decoding it).
+func (s *Server) runSnapshots(ctx context.Context, j *snapJob, sn *media.Snapper, urls []string, keep func(string) bool) {
 	work := make(chan string)
 	var wg sync.WaitGroup
 	for range 2 { // two pages at a time: a browser per page is heavy
@@ -237,6 +240,12 @@ func (s *Server) runSnapshots(ctx context.Context, j *snapJob, sn *media.Snapper
 		go func() {
 			defer wg.Done()
 			for u := range work {
+				if keep(u) {
+					j.mu.Lock()
+					j.Kept++
+					j.mu.Unlock()
+					continue
+				}
 				err := sn.Snap(ctx, u)
 				j.mu.Lock()
 				switch {

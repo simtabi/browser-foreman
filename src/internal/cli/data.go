@@ -259,3 +259,28 @@ func restoreCmd() *cobra.Command {
 		},
 	}
 }
+
+func pageDetailsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use: "page-details FILE", Short: "Add page titles, descriptions and final addresses from the Python tool's thumbs/_meta.jsonl to link results missing them",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			f, err := os.Open(args[0])
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			s, err := openStore()
+			if err != nil {
+				return err
+			}
+			defer s.Close()
+			res, err := store.AddPageDetails(cmd.Context(), s, f)
+			if err != nil {
+				return fmt.Errorf("%s: %w", args[0], err)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%d rows: %d link results filled in, %d for links never checked (left alone)\n", res.Rows, res.Added, res.Unchecked)
+			return nil
+		},
+	}
+}

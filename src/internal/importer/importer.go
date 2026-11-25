@@ -136,6 +136,12 @@ func ReadChrome(b []byte) (store.Tree, error) {
 
 // ReadNetscape reads an exported bookmarks HTML file: <DT><H3>folder</H3><DL>…</DL> for folders,
 // <DT><A HREF="…" ADD_DATE="…">title</A> for bookmarks and <DD> for a description of the item before it.
+//
+// Chrome, Edge and the other Chromium browsers export their Other bookmarks loose at the top, beside the bookmarks bar
+// folder (marked PERSONAL_TOOLBAR_FOLDER). From such a file everything at the top but the bar is filed in the "Other
+// bookmarks" folder (made when the file has none at the top), where the browser keeps it; write-back maps that folder
+// to the browser's root. Firefox marks its own Other Bookmarks folder (UNFILED_BOOKMARKS_FOLDER), and its loose
+// items are its bookmarks menu, so its files, and any file without a bar folder, keep their top level as it is.
 func ReadNetscape(b []byte) (store.Tree, error) {
 	z := html.NewTokenizer(bytes.NewReader(b))
 	root := &store.Node{ID: "root", Kind: store.KindFolder}
@@ -146,11 +152,16 @@ func ReadNetscape(b []byte) (store.Tree, error) {
 	var text strings.Builder
 	inTitle, inDD := "", false
 	var href, added string
+	var bar *store.Node // the top-level folder a Chromium browser marks as its bookmarks bar
+	barNext, firefox := false, false
 	for {
 		tt := z.Next()
 		switch tt {
 		case html.ErrorToken:
 			if errors.Is(z.Err(), io.EOF) {
+				if bar != nil && !firefox {
+					fileLoose(root, bar, &id)
+				}
 				t := store.Tree{Root: root}
 				return t, t.Validate()
 			}
@@ -167,6 +178,10 @@ func ReadNetscape(b []byte) (store.Tree, error) {
 			case "h3":
 				inTitle, inDD = "h3", false
 				added = attrs["add_date"]
+				if len(stack) == 1 {
+					barNext = strings.EqualFold(attrs["personal_toolbar_folder"], "true")
+					firefox = firefox || strings.EqualFold(attrs["unfiled_bookmarks_folder"], "true")
+				}
 				text.Reset()
 			case "a":
 				inTitle, inDD = "a", false
@@ -195,6 +210,10 @@ func ReadNetscape(b []byte) (store.Tree, error) {
 				f := &store.Node{ID: id.next(), Kind: store.KindFolder, Title: clean(text.String()), Added: unix(added)}
 				parent := stack[len(stack)-1]
 				parent.Children = append(parent.Children, f)
+				if barNext && len(stack) == 1 && bar == nil {
+					bar = f
+				}
+				barNext = false
 				pending, last, inTitle = f, f, ""
 			case "a":
 				bm := &store.Node{ID: id.next(), Kind: store.KindBookmark, Title: clean(text.String()), URL: strings.TrimSpace(href), Added: unix(added)}
@@ -216,6 +235,35 @@ func ReadNetscape(b []byte) (store.Tree, error) {
 			}
 		}
 	}
+}
+
+// fileLoose moves every top-level item but the bookmarks bar folder into the "Other bookmarks" folder: the one at the
+// top already (Browser Foreman's own export writes it), or a new one after the bar.
+func fileLoose(root, bar *store.Node, id *ids) {
+	var other *store.Node
+	for _, c := range root.Children {
+		if c != bar && c.Kind == store.KindFolder && strings.EqualFold(c.Title, "Other bookmarks") {
+			other = c
+			break
+		}
+	}
+	var keep, loose []*store.Node
+	for _, c := range root.Children {
+		if c == bar || c == other {
+			keep = append(keep, c)
+		} else {
+			loose = append(loose, c)
+		}
+	}
+	if len(loose) == 0 {
+		return
+	}
+	if other == nil {
+		other = &store.Node{ID: id.next(), Kind: store.KindFolder, Title: "Other bookmarks"}
+		keep = append(keep, other)
+	}
+	other.Children = append(other.Children, loose...)
+	root.Children = keep
 }
 
 func unix(s string) int64 {
