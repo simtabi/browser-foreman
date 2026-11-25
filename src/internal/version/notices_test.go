@@ -127,7 +127,11 @@ func goNotices(t *testing.T) (string, int) {
 		cmd.Env = append(os.Environ(), "GOOS="+goos)
 		out, err := cmd.Output()
 		if err != nil {
-			t.Fatalf("go list for %s: %v", goos, err)
+			var stderr []byte
+			if ee, ok := err.(*exec.ExitError); ok {
+				stderr = ee.Stderr
+			}
+			t.Fatalf("go list for %s: %v: %s", goos, err, stderr)
 		}
 		for _, l := range strings.Split(string(out), "\n") {
 			if l != "" && !seen[l] {
