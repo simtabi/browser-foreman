@@ -96,7 +96,11 @@ func (s *Server) commitWith(w http.ResponseWriter, r *http.Request, x store.Work
 		if viaHeader {
 			code = http.StatusPreconditionFailed
 		}
-		writeErr(w, code, fmt.Sprintf("the workspace is at %d now, not %d: reload and try again", x.Head, b))
+		head := x.Head
+		if now, err := s.Data.Workspace(r.Context(), x.ID); err == nil {
+			head = now.Head // where it is now: another change may have landed since x was read
+		}
+		writeErr(w, code, fmt.Sprintf("the workspace is at %d now, not %d: reload and try again", head, b))
 		return
 	}
 	if err != nil {
@@ -327,6 +331,10 @@ func (s *Server) undoRedo(op string) http.HandlerFunc {
 		}
 		if errors.Is(err, store.ErrNothing) {
 			writeErr(w, 409, err.Error())
+			return
+		}
+		if errors.Is(err, store.ErrConflict) { // another change landed while this one was being made
+			writeErr(w, 409, "the workspace changed while this was "+kind+": reload and try again")
 			return
 		}
 		if err != nil {
