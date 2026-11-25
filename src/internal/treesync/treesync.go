@@ -288,3 +288,57 @@ func count(n *store.Node) int {
 	}
 	return k
 }
+
+// Adopt takes the browser's tree, read back after the merge was written into it, as the workspace's next state: the
+// same bookmarks under the browser's ids. What only the workspace knows (note, description, rating, tags) comes along:
+// by id, and, for what the browser made anew (it gives a new id to each bookmark written into it), by folder, title
+// and address. The workspace's Trash is kept.
+func Adopt(head, browser store.Tree) store.Tree {
+	h := index(head)
+	out := store.Tree{Root: cloneTree(browser.Root), Trash: slices.Clone(head.Trash)}
+	r := index(out)
+	type key struct{ parent, title, url string }
+	spare := map[key][]*store.Node{} // workspace nodes the browser does not hold by id
+	for id, p := range h {
+		if _, ok := r[id]; !ok {
+			k := key{p.parent, p.node.Title, p.node.URL}
+			spare[k] = append(spare[k], p.node)
+		}
+	}
+	for _, list := range spare {
+		sort.Slice(list, func(i, j int) bool { return list[i].ID < list[j].ID })
+	}
+	for id, p := range r {
+		from := (*store.Node)(nil)
+		if hp, ok := h[id]; ok {
+			from = hp.node
+		} else {
+			k := key{p.parent, p.node.Title, p.node.URL}
+			if list := spare[k]; len(list) > 0 {
+				from, spare[k] = list[0], list[1:]
+			}
+		}
+		if from != nil {
+			p.node.Note, p.node.Description, p.node.Rating, p.node.Tags = from.Note, from.Description, from.Rating, from.Tags
+			if p.node.Added == 0 {
+				p.node.Added = from.Added
+			}
+		}
+	}
+	return out
+}
+
+func cloneTree(n *store.Node) *store.Node {
+	if n == nil {
+		return nil
+	}
+	c := *n
+	c.Children = make([]*store.Node, len(n.Children))
+	for i, x := range n.Children {
+		c.Children[i] = cloneTree(x)
+	}
+	if len(n.Children) == 0 {
+		c.Children = nil
+	}
+	return &c
+}

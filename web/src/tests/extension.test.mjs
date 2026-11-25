@@ -54,6 +54,16 @@ eq(seen[0], ["http://127.0.0.1:8765/api/v1/extension/bookmarks", "Bearer brofo_x
   eq(JSON.parse(calls[1][2]), { workspace: "main", url: "https://b.example/", title: "B" }, "no picture: none sent");
   eq(calls[2].slice(0, 2), ["GET", "http://127.0.0.1:8765/api/v1/extension/link?url=https%3A%2F%2Fa.example%2Fx%3Fy%3D1%26z%3D2"]);
 }
+// two-way sync: the merge request and the adopt after writing it
+{
+  const calls = [];
+  const c = new C.Client("http://127.0.0.1:8765", "brofo_x", async (url, init) => { calls.push([init.method, url, JSON.parse(init.body)]); return { ok: true, status: 200, json: async () => ({ seq: 4, tree: { root: {} }, conflicts: 0, removed: 0 }) }; });
+  await c.sync("chrome-live", 0, 1700000000000, [{ id: "0" }]);
+  await c.adopt("chrome-live", 4, [{ id: "0" }]);
+  eq(calls.map(x => x.slice(0, 2)), [["POST", "http://127.0.0.1:8765/api/v1/extension/sync"], ["POST", "http://127.0.0.1:8765/api/v1/extension/sync/adopt"]]);
+  eq(calls[0][2], { workspace: "chrome-live", base: 0, changed: 1700000000000, nodes: [{ id: "0" }] });
+  eq(calls[1][2], { workspace: "chrome-live", seq: 4, nodes: [{ id: "0" }] });
+}
 // the badge: only a link confirmed dead is marked
 eq(C.linkBadge({ status: "dead", confirmed: true }).text, "!");
 eq(C.linkBadge({ status: "dead", confirmed: false }).text, "", "dead once is only a suspicion");

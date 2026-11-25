@@ -84,7 +84,10 @@ func TestMerge3(t *testing.T) {
 		removed   int
 	}{
 		{"each side's own change", func(t store.Tree) store.Tree { node(t, "a").Title = "A"; return t },
-			func(t store.Tree) store.Tree { t.Root.Children[1].Children = append(t.Root.Children[1].Children, &store.Node{ID: "n", Kind: store.KindBookmark, Title: "n"}); return t },
+			func(t store.Tree) store.Tree {
+				t.Root.Children[1].Children = append(t.Root.Children[1].Children, &store.Node{ID: "n", Kind: store.KindBookmark, Title: "n"})
+				return t
+			},
 			Browser, "bar[a=A,b,c,x[]],other[d,e,f[g,h],n]", 0, 0},
 		{"both renamed: the newer wins", func(t store.Tree) store.Tree { node(t, "b").Title = "ws"; return t },
 			func(t store.Tree) store.Tree { node(t, "b").Title = "br"; return t },
@@ -159,5 +162,25 @@ func TestTheWorkspacesOwnFieldsStay(t *testing.T) {
 	b, _ := json.Marshal(got)
 	if got.Title != "Renamed" || got.Note != "read later" || got.Rating != 4 || len(got.Tags) != 1 {
 		t.Fatalf("%s", b)
+	}
+}
+
+// After the merge is written into the browser, its tree comes back with new ids for what it made; adopting it keeps
+// each bookmark's note, rating and tags, and the workspace's Trash.
+func TestAdoptKeepsWhatOnlyTheWorkspaceKnows(t *testing.T) {
+	head := t3("bar[a,new]")
+	node(head, "a").Note = "by id"
+	n := node(head, "new")
+	n.Rating, n.Tags = 5, []string{"made on the page"}
+	head.Trash = []*store.Trashed{{Node: &store.Node{ID: "old", Kind: store.KindBookmark, Title: "old"}, From: "bar"}}
+	br := t3("bar[a,b9]") // the browser gave "new" the id b9
+	b9 := node(br, "b9")
+	b9.Title, b9.URL = "new", "https://new.example/"
+	got := Adopt(head, br)
+	if node(got, "a").Note != "by id" || node(got, "b9").Rating != 5 || len(node(got, "b9").Tags) != 1 || len(got.Trash) != 1 {
+		t.Fatalf("%s %+v", shape(got.Root), node(got, "b9"))
+	}
+	if node(br, "b9").Rating != 0 {
+		t.Fatal("Adopt changed the browser's tree it was given")
 	}
 }

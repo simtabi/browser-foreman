@@ -2293,6 +2293,36 @@
         },
         "description": "Query: url. {status, confirmed, archive, checked}, or {status: \"unchecked\"}."
       }
+    },
+    "/api/v1/extension/sync": {
+      "post": {
+        "summary": "Merge the browser's bookmarks with the workspace kept in sync",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "extension",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {workspace, base, changed, nodes}. base 0 is the last entry the browser and the workspace agreed on. Answers {tree, conflicts, removed} with the entry made, or seq when nothing changed."
+      }
+    },
+    "/api/v1/extension/sync/adopt": {
+      "post": {
+        "summary": "Take the browser's ids after writing a merge into it",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "extension",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {workspace, seq, nodes}. 409 when the workspace moved on since seq."
+      }
     }
   }
 }

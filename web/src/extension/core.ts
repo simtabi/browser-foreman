@@ -93,6 +93,15 @@ export class Client {
   savePage(workspace: string, url: string, title: string, picture = ""): Promise<{ already?: boolean; entry?: { seq: number } }> {
     return this.call("POST", "extension/pages", { workspace, url, title, ...(picture ? { picture } : {}) });
   }
+  /** Merge this browser's bookmarks with the workspace kept in sync with them; base 0: from when they last agreed.
+   *  changed: when the browser's bookmarks last changed (Unix ms; 0: not since base). Answers the merged tree. */
+  sync(workspace: string, base: number, changed: number, nodes: unknown[]): Promise<{ tree: { root: any }; seq?: number; entry?: { seq: number }; conflicts: number; removed: number }> {
+    return this.call("POST", "extension/sync", { workspace, base, changed, nodes });
+  }
+  /** After writing the merge into the browser: its bookmarks read back, under the browser's ids. */
+  adopt(workspace: string, seq: number, nodes: unknown[]): Promise<{ seq?: number; entry?: { seq: number } }> {
+    return this.call("POST", "extension/sync/adopt", { workspace, seq, nodes });
+  }
   /** What Browser Foreman knows about one address: its status, and whether it is confirmed dead. */
   link(url: string): Promise<{ status: string; confirmed?: boolean; archive?: string }> { return this.call("GET", `extension/link?url=${encodeURIComponent(url)}`); }
   workspaces(): Promise<{ workspaces: { id: string; name: string; bookmarks: number }[] }> { return this.call("GET", "workspaces"); }
