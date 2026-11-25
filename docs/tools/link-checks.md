@@ -132,7 +132,7 @@ curl -s -X POST http://127.0.0.1:8765/api/v1/linkchecks -H "Authorization: Beare
 {"job": {"id": "lc_5e1c0a2b9f33", "state": "running", "total": 9, "checked": 0, "started": "2026-11-12T21:30:00Z", "done": false}}
 ```
 
-Then `GET /api/v1/linkchecks/{id}` for progress (`?results=1` adds the results), and `POST …/pause`, `…/resume` or
+Then `GET /api/v1/linkchecks/{id}` for progress (`?results=1` adds the results; `&from=N` only those after the first N, with `next`, which is how the page shows links turn as they are checked), and `POST …/pause`, `…/resume` or
 `…/cancel`. One check runs at a time. Results are kept per address, so every workspace holding an address shares
 them, and the web interface shows them as soon as it loads.
 

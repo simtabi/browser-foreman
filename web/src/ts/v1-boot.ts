@@ -165,20 +165,25 @@ if (boot) {
     } catch { /* no browser to take snapshots with, or snapshots already running */ }
     return { job: job.id, total: job.total };
   };
+  const readSoFar = new Map<string, number>(); // check id -> results already read while it ran
   const thumbKey = async (u: string): Promise<string> =>
     Array.from(new Uint8Array(await crypto.subtle.digest("SHA-1", new TextEncoder().encode(u))), b => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
   const job = async (id: string): Promise<Record<string, unknown>> => {
-    let j: { job: CheckView; results?: Record<string, V1Link> };
-    try { j = await call("GET", `linkchecks/${encodeURIComponent(id)}`); } catch { return { done: true, state: "lost", results: {}, rendered: 0 }; }
-    const v = j.job;
-    const results: Record<string, unknown> = {};
+    let j: { job: CheckView; results?: Record<string, V1Link>; next?: number };
+    // While it runs, only the results that arrived since the last poll; once done, all of them.
+    const from = readSoFar.get(id) ?? 0;
+    try { j = await call("GET", `linkchecks/${encodeURIComponent(id)}?results=1&from=${from}`); } catch { return { done: true, state: "lost", results: {}, rendered: 0 }; }
+    let v = j.job;
     if (v.done) {
       j = await call("GET", `linkchecks/${encodeURIComponent(id)}?results=1`);
-      for (const [url, l] of Object.entries(j.results ?? {})) for (const pid of pageIdsByURL.get(url) ?? []) results[pid] = linkFields(l);
-    }
+      v = j.job;
+      readSoFar.delete(id);
+    } else readSoFar.set(id, j.next ?? from);
+    const results: Record<string, unknown> = {};
+    for (const [url, l] of Object.entries(j.results ?? {})) for (const pid of pageIdsByURL.get(url) ?? []) results[pid] = linkFields(l);
     const base = { state: v.state === "done" ? "done" : v.state, checked: v.checked, total: v.total, started: Date.parse(v.started) / 1000, results };
     const snap = snapOf.get(id);
-    if (!v.done || !snap) return { ...base, phase: "checking", done: v.done, rendered: 0, render_total: 0 };
+    if (!v.done || !snap) return { ...base, phase: "checking", done: v.done, rendered: 0, render_total: 0 };  // results so far apply now
     let sv: SnapView;
     try { sv = (await call<{ job: SnapView }>("GET", `snapshots/${encodeURIComponent(snap.id)}`)).job; } catch { return { ...base, phase: "rendering", done: true, rendered: 0, render_total: 0 }; }
     const rendered = sv.done + sv.failed + sv.skipped + (sv.kept ?? 0);
