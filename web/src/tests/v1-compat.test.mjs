@@ -20,6 +20,11 @@ const call = async (method, path, body) => {
   if (path === "extension/status") return { extensions: [{ name: "extension:Safari" }] };
   if (path === "extension/commands") return { command: { id: "cmd_1" } };
   if (path.startsWith("tabs/stored")) return { snapshots: 240, incognito_pages: 3 };
+  if (path === "workspaces/main/history") return { history: [{ seq: 1, at: "2026-11-25T10:00:00Z", op: "import", summary: "Imported 3", base: 0, snap: "x" }] };
+  if (path === "linkchecks/lc_9?results=1") return { job: {}, results: {
+    "https://was-ok/": { url: "https://was-ok/", status: "dead" }, "https://dead-already/": { url: "https://dead-already/", status: "dead" },
+    "https://back/": { url: "https://back/", status: "ok" }, "https://new/": { url: "https://new/", status: "dead" } },
+    previous: { "https://was-ok/": "ok", "https://back/": "dead", "https://new/": "" } };
   if (path === "linkchecks") return { running: null, runs: [{ id: "lc_1", state: "done", done: true, total: 8, checked: 8, newly_broken: 2, fixed: 0, started: "s", ended: "e" }] };
   return { passthrough: path };
 };
@@ -85,5 +90,12 @@ a = await run("POST", "tabs/note", "", { kind: "tab", key: "https://go.dev/", no
 assert.equal(calls.at(-1), 'PUT tabs/notes {"kind":"tab","key":"https://go.dev/","note":"read","tags":[]}');
 await run("POST", "history/access/open-settings", "", {});
 assert.equal(calls.at(-1), "POST history/access/open-settings", "opening System Settings goes to v1");
-assert.equal(await run("GET", "ws/main/history", "", undefined), null, "unknown calls are not swallowed");
-console.log("v1-compat: 19 checks passed");
+assert.equal(await run("GET", "ws/main/nothing-like-this", "", undefined), null, "unknown calls are not swallowed");
+// The Timeline's edits: the workspace's history, in the shape the page reads (it used to fall back to nothing).
+a = await run("GET", "ws/main/history", "limit=2000", undefined);
+assert.deepEqual(a.body, { entries: [{ seq: 1, at: "2026-11-25T10:00:00Z", op: "import", summary: "Imported 3" }] });
+// A re-check report names only the links this run changed: dead already is not newly broken.
+a = await run("GET", "rechecks/lc_9", "", undefined);
+assert.deepEqual(a.body.newly_broken.map(x => x.url).sort(), ["https://new/", "https://was-ok/"], "newly broken");
+assert.deepEqual(a.body.fixed.map(x => x.url), ["https://back/"], "fixed");
+console.log("v1-compat: 22 checks passed");

@@ -88,3 +88,30 @@ func TestOldSnapshotJobsAreForgotten(t *testing.T) {
 		t.Fatalf("kept %d, the oldest still there: %v", len(s.snaps.jobs), s.snaps.jobs["sn_x"] != nil)
 	}
 }
+
+// A check's results say, for each link it changed, what that link was before: a report can then tell a link that
+// just broke from one that was dead already.
+func TestResultsSayWhatEachChangedLinkWasBefore(t *testing.T) {
+	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) }))
+	defer site.Close()
+	s := newServer(t, "tok")
+	linkWorkspace(t, s, site.URL)
+	old := time.Now().Add(-48 * time.Hour)
+	_ = s.Data.SaveLinks(context.Background(), []store.LinkResult{
+		{URL: site.URL + "/a", Status: "ok", Checked: old},
+		{URL: site.URL + "/b", Status: "dead", Checked: old, DeadSince: old},
+	})
+	job, err := s.StartCheck("links", []string{site.URL + "/a", site.URL + "/b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job.Wait()
+	var out struct{ Previous map[string]string }
+	_ = json.Unmarshal(send(s.Handler(), "GET", "/api/v1/linkchecks/"+job.ID+"?results=1", "").Body.Bytes(), &out)
+	if out.Previous[site.URL+"/a"] != "ok" {
+		t.Fatalf("previous %v", out.Previous)
+	}
+	if _, ok := out.Previous[site.URL+"/b"]; ok {
+		t.Fatalf("a link dead before and after is listed as changed: %v", out.Previous)
+	}
+}
