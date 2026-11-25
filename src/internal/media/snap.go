@@ -136,14 +136,22 @@ func (s Snapper) Snap(ctx context.Context, raw string) error {
 	if err != nil {
 		return err
 	}
+	return s.Store.SaveThumb(raw, img)
+}
+
+// SaveThumb keeps a picture of a page as its snapshot: a JPEG of half its size.
+func (s Store) SaveThumb(raw string, img image.Image) error {
+	if s.Dir == "" {
+		return errors.New("no folder is set for snapshots")
+	}
 	var b bytes.Buffer
 	if err := jpeg.Encode(&b, half(img), &jpeg.Options{Quality: 72}); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(s.Store.dir("thumbs"), 0o700); err != nil {
+	if err := os.MkdirAll(s.dir("thumbs"), 0o700); err != nil {
 		return err
 	}
-	return writeAtomic(filepath.Join(s.Store.dir("thumbs"), ThumbKey(raw)+".jpg"), b.Bytes())
+	return writeAtomic(filepath.Join(s.dir("thumbs"), ThumbKey(raw)+".jpg"), b.Bytes())
 }
 
 // shoot has Chrome picture one page and returns the picture.
