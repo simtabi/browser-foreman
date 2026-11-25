@@ -207,3 +207,45 @@ func TestTheTestsRunUnderTheRaceDetector(t *testing.T) {
 		t.Fatal("CI does not run make test")
 	}
 }
+
+// CI and make check vet every system the release builds for, keep go.mod tidy and run govulncheck at a pinned version:
+// a build-tagged file for another system is otherwise first compiled when a release tag is built.
+func TestChecksCoverEverySystemAndTheModuleFile(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	mk, err := os.ReadFile(filepath.Join(root, "Makefile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ci, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	oses := regexp.MustCompile(`(?m)^VET_OSES := (.+)$`).FindSubmatch(mk)
+	if oses == nil {
+		t.Fatal("no VET_OSES in the Makefile")
+	}
+	for _, want := range []string{"darwin", "linux", "windows", "freebsd"} {
+		if !strings.Contains(" "+string(oses[1])+" ", " "+want+" ") {
+			t.Errorf("make vet does not vet %s", want)
+		}
+	}
+	if !regexp.MustCompile(`(?m)^GOVULNCHECK_VERSION := v\d+\.\d+\.\d+$`).Match(mk) {
+		t.Error("govulncheck is not pinned to a release")
+	}
+	check := regexp.MustCompile(`(?m)^check: (.*?)  ##`).FindSubmatch(mk)
+	for _, step := range []string{"fmt", "vet", "tidy", "lint", "vuln", "test"} {
+		if check == nil || !strings.Contains(" "+string(check[1])+" ", " "+step+" ") {
+			t.Errorf("make check leaves out %s", step)
+		}
+	}
+	run := regexp.MustCompile(`(?m)run: make (.*)$`).FindAllSubmatch(ci, -1)
+	got := ""
+	for _, r := range run {
+		got += " " + string(r[1]) + " "
+	}
+	for _, step := range []string{"vet", "tidy", "vuln", "test"} {
+		if !strings.Contains(got, " "+step+" ") {
+			t.Errorf("CI does not run make %s", step)
+		}
+	}
+}
