@@ -89,7 +89,7 @@ export class ServerSettingsPanel {
   /** Save values together; a risky one asks first. Answers whether it was saved. */
   async save(values: Record<string, unknown>, risky = false, said = ""): Promise<boolean> {
     if (risky && !(await askConfirm({ title: "Change a server setting that matters for safety?", ok: "Change it", no: "Keep it",
-      body: "This changes who can reach Browser Foreman or where its data lives. It takes effect when the server restarts; a wrong value can keep it from starting until you fix the file." }))) return false;
+      body: "This changes who can reach Browser Foreman, where its data lives, or where an API key is sent. A wrong value can keep the server from starting, or send the key to the wrong place, until you fix the file." }))) return false;
     try {
       const r = await this.call<Saved>("PUT", "settings", { values, confirm: risky });
       this.data = r;

@@ -30,7 +30,7 @@ on. Each setting shows where its value comes from (the default, a config file, `
   loader the server starts with, and nothing is written unless all of it passes.
 - **The environment wins.** A setting a `BROFO_*` variable sets in the shell is shown, not editable.
 - **What the page may change** is `settings.edit`, set in the files only. `safe` (the default) leaves the server's
-  address and mode, storage, and the API token to the files. `all` lets the page change those too, each after a
+  address and mode, storage, the API token and the OpenAI address (the key is sent there) to the files. `all` lets the page change those too, each after a
   confirmation.
 - **AI is one choice, not five fields.** *Who answers AI jobs* picks the provider (your assistant over MCP,
   Anthropic, OpenAI or a local Ollama), and only that provider's settings show beneath it: its key, a model chosen

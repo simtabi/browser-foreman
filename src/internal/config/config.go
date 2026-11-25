@@ -91,7 +91,7 @@ type AI struct {
 	Model     string `json:"model,omitempty" env:"BROFO_AI_MODEL" ui:"live" help:"The model. Needed for OpenAI and Ollama; Anthropic uses claude-opus-5-5 when empty."`          // anthropic: claude-opus-5-5 when empty; openai and ollama: required
 	Effort    string `json:"effort,omitempty" ui:"live" choices:"low,medium,high" help:"How hard Anthropic's model thinks."`                                                     // anthropic: low, medium or high; empty: low
 	OllamaURL string `json:"ollama_url,omitempty" ui:"live" help:"Ollama's address."`                                                                                            // http://127.0.0.1:11434 when empty
-	OpenAIURL string `json:"openai_url,omitempty" ui:"live" help:"OpenAI's address, or any server with the same API."`                                                           // https://api.openai.com/v1 when empty; any server speaking the same API
+	OpenAIURL string `json:"openai_url,omitempty" ui:"live,risky" help:"OpenAI's address, or any server with the same API. Your OpenAI key is sent there."`                                                           // https://api.openai.com/v1 when empty; any server speaking the same API
 	// OpenAIKey is OPENAI_API_KEY, from .env or the environment only.
 	OpenAIKey string `json:"-" env:"OPENAI_API_KEY" ui:"secret,live" help:"Your OpenAI API key. Kept in .env, never shown again."`
 	// AnthropicKey is ANTHROPIC_API_KEY, from .env or the environment only; empty lets the SDK use `ant auth login`.

@@ -17,7 +17,7 @@ import (
 //	json     the key in a config file ("ai.provider"); "-" for a value kept only in .env
 //	env      the variable that sets it (BROFO_AI_PROVIDER, OPENAI_API_KEY)
 //	choices  the values it takes, when it takes a fixed few
-//	ui       secret (write-only, kept in .env), risky (changes who can reach the server or where data lives:
+//	ui       secret (write-only, kept in .env), risky (changes who can reach the server, where data lives or where a key is sent:
 //	         editable only with settings.edit all, after a confirmation), live (takes effect without a restart),
 //	         file (edited in the file only)
 //	help     one line for the page

@@ -234,3 +234,32 @@ func TestInitMakesEnvFromTheExample(t *testing.T) {
 		t.Fatalf("%v %q", err, c.APIToken)
 	}
 }
+
+// The OpenAI key goes wherever ai.openai_url points, so pointing it elsewhere is as risky as moving the server:
+// otherwise anyone who may edit safe settings could read the write-only key.
+func TestTheOpenAIAddressGuardsItsKey(t *testing.T) {
+	p := setup(t, `{}`, "")
+	addr := map[string]json.RawMessage{"ai.openai_url": raw("https://elsewhere.example/v1")}
+	if _, err := Apply(p, noEnv, addr, true); !errors.Is(err, ErrLocked) {
+		t.Fatalf("safe mode let ai.openai_url through: %v", err)
+	}
+	p = setup(t, `{"settings":{"edit":"all"}}`, "")
+	if _, err := Apply(p, noEnv, addr, false); !errors.Is(err, ErrConfirm) {
+		t.Fatalf("all mode without a confirmation: %v", err)
+	}
+	if _, err := Apply(p, noEnv, addr, true); err != nil {
+		t.Fatal(err)
+	}
+	if f := find(mustDescribe(t, p), "ai.ollama_url"); !f.Editable || f.Risky {
+		t.Fatalf("Ollama's address carries no key and stays an ordinary setting: %+v", f)
+	}
+}
+
+func mustDescribe(t *testing.T, p Paths) []Field {
+	t.Helper()
+	fs, _, err := Describe(p, noEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fs
+}
