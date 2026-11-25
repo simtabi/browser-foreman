@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -88,11 +89,11 @@ func TestAnAITagJobWaitsForAClientAndApplies(t *testing.T) {
 }
 
 // fakeProvider answers every dedupe group with all members the same page.
-type fakeProvider struct{ calls int }
+type fakeProvider struct{ calls atomic.Int32 } // Answer runs on the job goroutine, read by the test
 
 func (*fakeProvider) Name() string { return "fake" }
 func (f *fakeProvider) Answer(_ context.Context, j ai.Job) (ai.Results, error) {
-	f.calls++
+	f.calls.Add(1)
 	var r ai.Results
 	for _, g := range j.Groups {
 		v := ai.Verdict{Keep: g.Keep, Reason: "same release notes"}
@@ -122,8 +123,8 @@ func TestAProviderJudgesOnlyUncertainDuplicates(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if !done || f.calls != 1 {
-		t.Fatalf("done %v, calls %d", done, f.calls)
+	if !done || f.calls.Load() != 1 {
+		t.Fatalf("done %v, calls %d", done, f.calls.Load())
 	}
 	tr, _, _ := s.Data.State(context.Background(), "w", 0)
 	if len(tr.Trash) != 1 || !strings.Contains(tr.Trash[0].Reason, "judged the same page by a model") {
@@ -169,15 +170,15 @@ func TestAIJobsOutliveARestart(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatalf("the job did not survive the restart: calls %d", f.calls)
+	t.Fatalf("the job did not survive the restart: calls %d", f.calls.Load())
 }
 
 // tagger tags every bookmark of a job "x".
-type tagger struct{ calls int }
+type tagger struct{ calls atomic.Int32 } // Answer runs on the job goroutine
 
 func (*tagger) Name() string { return "tagger" }
 func (f *tagger) Answer(_ context.Context, j ai.Job) (ai.Results, error) {
-	f.calls++
+	f.calls.Add(1)
 	var r ai.Results
 	for _, it := range j.Items {
 		r.Tags = append(r.Tags, ai.TagResult{ID: it.ID, Tags: []string{"x"}})
