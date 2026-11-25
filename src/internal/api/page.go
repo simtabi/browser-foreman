@@ -48,8 +48,8 @@ func plainPage(w http.ResponseWriter, code int, nonce, title, body string) {
 }
 
 // page serves the web interface for one workspace (?ws=, or the first). In local mode the page carries the configured
-// token, which only this computer can read (the Host and Origin checks keep other sites from reading the page). In
-// accounts mode it needs a session; without one, it is the sign-in page.
+// token, but only for a browser that opened a one-time link (local_signin.go): other programs and people on this
+// computer cannot read it from here. In accounts mode it needs a session; without one, it is the sign-in page.
 func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	if !webui.Built(s.ui()) {
 		s.home(w, r)
@@ -61,6 +61,10 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		if s.Cfg.APIToken == "" {
 			plainPage(w, 503, nonce, "Set up", `<h1 class="h2">Almost there</h1><p>No API token is set, so the interface cannot save. Run
 <code>browser-foreman config init</code>, then restart the server.</p>`)
+			return
+		}
+		if !s.localSignedIn(r) {
+			s.openFromHere(w, http.StatusUnauthorized, nonce, "This browser has not been signed in yet, or its sign-in ran out.")
 			return
 		}
 		auth["token"] = s.Cfg.APIToken

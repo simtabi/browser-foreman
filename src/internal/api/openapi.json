@@ -2249,6 +2249,20 @@
         },
         "description": "Body: {browser}. The page is the fixed one for that browser."
       }
+    },
+    "/api/v1/local/links": {
+      "post": {
+        "summary": "A one-time link to the page (local mode): it works once, within two minutes, and signs in the browser that opens it",
+        "tags": [
+          "Server"
+        ],
+        "x-role": "owner",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        }
+      }
     }
   }
 }

@@ -29,11 +29,17 @@ browser-foreman serve
 
 ```text
 Browser Foreman 0.1.0-dev on http://127.0.0.1:8765 (config …/.config/browser-foreman, state …/.local/state/browser-foreman)
-Open Browser Foreman: http://127.0.0.1:8765/
+Open Browser Foreman: http://127.0.0.1:8765/open/…
 ```
 
 Started from a terminal, it also opens that page in your default browser (`server.open`; `--no-open` skips it). If
-it is already running, `serve` says so, gives the same link, and opens it.
+it is already running, `serve` says so, gives a new link, and opens it. The link works once, within two minutes, and
+signs in the browser that opens it, for 30 days: the page never hands its token to anything else on this computer.
+To open it again later, or in another browser:
+
+```bash
+browser-foreman open
+```
 
 Check it answers:
 

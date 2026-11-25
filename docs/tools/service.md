@@ -13,7 +13,7 @@ browser-foreman service uninstall
 ```
 
 `install` starts `browser-foreman serve --no-open` now and at every login, from the binary you ran it with. Nothing
-installs it for you.
+installs it for you. Open the page with `browser-foreman open`, which signs your browser in with a one-time link.
 
 | System | What it installs | Its output |
 |---|---|---|

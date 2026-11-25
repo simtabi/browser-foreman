@@ -16,8 +16,12 @@ What Browser Foreman protects, and how. Report a weakness privately: see [SECURI
 - **The web page.** Its Content Security Policy allows scripts from the server and inline scripts carrying that
   response's nonce, nothing from other hosts. It needs `'unsafe-eval'` for Alpine, which compiles the page's own
   `x-*` attributes. Bookmark data is embedded as JSON with `<`, `>`, `&`, U+2028 and U+2029 escaped, so a title cannot
-  end the script it sits in. In `local` mode the page carries the API token, readable only from this computer (the
-  Host and Origin checks keep other sites out); in `accounts` mode it needs a session and carries only its CSRF token.
+  end the script it sits in. In `local` mode the page carries the API token, but only for a browser signed in
+  through a one-time link: `serve` and `browser-foreman open` make one (the second asks with the token from `.env`),
+  it works once within two minutes, and it sets an `HttpOnly`, `SameSite=Strict` cookie signed with the token, good
+  for 30 days and void once the token changes. Another program or person on this computer that loads the page gets
+  only how to open it (the Host and Origin checks keep other sites out); in `accounts` mode it needs a session and
+  carries only its CSRF token.
 - **Other sites' pages get nothing.** Besides the Origin check, a request a browser marks `Sec-Fetch-Site:
   cross-site` is refused unless it is following a link, so another site cannot even load an image from here.
 - **This computer's browsers.** Opening links, restoring a session and closing tabs need the owner role, open only

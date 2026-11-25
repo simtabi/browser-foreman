@@ -79,6 +79,7 @@ type Server struct {
 	ConfigPaths config.Paths
 	Getenv      func(string) string
 	ai          aiState
+	links       localLinks // one-time links that sign a browser in, in local mode
 	// Notifier shows desktop notifications (a scheduled re-check's result); nil shows none.
 	Notifier *notifykit.Notifier
 	snaps    snapRunner
@@ -212,6 +213,8 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/ai/jobs/next", s.require(store.RoleOwner, s.nextAIJobs))
 	m.HandleFunc("POST /api/v1/ai/jobs/{id}/results", s.require(store.RoleOwner, s.submitAIResults))
 	m.HandleFunc("GET /api/v1/extension/commands/{id}", s.require(store.RoleViewer, s.getCommand))
+	m.HandleFunc("POST /api/v1/local/links", s.require(store.RoleOwner, s.createLocalLink))
+	m.HandleFunc("GET /open/{code}", s.openLink)
 	m.HandleFunc("GET /{$}", s.page)
 	m.Handle("GET /assets/", s.assets())
 	return s.guard(m)

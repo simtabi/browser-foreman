@@ -112,7 +112,7 @@ func TestIconsSnapshotsAndTheirRoutes(t *testing.T) {
 		t.Fatalf("second run %s", w.Body)
 	}
 	// The page is told which pictures there are.
-	if body := get(h, "/?ws=pics", nil).Body.String(); !strings.Contains(body, `"icons":{"go.dev":"`+icon+`"}`) || !strings.Contains(body, media.ThumbKey("https://www.go.dev/")) {
+	if body := get(h, "/?ws=pics", signedIn(t, s)).Body.String(); !strings.Contains(body, `"icons":{"go.dev":"`+icon+`"}`) || !strings.Contains(body, media.ThumbKey("https://www.go.dev/")) {
 		t.Fatalf("boot media missing: %s", body[strings.Index(body, `"media"`):][:200])
 	}
 	// A folder chosen in Preferences is where pictures are then read from: the snapshot in the default folder is no

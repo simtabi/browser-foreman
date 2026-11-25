@@ -96,6 +96,8 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `POST` | `/api/v1/writeback/preview`, `/api/v1/writeback/apply` | owner | a workspace back into a browser profile, previewed first; see [write-back](write-back.md) |
 | `POST`, `GET` | `/api/v1/ai/jobs`, `/api/v1/ai/jobs/next`, `/api/v1/ai/jobs/{id}/results` | owner | tag suggestions and duplicate verdicts by a model; see [AI](ai.md) |
 | `GET` | `/api/v1/ai/models` | owner | `?provider=anthropic\|openai\|ollama`: the models that provider offers, for Settings to choose from; see [AI](ai.md#through-the-api) |
+| `POST` | `/api/v1/local/links` | owner | local mode: `{url, expires_in}`, a one-time link to the page that works once within two minutes; `browser-foreman open` asks for it |
+| `GET` | `/open/{code}` | the link | spends the code, signs the browser in (an `HttpOnly` cookie signed with the token, 30 days) and goes to the page; a used or old code answers `403` with how to open it |
 | `GET` | `/api/v1/settings` | owner | the configuration in force, without secrets |
 | `GET` | `/api/v1/settings/fields` | owner | every setting: `key`, `group`, `type`, `choices`, `value` (never a secret's), `set`, `source`, `editable` and why not, `risky`, `live`; plus `edit` (`safe` or `all`) and the config `folder`; see [editing from the page](../configuration.md#editing-from-the-page) |
 | `PUT` | `/api/v1/settings` | owner, from this computer | `{values: {key: value}, confirm?}`: all or nothing; `403` for a setting the page may not change, `409` for a risky one without `confirm`; answers `result.changed`, `result.restart` (needs a restart) and `result.files` |
