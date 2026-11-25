@@ -375,7 +375,8 @@ func (s *Server) addHook(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	_, _ = s.Bus.Publish("webhook.created", map[string]string{"id": sub.ID, "url": sub.URL})
+	// Only the id: a webhook's address is often a secret itself, and every viewer and every "*" webhook sees events.
+	_, _ = s.Bus.Publish("webhook.created", map[string]string{"id": sub.ID})
 	writeJSON(w, 201, redact(sub))
 }
 
