@@ -74,3 +74,17 @@ func TestOldChecksAreForgotten(t *testing.T) {
 	}
 }
 
+// Snapshot jobs are forgotten the same way.
+func TestOldSnapshotJobsAreForgotten(t *testing.T) {
+	s := newServer(t, "tok")
+	s.snaps.jobs = map[string]*snapJob{}
+	t0 := time.Now()
+	for i := range keptChecks + 5 {
+		id := "sn_" + strings.Repeat("x", i+1)
+		s.snaps.jobs[id] = &snapJob{ID: id, Started: t0.Add(time.Duration(i) * time.Second), State: "done"}
+		s.forgetOldSnapJobs()
+	}
+	if len(s.snaps.jobs) != keptChecks || s.snaps.jobs["sn_x"] != nil {
+		t.Fatalf("kept %d, the oldest still there: %v", len(s.snaps.jobs), s.snaps.jobs["sn_x"] != nil)
+	}
+}

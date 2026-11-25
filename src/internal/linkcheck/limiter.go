@@ -118,10 +118,28 @@ func (l *Limiter) state(site string) *siteState {
 	defer l.mu.Unlock()
 	s := l.sites[site]
 	if s == nil {
+		if len(l.sites) >= maxSites {
+			l.forgetQuiet()
+		}
 		s = &siteState{sem: make(chan struct{}, max(1, l.rule(site).Concurrent))}
 		l.sites[site] = s
 	}
 	return s
+}
+
+// maxSites is how many sites the limiter remembers before it forgets the quiet ones.
+const maxSites = 20000
+
+// forgetQuiet drops the sites that are in exactly the state a new one starts in: nothing in flight, no pause to wait
+// out, no strikes, no backoff. Forgetting them changes nothing; a site that asked to slow down is always kept. l.mu
+// is held.
+func (l *Limiter) forgetQuiet() {
+	now := l.Now()
+	for k, s := range l.sites {
+		if len(s.sem) == 0 && !now.Before(s.next) && !now.Before(s.cool) && s.strikes == 0 && s.backoff == 0 {
+			delete(l.sites, k)
+		}
+	}
 }
 
 // Acquire waits for a slot for rawURL's site. It returns false when the site stays paused past MaxWait or ctx ends;
