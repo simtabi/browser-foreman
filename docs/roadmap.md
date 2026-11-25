@@ -1,6 +1,6 @@
 # Roadmap
 
-Everything below ships in **v0.1.0**; the version is released when the last item is done. Each phase lands as its own
+Everything below shipped in **v0.1.0** (released 2026-11-10); later releases are under *After v0.1.0*. Each phase lands as its own
 pull request, with tests and docs.
 
 | Status | Meaning |

@@ -14,48 +14,37 @@ import (
 	"testing"
 )
 
-var updateNotices = flag.Bool("update-notices", false, "rewrite THIRD_PARTY_NOTICES from the dependencies (make notices)")
+var noticesOut = flag.String("notices-out", "", "write THIRD_PARTY_NOTICES to this path (make notices)")
 
 // The release ships THIRD_PARTY_NOTICES beside the binaries: the licence and notice texts of every Go module linked
-// into browser-foreman and every npm package bundled into its web page, as their authors wrote them. This fails when
-// the file no longer matches the dependencies; `make notices` rewrites it.
-func TestThirdPartyNoticesAreCurrent(t *testing.T) {
-	path := filepath.Join("..", "..", "..", "THIRD_PARTY_NOTICES")
+// into browser-foreman and every npm package bundled into its web page, as their authors wrote them. It is written
+// when the release runs (`make notices`, a GoReleaser hook, into the ignored .cache/notices/), so it always matches
+// the dependencies being shipped and is never kept in the repository. This test builds it on every run, so a
+// dependency that ships no licence fails here, not at release time.
+func TestThirdPartyNoticesCanBeWritten(t *testing.T) {
 	goPart, modules := goNotices(t)
 	npmPart, packages, haveNode := npmNotices(t)
 	// Measured 2026-11-25: 45 Go modules linked on one release system or another, 3 npm packages bundled.
 	if modules < 30 || (haveNode && packages < 3) {
 		t.Fatalf("found %d Go modules and %d npm packages; the dependency walk has lost its way", modules, packages)
 	}
-	if *updateNotices {
-		if !haveNode {
-			t.Fatal("web/node_modules is missing: run npm ci in web first, so the bundled packages are included")
-		}
-		if err := os.WriteFile(path, []byte(noticesHeader+goPart+npmPart), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	if *noticesOut == "" {
 		return
 	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("%v: run make notices", err)
+	if !haveNode {
+		t.Fatal("web/node_modules is missing: run make web first, so the bundled packages are included")
 	}
-	have := string(b)
-	// Without web/node_modules (the Go-only CI job) the npm half cannot be rebuilt, so only the Go half is compared.
-	want := noticesHeader + goPart
-	if haveNode {
-		want += npmPart
-	} else if i := strings.Index(have, npmHeading); i >= 0 {
-		have = have[:i]
+	if err := os.MkdirAll(filepath.Dir(*noticesOut), 0o755); err != nil {
+		t.Fatal(err)
 	}
-	if have != want {
-		t.Error("THIRD_PARTY_NOTICES is out of date with the dependencies: run make notices")
+	if err := os.WriteFile(*noticesOut, []byte(noticesHeader+goPart+npmPart), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 
 const (
 	noticesHeader = "Browser Foreman includes the third-party software below. Each entry carries the licence and notice\n" +
-		"files its authors ship with it. Written by `make notices` from the dependencies; do not edit by hand.\n"
+		"files its authors ship with it. Written by `make notices` from the dependencies of this release.\n"
 	npmHeading = "\n\n#### Bundled into the web page (npm)\n"
 	rule       = "\n\n================================================================================\n"
 )
@@ -221,16 +210,22 @@ func npmNotices(t *testing.T) (part string, n int, haveNode bool) {
 	return b.String(), len(names), true
 }
 
-// The release must carry the notices and the licence: its assets are bare binaries, with nothing bundled beside them.
+// The release must write the notices after the web page is built (its npm packages are then installed), and attach
+// them and the licence beside the bare binaries.
 func TestTheReleaseShipsTheNotices(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join("..", "..", ".goreleaser.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	extra := strings.Join(block(string(b), "release"), "\n")
-	for _, f := range []string{"./LICENSE", "./THIRD_PARTY_NOTICES"} {
-		if !strings.Contains(extra, "glob: "+f) {
-			t.Errorf("src/.goreleaser.yaml's release block does not ship %s as an extra file", f)
+	cfg := string(b)
+	hooks := strings.Join(block(cfg, "before"), "\n")
+	if web, notices := strings.Index(hooks, "- make web"), strings.Index(hooks, "- make notices"); web < 0 || notices < web {
+		t.Error("src/.goreleaser.yaml's before hooks must run make notices after make web")
+	}
+	release := strings.Join(block(cfg, "release"), "\n")
+	for _, f := range []string{"glob: ./LICENSE", "glob: ./.cache/notices/THIRD_PARTY_NOTICES"} {
+		if !strings.Contains(release, f) {
+			t.Errorf("src/.goreleaser.yaml's release block has no extra file %q", f)
 		}
 	}
 }

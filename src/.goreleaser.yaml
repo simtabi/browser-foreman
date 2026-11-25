@@ -26,6 +26,8 @@ before:
     # The binary embeds the web interface, so stage it first; then the tests the release always ran.
     - make web
     - make test
+    # The licences of what ships, written now so they match this release's dependencies.
+    - make notices
 
 builds:
   - id: browser-foreman
@@ -70,10 +72,10 @@ release:
     name: browser-foreman
   # A tag with a pre-release suffix (v0.1.0-rc.1) is published as a pre-release, not as the latest release.
   prerelease: auto
-  # The licence texts of what the binaries contain, beside them (make notices writes it).
+  # The licence texts of what the binaries contain, beside them (the make notices hook writes the second).
   extra_files:
     - glob: ./LICENSE
-    - glob: ./THIRD_PARTY_NOTICES
+    - glob: ./.cache/notices/THIRD_PARTY_NOTICES
 
 # No changelog block: the shared release workflow passes the tag's CHANGELOG section with --release-notes.
 # `changelog: disable: true` also drops those notes, which published v0.1.0-rc.1 with an empty description.

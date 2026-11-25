@@ -61,7 +61,7 @@ on. Each setting shows where its value comes from (the default, a config file, `
 | `writeback.mode` | — | `ask` | `merge`, `replace`, or `ask` each time; see [write-back](tools/write-back.md) |
 | `writeback.route` | — | `ask` | `file`, `extension`, or `ask` each time |
 | `writeback.read` | — | `ask` | how the extension route reads the profile now: `extension`, `file`, or `ask` |
-| `notify.desktop` | `BROFO_NOTIFY_DESKTOP` | `true` | a desktop notification when a scheduled re-check finds links that stopped working or work again; see [running at login and notifications](tools/service.md) |
+| `notify.desktop` | `BROFO_NOTIFY_DESKTOP=0` (off only) | `true` | `BROFO_NOTIFY_DESKTOP=0` turns them off for one run; any other value leaves the setting as it is. A desktop notification when a scheduled re-check finds links that stopped working or work again; see [running at login and notifications](tools/service.md) |
 | `ai.provider` | `BROFO_AI_PROVIDER` | `none` | who answers AI jobs: `none` (an MCP assistant), `anthropic`, `openai` or `ollama`; see [AI](tools/ai.md) |
 | `ai.model` | `BROFO_AI_MODEL` | `claude-opus-5-5` for `anthropic` | the model; required for `openai` and `ollama` |
 | `ai.effort` | — | `low` | with `anthropic`: `low`, `medium` or `high` |
@@ -87,7 +87,8 @@ on. Each setting shows where its value comes from (the default, a config file, `
 `~/.config/browser-foreman/.env`:
 
 ```bash
-BROFO_API_TOKEN=paste-the-token-config-init-wrote
+# config init writes the token after the =
+BROFO_API_TOKEN=
 ```
 
 ## Rules the loader enforces

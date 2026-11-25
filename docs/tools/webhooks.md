@@ -5,9 +5,10 @@ A webhook (a callback) is a URL that receives the [events](events.md) it subscri
 ## Subscribe
 
 ```bash
+BROFO_WEBHOOK_SECRET=$(openssl rand -hex 32)  # keep it: the receiver checks signatures with it
 curl -X POST http://127.0.0.1:8765/api/v1/webhooks \
   -H "Authorization: Bearer $BROFO_API_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"url": "https://example.com/brofo", "events": ["bookmark.*", "tabs.snapshot.saved"], "secret": "a-long-random-secret-value"}'
+  -d "{\"url\": \"https://example.com/brofo\", \"events\": [\"bookmark.*\", \"tabs.snapshot.saved\"], \"secret\": \"$BROFO_WEBHOOK_SECRET\"}"
 ```
 
 - `events`: exact types, a family (`bookmark.*`) or everything (`*`).

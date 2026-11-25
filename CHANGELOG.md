@@ -5,6 +5,69 @@ All notable changes are recorded here, following [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+A security, reliability and hygiene pass over the whole project: the server, the web page, the extension, the tests,
+CI and the release.
+
+### Security
+
+- The page signs in on this computer through a one-time link: `browser-foreman open` (or `--print`) makes it, and
+  the browser keeps a signed cookie for 30 days. Without it the page answers `401` and no longer hands its token to
+  any local page that asks.
+- Pictures (favicons, snapshots) need a sign-in or the token.
+- Only this computer may ask to pair an extension. In accounts mode, path sources may only be added from this
+  computer.
+- An extension asked to connect to an address it has not seen before shows `?` on its icon and asks in its popup
+  first (extension 0.1.9).
+- Webhooks check every address they connect to, not only the one typed, never follow redirects (a `3xx` is a failed
+  delivery), and wait at most five minutes between attempts. `webhook.created` carries the id only.
+- Page snapshots and blocked-page renders reach the web through a local proxy that refuses private addresses, with
+  QUIC and WebRTC leaks closed.
+- `server.tls_cert` and `server.tls_key` (`BROFO_SERVER_TLS_CERT`, `BROFO_SERVER_TLS_KEY`) serve https directly;
+  `server.trusted_proxy` names the TLS proxy whose `X-Forwarded-*` headers are believed. A clear-text warning shows
+  otherwise in accounts mode.
+- Sign-in lockouts count per name and address and per address. Request read and idle timeouts are set.
+- `ai.openai_url` is marked risky in Settings. MCP escapes `/` inside a path segment.
+
+### Fixed
+
+- A torn last line in a workspace's history is repaired instead of stopping the workspace from loading, and a failed
+  write no longer leaves a half-written line.
+- Every file the server writes goes through a temporary file, fsync and rename. A half-made workspace folder is
+  recovered; a failed restore removes what it made.
+- One slow or dead webhook receiver no longer holds up the others; a full queue is recorded, not silently dropped.
+- Link checks: an unreachable re-check still moves on; results that could not be saved are counted and reported;
+  old checks, snapshot jobs and quiet sites are forgotten so memory stays bounded; SQLite times sort correctly.
+- Undo and redo answer `409` when another change got there first; edits, deletes, restores and purges no longer race.
+- Write-back keeps bookmarks whose names hold `/` or repeat; a kept profile copy is never overwritten; queued
+  extension commands are withdrawn when nobody waits and requeued when they could not be sent.
+- AI jobs: a finished job is never turned into a failed one, and the provider's deadline is shorter than the lease.
+- Requests end when the server shuts down. Windows tells a running browser by its lock file.
+- The web page: Enter in a dialog means its focused button; one dialog at a time; edits are saved before the page
+  closes; unchanged saves are skipped; undo waits for pending saves; the timeline and "was before" columns show
+  again; a tab without an id is kept by its address; the popup writes only what it previewed.
+- Accessibility: dialogs trap and return focus, the tree reports its active row, icon buttons have names, labels
+  point at their fields, and low-contrast colours are raised.
+- Panels stay live after an error and say what failed; Safari is told plainly it has no bookmarks API; the extension
+  reaches `[::1]`.
+
+### Changed
+
+- `make check` and CI run vet for macOS, Linux, Windows and FreeBSD, a `go.mod` tidiness check, govulncheck and the
+  tests under the race detector. CI skips superseded runs, caches on `src/go.sum` and builds the extension.
+- Tests make their credentials when they run, and a test fails on one written down. `npm run test:web` runs every
+  test file it finds.
+- The web tools need Node.js 22.12 or newer (`engines` in `web/package.json`).
+- Dependencies: OpenTelemetry 1.47.0, `actions/setup-go` 7, the shared release workflow, and the Go minor and patch
+  group; Dependabot follows the organisation's standard.
+- Docs: the events example sends the token, webhook examples make their secret, `BROFO_NOTIFY_DESKTOP` is described
+  as the off switch it is, and the role address replaces a personal one.
+
+### Added
+
+- Releases carry `LICENSE` and `THIRD_PARTY_NOTICES`, the licence texts of every linked Go module and bundled npm
+  package, written by `make notices` during the release.
+- `POST /api/v1/local/links` makes a one-time sign-in link (owner only); `GET /open/{code}` uses it.
+
 ## [0.2.0] - 2026-11-17
 
 Server settings you can read at a glance: AI is one nested choice with the model picked from the provider's own
