@@ -68,7 +68,12 @@ func OpenSQLite(dir string) (*SQLiteStore, error) {
 
 func (s *SQLiteStore) Close() error { return s.db.Close() }
 
-const ts = time.RFC3339Nano
+// ts is how times are written: fixed width, so text order is time order ("…:05Z" sorted after "…:05.001Z" with
+// RFC3339Nano, which drops trailing zeros). tsRead reads both, so rows written before the change still parse.
+const (
+	ts     = "2006-01-02T15:04:05.000000000Z07:00"
+	tsRead = time.RFC3339Nano
+)
 
 func (s *SQLiteStore) CreateWorkspace(ctx context.Context, id, name string, at time.Time) (Workspace, error) {
 	if err := ValidID(id); err != nil {
@@ -101,8 +106,8 @@ func (s *SQLiteStore) Workspaces(ctx context.Context) ([]Workspace, error) {
 		if err := rows.Scan(&w.ID, &w.Name, &created, &w.Head, &w.Notes, &w.Locked, &w.Archived, &deleted, &w.Color, &w.Icon); err != nil {
 			return nil, err
 		}
-		w.Created, _ = time.Parse(ts, created)
-		w.Deleted, _ = time.Parse(ts, deleted)
+		w.Created, _ = time.Parse(tsRead, created)
+		w.Deleted, _ = time.Parse(tsRead, deleted)
 		out = append(out, w)
 	}
 	return out, rows.Err()
@@ -118,8 +123,8 @@ func (s *SQLiteStore) Workspace(ctx context.Context, id string) (Workspace, erro
 	if errors.Is(err, sql.ErrNoRows) {
 		return Workspace{}, ErrNotFound
 	}
-	w.Created, _ = time.Parse(ts, created)
-	w.Deleted, _ = time.Parse(ts, deleted)
+	w.Created, _ = time.Parse(tsRead, created)
+	w.Deleted, _ = time.Parse(tsRead, deleted)
 	return w, err
 }
 
@@ -207,7 +212,7 @@ func (s *SQLiteStore) History(ctx context.Context, id string) ([]Entry, error) {
 		if err := rows.Scan(&e.Seq, &at, &e.Op, &e.Summary, &e.Base, &e.Snap, &e.Undid, &e.Redone); err != nil {
 			return nil, err
 		}
-		e.At, _ = time.Parse(ts, at)
+		e.At, _ = time.Parse(tsRead, at)
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -234,7 +239,7 @@ func (s *SQLiteStore) State(ctx context.Context, id string, seq int) (Tree, Entr
 	if err != nil {
 		return Tree{}, Entry{}, err
 	}
-	e.At, _ = time.Parse(ts, at)
+	e.At, _ = time.Parse(tsRead, at)
 	if body, err = unpackSnapshot(body); err != nil {
 		return Tree{}, e, err
 	}
@@ -299,7 +304,7 @@ func (s *SQLiteStore) TabSnapshots(ctx context.Context, limit int) ([]TabSnapsho
 		if err := rows.Scan(&t.ID, &at, &t.Reason, &t.Pool); err != nil {
 			return nil, err
 		}
-		t.At, _ = time.Parse(ts, at)
+		t.At, _ = time.Parse(tsRead, at)
 		out = append(out, t)
 	}
 	return out, rows.Err()
@@ -313,7 +318,7 @@ func (s *SQLiteStore) TabSnapshot(ctx context.Context, id string) (TabSnapshot, 
 	if errors.Is(err, sql.ErrNoRows) {
 		return TabSnapshot{}, ErrNotFound
 	}
-	t.At, _ = time.Parse(ts, at)
+	t.At, _ = time.Parse(tsRead, at)
 	t.Windows = w
 	return t, err
 }

@@ -66,6 +66,8 @@ func confirmed(w http.ResponseWriter, r *http.Request, x store.Workspace) bool {
 // deleteWorkspace moves a workspace to the workspace Trash. Nothing is removed: restore brings it back whole. A locked
 // workspace, and the last one in use, cannot be deleted.
 func (s *Server) deleteWorkspace(w http.ResponseWriter, r *http.Request) {
+	s.meta.Lock() // read, check and write as one step: see Server.meta
+	defer s.meta.Unlock()
 	x, ok := s.workspace(w, r)
 	if !ok || !confirmed(w, r, x) {
 		return
@@ -117,6 +119,8 @@ func (s *Server) trashed(w http.ResponseWriter, r *http.Request) (store.Workspac
 
 // restoreWorkspace brings a workspace back from the workspace Trash, history and all.
 func (s *Server) restoreWorkspace(w http.ResponseWriter, r *http.Request) {
+	s.meta.Lock() // read, check and write as one step: see Server.meta
+	defer s.meta.Unlock()
 	x, ok := s.trashed(w, r)
 	if !ok {
 		return
@@ -132,6 +136,8 @@ func (s *Server) restoreWorkspace(w http.ResponseWriter, r *http.Request) {
 
 // purgeWorkspace removes a workspace in the workspace Trash for good. It cannot be undone, so it needs the id typed.
 func (s *Server) purgeWorkspace(w http.ResponseWriter, r *http.Request) {
+	s.meta.Lock() // read, check and write as one step: see Server.meta
+	defer s.meta.Unlock()
 	x, ok := s.trashed(w, r)
 	if !ok || !confirmed(w, r, x) {
 		return

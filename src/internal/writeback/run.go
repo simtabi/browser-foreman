@@ -130,8 +130,8 @@ func ApplyFile(ctx context.Context, s store.Store, j Job, path string, o FileOpt
 	if err != nil {
 		return Applied{}, err
 	}
-	kept := path + ".before-browser-foreman-" + now.UTC().Format("20060102-150405")
-	if err := chromefile.Replace(path, data, kept); err != nil {
+	kept, err := chromefile.Replace(path, data, path+".before-browser-foreman-"+now.UTC().Format("20060102-150405"))
+	if err != nil {
 		return Applied{}, err
 	}
 	again, err := PlanFile(ctx, s, Job{Workspace: j.Workspace, Base: j.Base, Mode: j.Mode}, path)

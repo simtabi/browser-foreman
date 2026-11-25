@@ -94,6 +94,22 @@ func (s *Server) mediaFor(t store.Tree) map[string]any {
 }
 
 // snapJob takes page snapshots in the background.
+// forgetOldSnapJobs keeps the newest keptChecks snapshot jobs and the running one; s.snaps.mu is held.
+func (s *Server) forgetOldSnapJobs() {
+	for len(s.snaps.jobs) > keptChecks {
+		var oldest *snapJob
+		for _, j := range s.snaps.jobs {
+			if j != s.snaps.live && (oldest == nil || j.Started.Before(oldest.Started)) {
+				oldest = j
+			}
+		}
+		if oldest == nil {
+			return
+		}
+		delete(s.snaps.jobs, oldest.ID)
+	}
+}
+
 type snapJob struct {
 	mu        sync.Mutex
 	ID        string    `json:"id"`
@@ -208,6 +224,7 @@ func (s *Server) startSnapshots(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 	j := &snapJob{ID: "sn_" + hex.EncodeToString(b), Workspace: x.ID, Total: len(urls), State: "running", Started: s.Now(), cancel: cancel}
 	s.snaps.jobs[j.ID], s.snaps.live = j, j
+	s.forgetOldSnapJobs()
 	go s.runSnapshots(ctx, j, sn, urls)
 	writeJSON(w, 202, map[string]any{"job": j.view()})
 }

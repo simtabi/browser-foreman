@@ -37,7 +37,7 @@ func (s *SQLiteStore) TabNotes(ctx context.Context) ([]TabNote, error) {
 			return nil, err
 		}
 		_ = json.Unmarshal([]byte(tags), &n.Tags)
-		n.Updated, _ = time.Parse(ts, at)
+		n.Updated, _ = time.Parse(tsRead, at)
 		out = append(out, n)
 	}
 	return out, rows.Err()

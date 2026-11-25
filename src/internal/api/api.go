@@ -80,6 +80,10 @@ type Server struct {
 	Getenv      func(string) string
 	ai          aiState
 	links       localLinks // one-time links that sign a browser in, in local mode
+	// meta makes each change to a workspace's own record (rename, notes, lock, archive, Trash, restore, purge) one
+	// step: they read the whole record and write it back, so two at once lost one change, a rename racing a delete
+	// brought the workspace back out of the Trash, and two deletes could trash the last two workspaces.
+	meta sync.Mutex
 	// Notifier shows desktop notifications (a scheduled re-check's result); nil shows none.
 	Notifier *notifykit.Notifier
 	snaps    snapRunner
@@ -467,6 +471,12 @@ func (s *Server) Run(ctx context.Context) error {
 	defer stop()
 	go s.Dispatch.Run(ctx, ch) // one queue per webhook: a dead receiver holds up only itself
 	srv := s.httpServer()
+	// Every request's context ends when shutdown starts, so the event stream and the extension's long poll return at
+	// once instead of holding Shutdown for its whole timeout.
+	base, stopRequests := context.WithCancel(context.Background())
+	defer stopRequests()
+	srv.BaseContext = func(net.Listener) context.Context { return base }
+	srv.RegisterOnShutdown(stopRequests)
 	cert, key := s.Cfg.Server.TLSCert, s.Cfg.Server.TLSKey
 	if w := s.clearTextWarning(); w != "" && s.Console != nil {
 		fmt.Fprintln(s.Console, w)

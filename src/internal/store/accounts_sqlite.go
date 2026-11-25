@@ -40,7 +40,7 @@ func scanUser(row interface{ Scan(...any) error }) (User, error) {
 		}
 		return User{}, err
 	}
-	u.Created, _ = time.Parse(ts, created)
+	u.Created, _ = time.Parse(tsRead, created)
 	return u, nil
 }
 
@@ -96,8 +96,8 @@ func scanToken(row interface{ Scan(...any) error }) (Token, error) {
 		}
 		return Token{}, err
 	}
-	t.Created, _ = time.Parse(ts, created)
-	t.LastUsed, _ = time.Parse(ts, used)
+	t.Created, _ = time.Parse(tsRead, created)
+	t.LastUsed, _ = time.Parse(tsRead, used)
 	return t, nil
 }
 
@@ -163,8 +163,8 @@ func (s *SQLiteStore) SessionByHash(ctx context.Context, hash string, now time.T
 	if err != nil {
 		return Session{}, err
 	}
-	x.Created, _ = time.Parse(ts, created)
-	x.Expires, _ = time.Parse(ts, expires)
+	x.Created, _ = time.Parse(tsRead, created)
+	x.Expires, _ = time.Parse(tsRead, expires)
 	if !x.Expires.After(now) {
 		return Session{}, ErrNotFound
 	}

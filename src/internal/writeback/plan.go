@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/simtabi/browser-foreman/src/internal/merge"
@@ -51,6 +52,19 @@ func roleOf(title string) string {
 }
 
 func clean(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+// segment is a folder title as one step of a path: "/" (and "%", "#") inside a title are escaped, so "CI/CD" is one
+// folder, not "CI" holding "CD". unsegment undoes it, and drops the "#n" that tells same-named siblings apart.
+var segEsc, segUnesc = strings.NewReplacer("%", "%25", "/", "%2F", "#", "%23"), strings.NewReplacer("%2F", "/", "%23", "#", "%25", "%")
+
+func segment(title string) string { return segEsc.Replace(clean(title)) }
+
+func unsegment(seg string) string {
+	if i := strings.LastIndex(seg, "#"); i >= 0 {
+		seg = seg[:i]
+	}
+	return segUnesc.Replace(seg)
+}
 
 // Item is one bookmark or folder in the report, by where it is in the profile.
 type Item struct {
@@ -119,16 +133,18 @@ func layout(t store.Tree, byPosition bool) (*laid, error) {
 	}
 	l := &laid{roots: map[string]*node{}, marks: map[string]*node{}, folders: map[string]*node{}}
 	seen := map[string]int{}
+	same := map[string]int{} // folders seen per path: the second "Work" beside the first is Work#2
 	var walk func(p *node, kids []*store.Node)
 	walk = func(p *node, kids []*store.Node) {
 		for _, c := range kids {
 			x := &node{n: c, parent: p}
 			p.kids = append(p.kids, x)
 			if c.Kind == store.KindFolder {
-				x.path = p.path + "/" + clean(c.Title)
-				if _, dup := l.folders[x.path]; !dup {
-					l.folders[x.path] = x
+				x.path = p.path + "/" + segment(c.Title)
+				if same[x.path]++; same[x.path] > 1 {
+					x.path += "#" + strconv.Itoa(same[x.path])
 				}
+				l.folders[x.path] = x
 				walk(x, c.Children)
 				continue
 			}
@@ -382,7 +398,7 @@ func ensure(tl *laid, path string, th *laid) *node {
 	}
 	i := strings.LastIndex(path, "/")
 	parent := ensure(tl, path[:i], th)
-	title := path[i+1:]
+	title := unsegment(path[i+1:])
 	if y := th.folders[path]; y != nil {
 		title = y.n.Title
 	}
@@ -458,7 +474,11 @@ func display(path string) string {
 	if rest == "" {
 		return name
 	}
-	return name + "/" + rest
+	parts := strings.Split(rest, "/")
+	for i, p := range parts {
+		parts[i] = unsegment(p)
+	}
+	return name + "/" + strings.Join(parts, "/")
 }
 
 func item(x *node) Item {

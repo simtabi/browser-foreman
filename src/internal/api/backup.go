@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -64,7 +65,8 @@ func (s *Server) restore(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "not a readable backup: "+err.Error())
 		return
 	}
-	res, err := store.Restore(r.Context(), s.Data, b, s.Now())
+	// Not cut short when the browser disconnects: a restore runs to its end, or rolls itself back.
+	res, err := store.Restore(context.WithoutCancel(r.Context()), s.Data, b, s.Now())
 	if err != nil {
 		writeErr(w, 400, err.Error())
 		return

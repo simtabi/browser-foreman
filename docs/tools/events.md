@@ -55,7 +55,7 @@ of that buffer, the stream starts with `: some events were missed; reload the st
 
 | `linkcheck.started` | `{id, workspace, total}` |
 | `link.checked` | an address's status changed: `{url, status, previous, final, note}` |
-| `linkcheck.finished` | `{id, workspace, state, checked, total, changed, dead}` |
+| `linkcheck.finished` | `{id, workspace, state, checked, total, changed, dead, save_errors}`; `save_errors` counts results that could not be saved |
 
 | `tabs.snapshot.saved` | `{id, reason, windows, tabs, incognito_windows, incognito_tabs}`; never pages |
 | `tabs.closed` | `{closed, skipped, undo_snapshot}` |
