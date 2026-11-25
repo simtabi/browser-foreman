@@ -11,10 +11,15 @@ password of yours is ever used, and only pages on the public internet are drawn:
 local network is refused before the browser starts. The picture kept is a small JPEG, half the size of the window.
 Site icons are kept the same way, from the bookmark file or the page.
 
+A blank picture (one colour, nearly edge to edge: a page pictured before it drew) is taken once more with three times
+the wait, and is never kept; the job counts it as failed. A blank snapshot already kept, such as one imported from the
+Python version, counts as missing, so the next *Refresh* takes it again. The job's `kept` counts the snapshots it
+looked at and found good.
+
 | Route | Role | Does |
 |---|---|---|
 | `POST /api/v1/snapshots` | editor | body `{workspace, nodes?, force?}`: snapshots in the background; `202 {"job"}` |
-| `GET /api/v1/snapshots/{id}` | viewer | the job's progress |
+| `GET /api/v1/snapshots/{id}` | viewer | the job's progress: `total`, `done`, `failed`, `skipped` (not public), `kept` |
 | `POST /api/v1/snapshots/{id}/cancel` | editor | stops it |
 | `GET /thumbs/{name}`, `GET /favicons/{name}` | viewer | the pictures |
 

@@ -154,7 +154,7 @@ if (boot) {
   for (const i of page.data.keep) pageIdsByURL.set(i.u, [...(pageIdsByURL.get(i.u) ?? []), i.id]);
   // A refresh re-checks links and takes snapshots: of the chosen pages again, or (for very many, Refresh all) of those
   // with none yet, since each snapshot starts a browser. No Chrome installed: checking alone.
-  type SnapView = { id: string; total: number; done: number; failed: number; skipped: number; state: string };
+  type SnapView = { id: string; total: number; done: number; failed: number; skipped: number; kept?: number; state: string };
   const snapOf = new Map<string, { id: string; urls: string[] }>();
   const refresh = async (ids: number[]): Promise<{ job: string; total: number }> => {
     const nodes = ids.map(id => page.ids[id - 1]).filter((x): x is string => !!x);
@@ -181,7 +181,7 @@ if (boot) {
     if (!v.done || !snap) return { ...base, phase: "checking", done: v.done, rendered: 0, render_total: 0 };
     let sv: SnapView;
     try { sv = (await call<{ job: SnapView }>("GET", `snapshots/${encodeURIComponent(snap.id)}`)).job; } catch { return { ...base, phase: "rendering", done: true, rendered: 0, render_total: 0 }; }
-    const rendered = sv.done + sv.failed + sv.skipped;
+    const rendered = sv.done + sv.failed + sv.skipped + (sv.kept ?? 0);
     if (sv.state === "running") return { ...base, phase: "rendering", done: false, rendered, render_total: sv.total };
     for (const u of snap.urls) {  // only beside a check result: a snapshot alone must not clear a page's status
       const pids = (pageIdsByURL.get(u) ?? []).filter(pid => results[pid]);
