@@ -1159,7 +1159,7 @@ const APP = {name: "Browser Foreman", version: "0.1.0", year: 2026, licence: "MI
   tagline: "Clean bookmarks, safe tabs.",
   description: "Keeps what your browser should never lose. For bookmarks: finds duplicates, checks every link, separates dead pages from dead sites, sorts them into one structure built on your own folders, and writes a standard file your browser imports. For tabs: saves every open window and tab, incognito included if you choose, so after a crash you can see what was open and reopen it. Everything runs on this computer.",
   company: "Simtabi LLC", site: "https://simtabi.com", oss: "https://opensource.simtabi.com", github: "https://github.com/simtabi",
-  maintainer: "Imani Manyara", maintainerEmail: "imani@simtabi.com", contact: "opensource@simtabi.com", security: "security@simtabi.com",
+  maintainer: "Imani Manyara", maintainerEmail: "opensource@simtabi.com", contact: "opensource@simtabi.com", security: "security@simtabi.com",
   author: "Imani Manyara", org: "Simtabi LLC"};
 const CREDITS = [
   ["Go", "1.26", "BSD-3-Clause", "https://go.dev", "The language the server is written in"],
