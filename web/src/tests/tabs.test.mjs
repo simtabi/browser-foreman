@@ -105,5 +105,13 @@ check("autosave line", () => {
   const e = await bad.get();
   check("single read: a failed read becomes the error value", () => assert.deepEqual(e, { error: "down", _got: 1 }));
 }
-assert.equal(checks, 19);
+// A selection follows its tab, not a position: a re-read that moves tabs along never selects the tab that moved in.
+{
+  const a = { browser: "Safari", windowN: 1, pos: 2, url: "https://a.example/" };
+  const b = { browser: "Safari", windowN: 1, pos: 2, url: "https://b.example/" }; // a closed, b slid into its place
+  assert.notEqual(T.keyOf(a), T.keyOf(b), "by position alone, the next tab would take over the selection"); checks++;
+  const c = { browser: "Chrome", windowId: 9, tabId: 41, windowN: 1, pos: 3, url: "https://a.example/" };
+  assert.equal(T.keyOf(c), T.keyOf({ ...c, pos: 1, url: "https://a.example/#moved" }), "with its own id, a tab keeps its key"); checks++;
+}
+assert.equal(checks, 21);
 console.log(`${checks} checks passed`);

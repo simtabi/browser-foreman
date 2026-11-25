@@ -59,7 +59,11 @@ export const closeTabs = (tabs: OpenTab[]): Promise<CloseResult> =>
     items: tabs.filter(t => isWeb(t.url)).map(t => ({ browser: t.browser, window_id: t.windowId, tab_id: t.tabId, pos: t.pos, url: t.url })),
   });
 
-export const keyOf = (t: OpenTab): string => `${t.browser}|${t.windowId ?? t.windowN}|${t.tabId ?? t.pos}`;
+/** A tab's key for a selection: its browser's own ids when it has them. Without ids (a browser read by position) the
+ *  address is part of the key, so when a re-read moves tabs along, a selected tab drops out instead of the tab that took
+ *  its place being selected, and then closed. */
+export const keyOf = (t: OpenTab): string =>
+  t.tabId != null ? `${t.browser}|${t.windowId ?? t.windowN}|${t.tabId}` : `${t.browser}|${t.windowN}|${t.pos}|${t.url}`;
 
 // ---- windows as the Open tabs view lists them: flat records, grouped and sorted any way (moved from page.ts) ----
 /** One window in a read or snapshot: its browser, its number in that browser (1-based), and whether it is incognito.
