@@ -5,8 +5,11 @@ All notable changes are recorded here, following [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
-A security, reliability and hygiene pass over the whole project: the server, the web page, the extension, the tests,
-CI and the release.
+## [0.3.0] - 2026-11-25
+
+A security, reliability and hygiene pass over the whole project (the server, the web page, the extension, the tests,
+CI and the release), with two-way sync between a browser and its workspace, *Save this page* in the extension and a
+`postgres` storage driver.
 
 ### Security
 

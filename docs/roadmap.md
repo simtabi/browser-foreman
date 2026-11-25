@@ -109,7 +109,7 @@ Added while the phases above were built, each with tests and docs:
 
 - v0.2.0: Settings › *Server settings* redesigned, with AI as one nested choice and the model picked from the
   provider's own list (`GET /api/v1/ai/models`); `make check` lints at CI's version.
-- Next release (in `CHANGELOG.md` under *Unreleased*): a security and reliability audit; two-way sync between a
+- v0.3.0: a security and reliability audit; two-way sync between a
   browser and its workspace; *Save this page* and a dead-page badge in the extension; a `postgres` storage driver;
   link results shown while a check runs; `webhook` and `doctor` commands; blank snapshots taken again.
 - Left after it: true windowing of the bookmark list for libraries past about 50,000 bookmarks (measured: a click deep
