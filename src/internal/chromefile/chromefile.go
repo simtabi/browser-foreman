@@ -241,11 +241,10 @@ func Checksum(roots map[string]any) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// Running says whether the browser that owns the profile folder is running: Chromium holds a SingletonLock link in
-// its user data folder (the profile folder's parent) while it runs.
+// Running says whether the browser that owns the profile folder is running, from the lock Chromium keeps in its user
+// data folder (the profile folder's parent) while it runs. How that lock looks differs by system; see running.
 func Running(profileDir string) bool {
-	_, err := os.Lstat(filepath.Join(filepath.Dir(profileDir), "SingletonLock"))
-	return err == nil
+	return running(filepath.Dir(profileDir))
 }
 
 // Replace writes data as the profile's Bookmarks file, after copying the file as it is to keep (a path beside it that
