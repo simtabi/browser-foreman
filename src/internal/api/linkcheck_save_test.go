@@ -106,6 +106,7 @@ func TestResultsSayWhatEachChangedLinkWasBefore(t *testing.T) {
 		t.Fatal(err)
 	}
 	job.Wait()
+	waitFinished(t, s) // the last results are saved after Wait returns, then linkcheck.finished is published
 	var out struct{ Previous map[string]string }
 	_ = json.Unmarshal(send(s.Handler(), "GET", "/api/v1/linkchecks/"+job.ID+"?results=1", "").Body.Bytes(), &out)
 	if out.Previous[site.URL+"/a"] != "ok" {
@@ -114,4 +115,19 @@ func TestResultsSayWhatEachChangedLinkWasBefore(t *testing.T) {
 	if _, ok := out.Previous[site.URL+"/b"]; ok {
 		t.Fatalf("a link dead before and after is listed as changed: %v", out.Previous)
 	}
+}
+
+// waitFinished waits for linkcheck.finished, which the server publishes once a check's last results are saved.
+func waitFinished(t *testing.T, s *Server) {
+	t.Helper()
+	for range 200 {
+		evs, _ := s.Bus.Since(0)
+		for _, e := range evs {
+			if e.Type == "linkcheck.finished" {
+				return
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("no linkcheck.finished")
 }
