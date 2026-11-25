@@ -185,7 +185,7 @@ func (s *SQLiteStore) Commit(ctx context.Context, id string, base int, c Change,
 	if err != nil {
 		return Entry{}, err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO snapshots (hash, body) VALUES (?, ?)`, hash, packed); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO snapshots (hash, body) VALUES (?, ?) ON CONFLICT (hash) DO NOTHING`, hash, packed); err != nil {
 		return Entry{}, err
 	}
 	e := Entry{Seq: head + 1, At: at.UTC(), Op: c.Op, Summary: c.Summary, Base: base, Snap: hash, Undid: c.Undid, Redone: c.Redone}
@@ -283,7 +283,8 @@ func (s *SQLiteStore) SaveTabs(ctx context.Context, t TabSnapshot) error {
 	if w == nil {
 		w = json.RawMessage("null")
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO tabs (id, at, reason, pool, windows) VALUES (?, ?, ?, ?, ?)`, t.ID, t.At.UTC().Format(ts), t.Reason, t.Pool, []byte(w))
+	_, err := s.db.ExecContext(ctx, `INSERT INTO tabs (id, at, reason, pool, windows) VALUES (?, ?, ?, ?, ?)
+	  ON CONFLICT (id) DO UPDATE SET at = excluded.at, reason = excluded.reason, pool = excluded.pool, windows = excluded.windows`, t.ID, t.At.UTC().Format(ts), t.Reason, t.Pool, []byte(w))
 	return err
 }
 
