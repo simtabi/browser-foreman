@@ -8,6 +8,8 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -87,6 +89,28 @@ func TestAnExtensionSavesThePageItIsOn(t *testing.T) {
 	}
 	if w := send(h, "POST", "/api/v1/extension/pages", `{"workspace":"main","url":"https://a.example/"}`); w.Code != 401 {
 		t.Errorf("the owner's own token is not an extension: %d", w.Code)
+	}
+	// A snapshot already kept for the page is not replaced by the extension's picture.
+	thumb := filepath.Join(s.Media.Dir, "thumbs", media.ThumbKey("https://pkg.go.dev/net/http")+".jpg")
+	before, _ := os.ReadFile(thumb)
+	other := image.NewRGBA(image.Rect(0, 0, 200, 120))
+	for i := range other.Pix {
+		other.Pix[i] = byte(i * 7)
+	}
+	if code, _ := save("https://pkg.go.dev/net/http", "again", dataURL(t, other)); code != 200 {
+		t.Fatal(code)
+	}
+	if after, _ := os.ReadFile(thumb); !bytes.Equal(before, after) {
+		t.Error("the kept snapshot was replaced")
+	}
+	// A save the workspace refuses keeps no picture.
+	x, _ := s.Data.Workspace(context.Background(), "main")
+	x.Locked = true
+	if err := s.Data.UpdateWorkspace(context.Background(), x); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := save("https://locked.example/", "", dataURL(t, page)); code != 423 || s.Media.HasThumb("https://locked.example/") {
+		t.Errorf("locked: %d, picture kept %v", code, s.Media.HasThumb("https://locked.example/"))
 	}
 }
 

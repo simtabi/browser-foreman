@@ -27,6 +27,10 @@ func savedFolder(browser string) string { return "Saved from " + browser }
 // (made when missing), and its picture as the page's snapshot. It only adds: an address the workspace already holds
 // is left where it is (200, already), and nothing else in the workspace is changed.
 func (s *Server) savePage(w http.ResponseWriter, r *http.Request, browser string) {
+	if store.RoleRank(principal(r).Role) < store.RoleRank(store.RoleEditor) {
+		writeErr(w, 403, "this needs the editor role")
+		return
+	}
 	var in struct {
 		Workspace string `json:"workspace"`
 		URL       string `json:"url"`
@@ -66,7 +70,7 @@ func (s *Server) savePage(w http.ResponseWriter, r *http.Request, browser string
 		return
 	}
 	if found := findURL(t.Root, in.URL); found != nil {
-		s.keepPicture(r, in.URL, pic)
+		s.keepPicture(r, in.URL, pic) // only where the page has none yet
 		writeJSON(w, 200, map[string]any{"already": true, "node": found.ID})
 		return
 	}
@@ -102,17 +106,19 @@ func (s *Server) savePage(w http.ResponseWriter, r *http.Request, browser string
 		return
 	}
 	events = append(events, more...)
-	s.keepPicture(r, in.URL, pic)
-	s.commit(w, r, x, 0, false, false, store.Change{Op: "edit", Summary: "Saved " + title + " from " + browser, Tree: next}, events, "committed")
+	// The picture is kept once the bookmark is: a save the workspace refuses (locked, changed meanwhile) keeps none.
+	s.commitWith(w, r, x, 0, false, false, store.Change{Op: "edit", Summary: "Saved " + title + " from " + browser, Tree: next}, events, "committed",
+		nil, func(store.Entry) error { s.keepPicture(r, in.URL, pic); return nil })
 }
 
-// keepPicture keeps a saved page's picture as its snapshot, unless it is blank. A failure to keep it does not fail
-// the save: the next Refresh takes one.
+// keepPicture keeps a saved page's picture as its snapshot, unless it is blank or the page has one already (snapshots
+// are kept by address, for every workspace; a Refresh takes a new one). A failure to keep it does not fail the save.
 func (s *Server) keepPicture(r *http.Request, raw string, pic image.Image) {
-	if pic == nil || media.Blank(pic) {
+	m := s.media(r)
+	if pic == nil || media.Blank(pic) || m.HasThumb(raw) {
 		return
 	}
-	if err := s.media(r).SaveThumb(raw, pic); err != nil {
+	if err := m.SaveThumb(raw, pic); err != nil {
 		s.say("A saved page's picture was not kept: %v", err)
 	}
 }

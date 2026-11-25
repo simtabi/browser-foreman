@@ -168,7 +168,8 @@ again, so a fresh `make extension` takes effect without visiting the browser's e
   kept in sync with it.
 - **Save this page.** The popup's *Save this page* adds the page the tab shows to a workspace you choose, in a top
   folder named *Saved from <browser>* (made the first time), with a picture of the tab as its snapshot. It only adds:
-  an address the workspace already holds is left where it is, and nothing else in the workspace changes. The
+  an address the workspace already holds is left where it is, nothing else in the workspace changes, and a snapshot
+  the page already has is kept (*Refresh* takes a new one). It needs the editor role. The
   browser's own pages cannot be pictured, and are saved without one. Pressing the toolbar button is what lets the
   extension picture the tab (the `activeTab` permission, from 0.1.10).
 - **A badge on dead pages.** On a page Browser Foreman has confirmed dead (two checks a day apart), the toolbar
