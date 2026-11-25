@@ -34,9 +34,11 @@ func linkWorkspace(t *testing.T, s *Server, base string) {
 	}
 }
 
+// waitCheck waits for a check to finish, up to 15 s: 4 s (200 × 20 ms) was too tight under the race detector on a
+// busy machine, where a throttled site's pause alone takes a good part of it.
 func waitCheck(t *testing.T, h http.Handler, id string) map[string]store.LinkResult {
 	t.Helper()
-	for range 200 {
+	for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); {
 		var out struct {
 			Job     struct{ Done bool }
 			Results map[string]store.LinkResult
