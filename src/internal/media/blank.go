@@ -59,10 +59,6 @@ func Blank(img image.Image) bool {
 	return float64(near) >= blankShare*float64(len(samples))
 }
 
-func less(a, b [3]uint8) bool {
-	return a[0] < b[0] || a[0] == b[0] && (a[1] < b[1] || a[1] == b[1] && a[2] < b[2])
-}
-
 func abs(x int) int {
 	if x < 0 {
 		return -x
