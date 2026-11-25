@@ -40,7 +40,7 @@ func (f *fakeBrowsers) Launch(_ context.Context, argv []string) error {
 }
 
 func TestBrowsersAndOpening(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	fake := s.Browsers.Platform.(*fakeBrowsers)
 	w := send(h, "GET", "/api/v1/browsers", "")
@@ -78,7 +78,7 @@ func TestBrowsersAndOpening(t *testing.T) {
 }
 
 func TestPreferencesAndRoles(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	if w := send(h, "PUT", "/api/v1/preferences", `{"open_with":["Google Chrome","Safari"],"include_incognito":true}`); w.Code != 200 {
 		t.Fatalf("%d %s", w.Code, w.Body)

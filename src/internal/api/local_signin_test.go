@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/rand"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -48,7 +49,7 @@ func TestTheLocalPageNeedsAOneTimeLink(t *testing.T) {
 	if c == nil || !c.HttpOnly || c.SameSite != http.SameSiteStrictMode {
 		t.Fatalf("cookie %+v", c)
 	}
-	if w := get(h, "/", c); w.Code != 200 || !strings.Contains(w.Body.String(), `"token":"tok"`) {
+	if w := get(h, "/", c); w.Code != 200 || !strings.Contains(w.Body.String(), `"token":"`+apiTok+`"`) {
 		t.Fatalf("with the cookie: %d", w.Code)
 	}
 	if w := get(h, path, nil); w.Code != http.StatusForbidden {
@@ -59,7 +60,7 @@ func TestTheLocalPageNeedsAOneTimeLink(t *testing.T) {
 	if w := get(h, "/", forged); w.Code != http.StatusUnauthorized {
 		t.Fatalf("a forged cookie: %d", w.Code)
 	}
-	s.Cfg.APIToken = "rotated" + strings.Repeat("x", 20)
+	s.Cfg.APIToken = rand.Text()
 	if w := get(s.Handler(), "/", c); w.Code != http.StatusUnauthorized {
 		t.Fatalf("a new token must end the old sign-ins: %d", w.Code)
 	}

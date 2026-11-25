@@ -78,7 +78,7 @@ func TestLinkChecksStoreResultsAndReportChanges(t *testing.T) {
 		_, _ = w.Write([]byte("hello"))
 	}))
 	defer site.Close()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	linkWorkspace(t, s, site.URL)
 	h := s.Handler()
 
@@ -128,7 +128,7 @@ func TestOneCheckAtATimeAndControls(t *testing.T) {
 		}
 	}))
 	defer site.Close()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	linkWorkspace(t, s, site.URL)
 	h := s.Handler()
 	id := start(t, h, `{"workspace":"links"}`)
@@ -173,7 +173,7 @@ func TestADeadLinkIsConfirmedADayLaterAndGetsItsArchiveCopy(t *testing.T) {
 		}
 	}))
 	defer site.Close()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	s.WaybackAPI = site.URL + "/wayback"
 	linkWorkspace(t, s, site.URL)
 	h := s.Handler()
@@ -221,7 +221,7 @@ func TestADeadLinkIsConfirmedADayLaterAndGetsItsArchiveCopy(t *testing.T) {
 }
 
 func TestFailingGitHubLinksAreSettledThroughTheAPI(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	ctx := context.Background()
 	t0 := time.Now().Add(-48 * time.Hour)
 	s.Checker.Now = func() time.Time { return t0.Add(48 * time.Hour) }
@@ -281,7 +281,7 @@ func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f
 
 // A run asks GitHub's API about the GitHub links it found failing, once it finishes.
 func TestARunAsksGitHubAboutItsFailingGitHubLinks(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	ctx := context.Background()
 	_, _ = s.Data.CreateWorkspace(ctx, "links", "Links", time.Now())
@@ -311,7 +311,7 @@ func TestARunAsksGitHubAboutItsFailingGitHubLinks(t *testing.T) {
 
 // When gh cannot answer at all (signed out, no network), the run's own results stay and nothing more is asked.
 func TestGitHubThatCannotAnswerChangesNothing(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	ctx := context.Background()
 	asked := 0
 	s.GitHub = func(context.Context, string) linkcheck.GitHubAnswer { asked++; return linkcheck.GitHubAnswer{} }
@@ -326,7 +326,7 @@ func TestGitHubThatCannotAnswerChangesNothing(t *testing.T) {
 
 // Links a plain request could not settle are opened in Chrome and judged from what it shows.
 func TestBlockedLinksAreSettledInChrome(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	ctx := context.Background()
 	words := strings.Repeat("Plenty of real words on this page. ", 10)
 	var mu sync.Mutex // Render runs the fake from several goroutines at once
@@ -371,7 +371,7 @@ func TestBlockedLinksAreSettledInChrome(t *testing.T) {
 
 // A run opens in Chrome the links it could not settle, once it finishes.
 func TestARunSettlesBlockedLinksInChrome(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	ctx := context.Background()
 	_, _ = s.Data.CreateWorkspace(ctx, "links", "Links", time.Now())
@@ -401,7 +401,7 @@ func TestARunSettlesBlockedLinksInChrome(t *testing.T) {
 
 // Failing Stack Overflow questions are settled through the Stack Exchange API, a hundred to a request.
 func TestFailingStackOverflowLinksAreSettledThroughTheAPI(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	ctx := context.Background()
 	s.Checker.Client.Transport = roundTrip(func(r *http.Request) (*http.Response, error) {
 		body := `{"items":[]}`
@@ -426,7 +426,7 @@ func TestFailingStackOverflowLinksAreSettledThroughTheAPI(t *testing.T) {
 
 // A run asks the Stack Exchange API about the Stack Overflow links it could not settle, once it finishes.
 func TestARunAsksStackExchange(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	ctx := context.Background()
 	_, _ = s.Data.CreateWorkspace(ctx, "links", "Links", time.Now())

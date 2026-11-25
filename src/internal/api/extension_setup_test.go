@@ -14,7 +14,7 @@ import (
 )
 
 func TestOneClickPairing(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	var console bytes.Buffer
 	s.Console = &console
 	h := s.Handler()
@@ -101,7 +101,7 @@ func TestOneClickPairing(t *testing.T) {
 }
 
 func TestAnExtensionTokenIsLimitedToTheExtension(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	tok := paired(t, s, h, "Google Chrome")
 	if w := send(h, "POST", "/api/v1/workspaces", `{"id":"work","name":"Work"}`); w.Code != 201 {
@@ -142,7 +142,7 @@ func TestAnExtensionTokenIsLimitedToTheExtension(t *testing.T) {
 }
 
 func TestCommandsDoNotPileUp(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	for i := range maxQueued {
 		if w := send(h, "POST", "/api/v1/extension/commands", `{"browser":"Opera","kind":"open","urls":["https://go.dev/`+fmt.Sprint(i)+`"]}`); w.Code != 202 {
@@ -175,7 +175,7 @@ func TestCommandsDoNotPileUp(t *testing.T) {
 }
 
 func TestGuidedInstall(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	s.ExtensionRoot = t.TempDir()
 	fake := s.Browsers.Platform.(*fakeBrowsers)

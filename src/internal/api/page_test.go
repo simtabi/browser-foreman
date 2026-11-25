@@ -42,7 +42,7 @@ func TestPageInLocalMode(t *testing.T) {
 	_, _ = s.Data.Commit(ctx, "main", 1, store.Change{Op: "edit", Summary: "x", Tree: tr}, time.Now())
 	w := get(s.Handler(), "/", signedIn(t, s))
 	body := w.Body.String()
-	if w.Code != 200 || !strings.Contains(body, `window.BF_V1 = {`) || !strings.Contains(body, `"token":"tok"`) {
+	if w.Code != 200 || !strings.Contains(body, `window.BF_V1 = {`) || !strings.Contains(body, `"token":"`+apiTok+`"`) {
 		t.Fatalf("%d %s", w.Code, body)
 	}
 	if strings.Contains(body, "</script><script>alert") || strings.Contains(body, " ") {
@@ -76,12 +76,12 @@ func TestPageWithoutTokenOrUI(t *testing.T) {
 	if w := get(withUI(newServer(t, "")).Handler(), "/", nil); w.Code != 503 || strings.Contains(w.Body.String(), "BF_V1") {
 		t.Fatalf("no token: %d", w.Code)
 	}
-	unbuilt := newServer(t, "tok")
+	unbuilt := newServer(t, apiTok)
 	unbuilt.UI = fstest.MapFS{}
 	if w := get(unbuilt.Handler(), "/", nil); w.Code != 200 || !strings.Contains(w.Body.String(), "make web") {
 		t.Fatalf("unbuilt UI: %d %s", w.Code, w.Body)
 	}
-	empty := withUI(newServer(t, "tok"))
+	empty := withUI(newServer(t, apiTok))
 	if w := get(empty.Handler(), "/", signedIn(t, empty)); !strings.Contains(w.Body.String(), "browser-foreman import") {
 		t.Fatalf("no workspaces: %s", w.Body)
 	}

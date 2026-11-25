@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"net"
@@ -69,8 +70,8 @@ func TestDescribeNeverShowsASecret(t *testing.T) {
 }
 
 func TestApplyWritesKeysToEnvAndKeepsItsComments(t *testing.T) {
-	p := setup(t, `{"server":{"addr":"127.0.0.1:8765"}}`, "# keep me\nANTHROPIC_BASE_URL=https://example.test\nBROFO_API_TOKEN=abc\n")
-	key := strings.Repeat("k", 12)
+	p := setup(t, `{"server":{"addr":"127.0.0.1:8765"}}`, "# keep me\nANTHROPIC_BASE_URL=https://example.test\nBROFO_API_TOKEN="+rand.Text()+"\n")
+	key := rand.Text()
 	res, err := Apply(p, noEnv, map[string]json.RawMessage{"ANTHROPIC_API_KEY": raw(key), "ai.provider": raw("anthropic")}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -223,7 +224,7 @@ func TestTagsLoaderAndEnvExampleAgree(t *testing.T) {
 
 func TestInitMakesEnvFromTheExample(t *testing.T) {
 	p := Paths{Config: t.TempDir(), State: t.TempDir()}
-	tok := strings.Repeat("t", 16)
+	tok := rand.Text()
 	if _, err := Init(p, tok); err != nil {
 		t.Fatal(err)
 	}

@@ -24,7 +24,7 @@ func TestBackupDownloadAndRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 	plain, _ := io.ReadAll(zr)
-	if strings.Contains(string(plain), "tok") && strings.Contains(string(plain), "api_token") {
+	if strings.Contains(string(plain), apiTok) && strings.Contains(string(plain), "api_token") {
 		t.Fatal("the API token reached a backup")
 	}
 	// Restore the gzipped file into the same server: the backup's workspace comes back beside the live one.
@@ -41,7 +41,7 @@ func TestBackupDownloadAndRestore(t *testing.T) {
 	if w := send(h, "POST", "/api/v1/restore", `{"format":"nope","version":1}`); w.Code != 400 {
 		t.Fatalf("not a backup %d", w.Code)
 	}
-	if w := send(h, "GET", "/api/v1/settings", ""); w.Code != 200 || strings.Contains(w.Body.String(), `"tok"`) || !strings.Contains(w.Body.String(), `"api_token_set":true`) {
+	if w := send(h, "GET", "/api/v1/settings", ""); w.Code != 200 || strings.Contains(w.Body.String(), `"`+apiTok+`"`) || !strings.Contains(w.Body.String(), `"api_token_set":true`) {
 		t.Fatalf("settings %d %s", w.Code, w.Body)
 	}
 }

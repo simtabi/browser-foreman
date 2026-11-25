@@ -12,7 +12,7 @@ import (
 // Two copies of one browser on one computer (your Chrome, and another Chrome) both call themselves "Google Chrome".
 // Only one is connected at a time: approving the second pins it and revokes the first, which is told so (401).
 func TestTwoCopiesOfABrowserAreNeverBothConnected(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	connect := func(instance string) string {
 		t.Helper()
@@ -65,7 +65,7 @@ func TestTwoCopiesOfABrowserAreNeverBothConnected(t *testing.T) {
 }
 
 func TestPairingByCodePinsToo(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	code := func() string {
 		var c struct{ Code string }
@@ -91,7 +91,7 @@ func TestPairingByCodePinsToo(t *testing.T) {
 // A second copy asking by itself while another copy is connected is refused, so it stops asking; pressing Connect in
 // it (replace) may ask, and approving that moves the browser.
 func TestASecondCopyMayAskOnlyOnPurpose(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	w := fromExtension(h, "POST", "/api/v1/extension/requests", `{"browser":"Google Chrome","version":"0.1.8","instance":"aaaa1111"}`, "")
 	var q struct{ ID string }

@@ -42,7 +42,7 @@ func (f *fakeLocator) OpenIn(_ context.Context, in browsers.Instance, url string
 }
 
 func TestSetupOpensInThePagesOwnCopy(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	loc := &fakeLocator{}
 	s.Browsers.Platform = loc

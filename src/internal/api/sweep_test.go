@@ -36,7 +36,7 @@ func waitSent(rec *notifykit.Recorder, want int) []notifykit.Notification {
 func TestAScheduledRecheckNotifiesOnceAboutConfirmedDeadLinks(t *testing.T) {
 	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) }))
 	defer site.Close()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	var rec *notifykit.Recorder
 	s.Notifier, rec = recorded(t)
 	ctx := context.Background()
@@ -59,7 +59,7 @@ func TestAScheduledRecheckNotifiesOnceAboutConfirmedDeadLinks(t *testing.T) {
 func TestACheckStartedFromThePageDoesNotNotify(t *testing.T) {
 	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) }))
 	defer site.Close()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	var rec *notifykit.Recorder
 	s.Notifier, rec = recorded(t)
 	ctx := context.Background()

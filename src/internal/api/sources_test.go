@@ -43,7 +43,7 @@ func multipartBody(t *testing.T, files map[string]string) (string, string) {
 }
 
 func TestSourcesMergeFilesAndTrashTheCopies(t *testing.T) {
-	h := newServer(t, "tok").Handler()
+	h := newServer(t, apiTok).Handler()
 	if w := send(h, "POST", "/api/v1/workspaces", `{"id":"main","name":"All"}`); w.Code != 201 {
 		t.Fatalf("create %d", w.Code)
 	}
@@ -113,7 +113,7 @@ func TestSourcesMergeFilesAndTrashTheCopies(t *testing.T) {
 }
 
 func TestSourcesFromAnotherWorkspaceAndSeparate(t *testing.T) {
-	h := newServer(t, "tok").Handler()
+	h := newServer(t, apiTok).Handler()
 	for _, id := range []string{"a", "b"} {
 		if w := send(h, "POST", "/api/v1/workspaces", `{"id":"`+id+`","name":"W `+id+`"}`); w.Code != 201 {
 			t.Fatal(w.Code)
@@ -145,7 +145,7 @@ func TestSourcesFromAnotherWorkspaceAndSeparate(t *testing.T) {
 }
 
 func TestUpdateReadsTheSourcesAgain(t *testing.T) {
-	h := newServer(t, "tok").Handler()
+	h := newServer(t, apiTok).Handler()
 	for _, id := range []string{"up", "main"} {
 		if w := send(h, "POST", "/api/v1/workspaces", `{"id":"`+id+`","name":"`+id+`"}`); w.Code != 201 {
 			t.Fatal(w.Code)

@@ -14,7 +14,7 @@ import (
 )
 
 func TestSortPlansThenAppliesAsOneEntry(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	s.Cfg.Storage.Path = t.TempDir()
 	h := s.Handler()
 	ctx := context.Background()

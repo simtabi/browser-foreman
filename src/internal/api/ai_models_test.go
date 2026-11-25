@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -33,7 +34,7 @@ func TestAIModelsForSettings(t *testing.T) {
 		t.Fatalf("no key: %+v in %v", got, time.Since(start))
 	}
 
-	key := strings.Repeat("o", 16)
+	key := rand.Text()
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+key {
 			http.Error(w, "no", http.StatusUnauthorized)
@@ -42,7 +43,7 @@ func TestAIModelsForSettings(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":[{"id":"gpt-5"},{"id":"tts-1"}]}`))
 	}))
 	defer up.Close()
-	env := "BROFO_API_TOKEN=tok\nOPENAI_API_KEY=" + key + "\n"
+	env := "BROFO_API_TOKEN=" + apiTok + "\nOPENAI_API_KEY=" + key + "\n"
 	cfg := `{"ai":{"openai_url":"` + up.URL + `"}}`
 	if err := os.WriteFile(filepath.Join(p.Config, ".env"), []byte(env), 0o600); err != nil {
 		t.Fatal(err)
