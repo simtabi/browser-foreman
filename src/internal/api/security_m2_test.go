@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/rand"
 	"encoding/json"
+	"github.com/simtabi/browser-foreman/src/internal/store"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -80,5 +81,29 @@ func TestPicturesNeedTheSignIn(t *testing.T) {
 	h.ServeHTTP(w, r)
 	if w.Code != 200 {
 		t.Fatalf("the signed-in page: %d", w.Code)
+	}
+}
+
+// Five wrong passwords from one place lock that place out, not the person: the owner still signs in from elsewhere.
+func TestFailingWithTheOwnersNameDoesNotLockTheOwnerOut(t *testing.T) {
+	s := accountsServer(t)
+	p := pw(t)
+	addUser(t, s, "owner", store.RoleOwner, p)
+	h := s.Handler()
+	try := func(addr, password string) int {
+		r := httptest.NewRequest("POST", "/api/v1/auth/signin", strings.NewReader(`{"username":"owner","password":"`+password+`"}`))
+		r.Host, r.RemoteAddr = host, addr
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+	for range 6 {
+		try("198.51.100.9:4000", rand.Text())
+	}
+	if c := try("198.51.100.9:4000", p); c != 429 {
+		t.Fatalf("the guessing address is not locked out: %d", c)
+	}
+	if c := try("127.0.0.1:4000", p); c != 200 {
+		t.Fatalf("the owner was locked out by someone else's guesses: %d", c)
 	}
 }

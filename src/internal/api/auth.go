@@ -139,8 +139,8 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	return true
 }
 
-// signIn checks a name and password and starts a session. Failures are counted per name and per address; too many
-// lock both out for a while (429 with Retry-After). A missing name costs the same time as a wrong password.
+// signIn checks a name and password and starts a session. Failures are counted per name and address, and per
+// address; too many lock them out for a while (429 with Retry-After). A missing name costs the same time as a wrong password.
 func (s *Server) signIn(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Username string `json:"username"`
@@ -150,7 +150,10 @@ func (s *Server) signIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := s.Now()
-	keys := []string{"user:" + strings.ToLower(in.Username), "addr:" + s.clientKey(r)}
+	// Locked per name and address together, and per address: a guesser elsewhere cannot lock the owner out of their
+	// own sign-in by failing five times with the owner's name (each guess still costs a full argon2id check).
+	addr := s.clientKey(r)
+	keys := []string{"user:" + strings.ToLower(in.Username) + "@" + addr, "addr:" + addr}
 	for _, k := range keys {
 		if ok, until := s.Limit.Allowed(k, now); !ok {
 			w.Header().Set("Retry-After", strconv.Itoa(int(until.Sub(now).Seconds())+1))
