@@ -71,8 +71,12 @@ func TestACheckStartedFromThePageDoesNotNotify(t *testing.T) {
 		t.Fatal(err)
 	}
 	job.Wait()
-	time.Sleep(200 * time.Millisecond)
-	if got := rec.Sent(); len(got) != 0 {
-		t.Fatalf("%+v", got)
+	waitFinished(t, s)
+	// A scheduled check of the same link does notify. By the time its notice arrives, one from the page's check would
+	// have arrived too, so exactly one means the page's check sent none.
+	_ = s.Data.SaveLinks(ctx, []store.LinkResult{{URL: site.URL + "/a", Status: "dead", Checked: old, DeadSince: old}})
+	s.recheckStale(ctx)
+	if got := waitSent(rec, 1); len(got) != 1 {
+		t.Fatalf("%d notifications, want only the scheduled check's: %+v", len(got), got)
 	}
 }
