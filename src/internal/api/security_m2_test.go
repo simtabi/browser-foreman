@@ -3,8 +3,12 @@ package api
 import (
 	"crypto/rand"
 	"encoding/json"
+	"github.com/simtabi/browser-foreman/src/internal/config"
 	"github.com/simtabi/browser-foreman/src/internal/store"
 	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -105,5 +109,34 @@ func TestFailingWithTheOwnersNameDoesNotLockTheOwnerOut(t *testing.T) {
 	}
 	if c := try("127.0.0.1:4000", p); c != 200 {
 		t.Fatalf("the owner was locked out by someone else's guesses: %d", c)
+	}
+}
+
+// In accounts mode a file path is read only for a request from the server's own computer.
+func TestReadingAFileByPathIsForThisComputer(t *testing.T) {
+	s := seeded(t)
+	s.Cfg.Server.Mode = config.ModeAccounts
+	p := pw(t)
+	addUser(t, s, "owner", store.RoleOwner, p)
+	h := s.Handler()
+	_, own := signIn(t, h, "owner", p)
+	path := filepath.Join(t.TempDir(), "bookmarks.html")
+	if err := os.WriteFile(path, []byte(`<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><DT><A HREF="https://go.dev/">Go</A></DL>`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	req := func(addr string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/api/v1/workspaces/main/sources?path="+url.QueryEscape(path), nil)
+		r.Host, r.RemoteAddr = host, addr
+		r.AddCookie(own.cookie)
+		r.Header.Set("X-CSRF-Token", own.csrf)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w := req("198.51.100.9:4000"); w.Code != 403 || !strings.Contains(w.Body.String(), "own computer") {
+		t.Fatalf("from another computer: %d %s", w.Code, w.Body)
+	}
+	if w := req("127.0.0.1:4000"); w.Code == 403 {
+		t.Fatalf("from this computer: %d %s", w.Code, w.Body)
 	}
 }
