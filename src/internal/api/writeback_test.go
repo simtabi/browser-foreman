@@ -15,7 +15,7 @@ import (
 const chromeNodes = `[{"id":"0","title":"","children":[{"id":"1","title":"Bookmarks bar","children":[]},{"id":"2","title":"Other bookmarks","children":[{"id":"5","title":"A","url":"https://a.example/"},{"id":"6","title":"B","url":"https://b.example/"}]},{"id":"3","title":"Mobile bookmarks","children":[]}]}]`
 
 func TestThePageCanPreviewAndRefusesAStaleApply(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	chrome := paired(t, s, h, "Google Chrome")
 	ctx, now := context.Background(), time.Now()

@@ -54,7 +54,7 @@ func node(t *testing.T, s *Server, id string) *store.Node {
 }
 
 func TestAnAITagJobWaitsForAClientAndApplies(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	aiWorkspace(t, s)
 	h := s.Handler()
 	w := send(h, "POST", "/api/v1/ai/jobs", `{"kind":"tag","workspace":"w","folder":"Bookmarks Bar/Dev","apply":true}`)
@@ -106,7 +106,7 @@ func (f *fakeProvider) Answer(_ context.Context, j ai.Job) (ai.Results, error) {
 }
 
 func TestAProviderJudgesOnlyUncertainDuplicates(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	aiWorkspace(t, s)
 	f := &fakeProvider{}
 	s.AI = f
@@ -133,7 +133,7 @@ func TestAProviderJudgesOnlyUncertainDuplicates(t *testing.T) {
 }
 
 func TestAIJobsRefuseWhatTheyCannotDo(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	aiWorkspace(t, s)
 	h := s.Handler()
 	for body, want := range map[string]string{
@@ -150,7 +150,7 @@ func TestAIJobsRefuseWhatTheyCannotDo(t *testing.T) {
 }
 
 func TestAIJobsOutliveARestart(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	aiWorkspace(t, s)
 	if w := send(s.Handler(), "POST", "/api/v1/ai/jobs", `{"kind":"tag","workspace":"w"}`); w.Code != 201 {
 		t.Fatalf("%d %s", w.Code, w.Body)
@@ -159,7 +159,7 @@ func TestAIJobsOutliveARestart(t *testing.T) {
 		t.Fatalf("the queue file: %v %v", st, err)
 	}
 	// A new server on the same state folder, with a provider: it takes the waiting job and answers it.
-	again := newServer(t, "tok")
+	again := newServer(t, apiTok)
 	again.Cfg.Storage.Path, again.Data = s.Cfg.Storage.Path, s.Data
 	f := &tagger{}
 	again.AI = f

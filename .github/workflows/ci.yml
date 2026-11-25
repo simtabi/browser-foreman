@@ -3,12 +3,13 @@ name: CI
 # Pull requests, by hand, and once a week against main (the post-merge check). Never on a branch push.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review] # ready_for_review: a draft made ready gets its run
   workflow_dispatch:
   schedule:
     - cron: "23 6 * * 1"
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }} # a manual run never cancels the weekly one, or the other way
   cancel-in-progress: true
 
 permissions:
@@ -28,7 +29,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: src/go.mod
-      - run: make fmt vet test
+          cache-dependency-path: src/go.sum
+      - run: make fmt vet tidy vuln test
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.15.0
@@ -43,4 +45,4 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - run: cd web && npm install --no-audit --no-fund && npm run check:web && npm run test:web
+      - run: cd web && npm install --no-audit --no-fund && npm run check:web && npm run test:web && npm run build:extension

@@ -14,7 +14,7 @@ import (
 
 func seeded(t *testing.T) *Server {
 	t.Helper()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	ctx := context.Background()
 	_, _ = s.Data.CreateWorkspace(ctx, "main", "Chrome", time.Now())
 	tree := store.Tree{Root: &store.Node{ID: "root", Kind: store.KindFolder, Children: []*store.Node{
@@ -31,7 +31,7 @@ func seeded(t *testing.T) *Server {
 func send(h http.Handler, method, url, body string, header ...string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, url, strings.NewReader(body))
 	r.Host = host
-	r.Header.Set("Authorization", "Bearer tok")
+	r.Header.Set("Authorization", "Bearer "+apiTok)
 	for i := 0; i+1 < len(header); i += 2 {
 		r.Header.Set(header[i], header[i+1])
 	}
@@ -148,7 +148,7 @@ func TestTrashUndoRedoRollback(t *testing.T) {
 }
 
 func TestCreateImportExport(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	if w := send(h, "POST", "/api/v1/workspaces", `{"id":"work","name":"Work"}`); w.Code != 201 {
 		t.Fatalf("create %d %s", w.Code, w.Body)

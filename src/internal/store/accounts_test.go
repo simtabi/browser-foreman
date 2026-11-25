@@ -10,22 +10,22 @@ import (
 func TestUsersTokensSessions(t *testing.T) {
 	each(t, func(t *testing.T, s Store) {
 		ctx := context.Background()
-		if err := s.CreateUser(ctx, User{Name: "ada", Role: RoleOwner, PasswordHash: "h1", Created: t0}); err != nil {
+		if err := s.CreateUser(ctx, User{Name: "ada", Role: RoleOwner, PasswordHash: hash1, Created: t0}); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.CreateUser(ctx, User{Name: "ada", Role: RoleViewer, PasswordHash: "h2", Created: t0}); err == nil {
+		if err := s.CreateUser(ctx, User{Name: "ada", Role: RoleViewer, PasswordHash: hash2, Created: t0}); err == nil {
 			t.Fatal("a second user with the same name")
 		}
 		if err := s.CreateUser(ctx, User{Name: "../x", Role: RoleViewer}); err == nil {
 			t.Fatal("a path in a name was accepted")
 		}
-		_ = s.CreateUser(ctx, User{Name: "bob", Role: RoleViewer, PasswordHash: "h3", Created: t0})
+		_ = s.CreateUser(ctx, User{Name: "bob", Role: RoleViewer, PasswordHash: hash2, Created: t0})
 		u, _ := s.User(ctx, "ada")
 		u.Role, u.Disabled = RoleEditor, true
 		if err := s.UpdateUser(ctx, u); err != nil {
 			t.Fatal(err)
 		}
-		if got, _ := s.User(ctx, "ada"); got.Role != RoleEditor || !got.Disabled || got.PasswordHash != "h1" {
+		if got, _ := s.User(ctx, "ada"); got.Role != RoleEditor || !got.Disabled || got.PasswordHash != hash1 {
 			t.Fatalf("%+v", got)
 		}
 		if all, _ := s.Users(ctx); len(all) != 2 || all[0].Name != "ada" {
@@ -81,7 +81,7 @@ func TestUsersTokensSessions(t *testing.T) {
 func TestMigrateCarriesPeopleNotSessions(t *testing.T) {
 	ctx := context.Background()
 	src, dst := open(t, "json"), open(t, "sqlite")
-	_ = src.CreateUser(ctx, User{Name: "ada", Role: RoleOwner, PasswordHash: "h", Created: t0})
+	_ = src.CreateUser(ctx, User{Name: "ada", Role: RoleOwner, PasswordHash: hash1, Created: t0})
 	_ = src.CreateToken(ctx, Token{ID: "tk1", User: "ada", Name: "cli", Hash: "hash-a", Created: t0})
 	_ = src.CreateSession(ctx, Session{Hash: "s", User: "ada", CSRF: "c", Created: t0, Expires: time.Now().Add(time.Hour)})
 	if _, _, err := Migrate(ctx, src, dst); err != nil {
@@ -99,7 +99,7 @@ func TestDeleteSessionsKeepsOne(t *testing.T) {
 	each(t, func(t *testing.T, s Store) {
 		ctx := context.Background()
 		for _, n := range []string{"ada", "bob"} {
-			if err := s.CreateUser(ctx, User{Name: n, Role: RoleOwner, PasswordHash: "x", Created: t0}); err != nil {
+			if err := s.CreateUser(ctx, User{Name: n, Role: RoleOwner, PasswordHash: hash1, Created: t0}); err != nil {
 				t.Fatal(err)
 			}
 		}

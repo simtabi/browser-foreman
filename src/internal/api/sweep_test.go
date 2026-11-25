@@ -36,7 +36,7 @@ func waitSent(rec *notifykit.Recorder, want int) []notifykit.Notification {
 func TestAScheduledRecheckNotifiesOnceAboutConfirmedDeadLinks(t *testing.T) {
 	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) }))
 	defer site.Close()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	var rec *notifykit.Recorder
 	s.Notifier, rec = recorded(t)
 	ctx := context.Background()
@@ -59,7 +59,7 @@ func TestAScheduledRecheckNotifiesOnceAboutConfirmedDeadLinks(t *testing.T) {
 func TestACheckStartedFromThePageDoesNotNotify(t *testing.T) {
 	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) }))
 	defer site.Close()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	var rec *notifykit.Recorder
 	s.Notifier, rec = recorded(t)
 	ctx := context.Background()
@@ -71,8 +71,12 @@ func TestACheckStartedFromThePageDoesNotNotify(t *testing.T) {
 		t.Fatal(err)
 	}
 	job.Wait()
-	time.Sleep(200 * time.Millisecond)
-	if got := rec.Sent(); len(got) != 0 {
-		t.Fatalf("%+v", got)
+	waitFinished(t, s)
+	// A scheduled check of the same link does notify. By the time its notice arrives, one from the page's check would
+	// have arrived too, so exactly one means the page's check sent none.
+	_ = s.Data.SaveLinks(ctx, []store.LinkResult{{URL: site.URL + "/a", Status: "dead", Checked: old, DeadSince: old}})
+	s.recheckStale(ctx)
+	if got := waitSent(rec, 1); len(got) != 1 {
+		t.Fatalf("%d notifications, want only the scheduled check's: %+v", len(got), got)
 	}
 }

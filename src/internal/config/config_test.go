@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,7 +33,8 @@ func TestLayersMergeInOrderAndEnvironmentWins(t *testing.T) {
 	}
 	must("00-base.json", `{"server": {"addr": "127.0.0.1:9000"}, "webhooks": {"attempts": 3, "timeout": "5s"}}`)
 	must("10-override.json", `{"webhooks": {"attempts": 4}}`)
-	must(".env", "# secrets\nBROFO_API_TOKEN=\"from-dotenv\"\nexport BROFO_STORAGE_DRIVER=json\n")
+	dotenvTok := rand.Text()
+	must(".env", "# secrets\nBROFO_API_TOKEN=\""+dotenvTok+"\"\nexport BROFO_STORAGE_DRIVER=json\n")
 	c, err := Load(p, env(map[string]string{"BROFO_SERVER_ADDR": "127.0.0.1:9100"}))
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +42,7 @@ func TestLayersMergeInOrderAndEnvironmentWins(t *testing.T) {
 	if c.Server.Addr != "127.0.0.1:9100" || c.Webhooks.Attempts != 4 || c.Webhooks.Timeout.Duration != 5*time.Second {
 		t.Fatalf("merge: %+v", c)
 	}
-	if c.APIToken != "from-dotenv" || c.Storage.Driver != "json" || c.Storage.Path != p.State {
+	if c.APIToken != dotenvTok || c.Storage.Driver != "json" || c.Storage.Path != p.State {
 		t.Fatalf("dotenv/defaults: %+v", c)
 	}
 	if len(c.Sources) != 3 {
@@ -51,7 +53,7 @@ func TestLayersMergeInOrderAndEnvironmentWins(t *testing.T) {
 func TestAnEnvFileOthersCanReadIsRefused(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, ".env")
-	_ = os.WriteFile(f, []byte("BROFO_API_TOKEN=x\n"), 0o644)
+	_ = os.WriteFile(f, []byte("BROFO_API_TOKEN="+rand.Text()+"\n"), 0o644)
 	if err := os.Chmod(f, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +64,7 @@ func TestAnEnvFileOthersCanReadIsRefused(t *testing.T) {
 
 func TestUnknownKeysAndTokensInJSONAreRefused(t *testing.T) {
 	dir := t.TempDir()
-	_ = os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"apiToken": "x"}`), 0o600)
+	_ = os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"apiToken": "`+rand.Text()+`"}`), 0o600)
 	if _, err := Load(Paths{Config: dir, State: dir}, env(nil)); err == nil || !strings.Contains(err.Error(), "unknown field") {
 		t.Fatalf("want unknown field, got %v", err)
 	}
@@ -106,7 +108,8 @@ func TestValidateRefusesUnsafeOrBrokenSettings(t *testing.T) {
 func TestInitWritesPrivateFilesOnce(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "cfg")
 	p := Paths{Config: dir, State: dir}
-	wrote, err := Init(p, "tok123")
+	tok := rand.Text()
+	wrote, err := Init(p, tok)
 	if err != nil || len(wrote) != 2 {
 		t.Fatalf("%v %v", wrote, err)
 	}
@@ -115,11 +118,11 @@ func TestInitWritesPrivateFilesOnce(t *testing.T) {
 			t.Errorf("%s is %v, want 0600", f, st.Mode().Perm())
 		}
 	}
-	if again, _ := Init(p, "other"); len(again) != 0 {
+	if again, _ := Init(p, rand.Text()); len(again) != 0 {
 		t.Fatalf("overwrote %v", again)
 	}
 	c, err := Load(p, env(nil))
-	if err != nil || c.APIToken != "tok123" {
+	if err != nil || c.APIToken != tok {
 		t.Fatalf("round trip: %+v %v", c, err)
 	}
 }

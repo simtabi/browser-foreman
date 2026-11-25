@@ -45,7 +45,7 @@ func paired(t *testing.T, s *Server, h http.Handler, browser string) string {
 }
 
 func TestPairingAndTabs(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	tok := paired(t, s, h, "Firefox")
 	if u, err := s.Data.User(t.Context(), "local"); err != nil || u.PasswordHash != "" {
@@ -65,7 +65,7 @@ func TestPairingAndTabs(t *testing.T) {
 		t.Fatalf("%s", live)
 	}
 	// The config token is not an extension's: it cannot pretend to be one.
-	if w := fromExtension(h, "POST", "/api/v1/extension/tabs", body, "tok"); w.Code != 401 {
+	if w := fromExtension(h, "POST", "/api/v1/extension/tabs", body, apiTok); w.Code != 401 {
 		t.Fatalf("config token as an extension: %d", w.Code)
 	}
 	// An extension's token reads nothing it was not made for? It is a token of the local owner; revoking it ends it.
@@ -81,7 +81,7 @@ func TestPairingAndTabs(t *testing.T) {
 }
 
 func TestWrongCodesAreLimited(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	for i := 0; i < 5; i++ {
 		fromExtension(h, "POST", "/api/v1/extension/pair", `{"code":"AAAA-AAAA","browser":"x"}`, "")
@@ -103,7 +103,7 @@ func TestWrongCodesAreLimited(t *testing.T) {
 }
 
 func TestCommandsReachTheirBrowser(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	chrome, firefox := paired(t, s, h, "Google Chrome"), paired(t, s, h, "Firefox")
 	got := make(chan string, 1)
@@ -146,7 +146,7 @@ func TestCommandsReachTheirBrowser(t *testing.T) {
 }
 
 func TestReadBookmarksFromTheExtension(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	tok := paired(t, s, h, "Google Chrome")
 	body := `{"nodes":[{"id":"0","title":"","children":[{"id":"1","title":"Bookmarks bar","children":[{"id":"5","title":"Go","url":"https://go.dev/"}]}]}]}`
@@ -168,7 +168,7 @@ func TestReadBookmarksFromTheExtension(t *testing.T) {
 }
 
 func TestAWriteCommandCarriesItsPlanAndReportsItsResult(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	chrome := paired(t, s, h, "Google Chrome")
 	print := strings.Repeat("a", 64)

@@ -1,9 +1,11 @@
 package version
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -122,6 +124,26 @@ func TestReleaseRunsOnAVersionTagOrOnRequest(t *testing.T) {
 	if relNode == nil || relNode[1] != string(ciNode[1]) {
 		t.Errorf("the release job's node-version is %v; want %q, the Node ci.yml's web job uses", relNode, ciNode[1])
 	}
+
+	// web/package.json names the oldest Node the web tools run on, CI tests that major, and the install page says so.
+	pkg, err := os.ReadFile(filepath.Join("..", "..", "..", "web", "package.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	floor := regexp.MustCompile(`"node":\s*">=(([0-9]+)(?:\.[0-9]+)*)"`).FindSubmatch(pkg)
+	if floor == nil {
+		t.Fatal(`web/package.json names no "engines": {"node": ">=..."}`)
+	}
+	if major := strings.SplitN(string(ciNode[1]), ".", 2)[0]; major != string(floor[2]) {
+		t.Errorf("ci.yml tests Node %s, but web/package.json's floor is Node %s", ciNode[1], floor[1])
+	}
+	install, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "installation.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "Node.js " + string(floor[1]); !strings.Contains(string(install), want+" or newer") {
+		t.Errorf("docs/installation.md does not say %q or newer, the floor web/package.json names", want)
+	}
 }
 
 // The GitHub release is the only channel. go.md's list of GoReleaser blocks that publish anywhere else.
@@ -206,4 +228,100 @@ func TestTheTestsRunUnderTheRaceDetector(t *testing.T) {
 	if !regexp.MustCompile(`(?m)run: make .*\btest\b`).Match(ci) {
 		t.Fatal("CI does not run make test")
 	}
+}
+
+// CI and make check vet every system the release builds for, keep go.mod tidy and run govulncheck at a pinned version:
+// a build-tagged file for another system is otherwise first compiled when a release tag is built.
+func TestChecksCoverEverySystemAndTheModuleFile(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	mk, err := os.ReadFile(filepath.Join(root, "Makefile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ci, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	oses := regexp.MustCompile(`(?m)^VET_OSES := (.+)$`).FindSubmatch(mk)
+	if oses == nil {
+		t.Fatal("no VET_OSES in the Makefile")
+	}
+	for _, want := range []string{"darwin", "linux", "windows", "freebsd"} {
+		if !strings.Contains(" "+string(oses[1])+" ", " "+want+" ") {
+			t.Errorf("make vet does not vet %s", want)
+		}
+	}
+	if !regexp.MustCompile(`(?m)^GOVULNCHECK_VERSION := v\d+\.\d+\.\d+$`).Match(mk) {
+		t.Error("govulncheck is not pinned to a release")
+	}
+	check := regexp.MustCompile(`(?m)^check: (.*?)  ##`).FindSubmatch(mk)
+	for _, step := range []string{"fmt", "vet", "tidy", "lint", "vuln", "test"} {
+		if check == nil || !strings.Contains(" "+string(check[1])+" ", " "+step+" ") {
+			t.Errorf("make check leaves out %s", step)
+		}
+	}
+	run := regexp.MustCompile(`(?m)run: make (.*)$`).FindAllSubmatch(ci, -1)
+	got := ""
+	for _, r := range run {
+		got += " " + string(r[1]) + " "
+	}
+	for _, step := range []string{"vet", "tidy", "vuln", "test"} {
+		if !strings.Contains(got, " "+step+" ") {
+			t.Errorf("CI does not run make %s", step)
+		}
+	}
+}
+
+// make cross builds build/targets.txt and the release builds src/.goreleaser.yaml's goos x goarch less its ignores.
+// The two must name the same systems, or a release ships a binary nobody built and tested locally, or misses one.
+func TestReleaseTargetsMatchTheLocalBuild(t *testing.T) {
+	local, err := os.ReadFile(filepath.Join("..", "..", "..", "build", "targets.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	release, err := os.ReadFile(filepath.Join("..", "..", ".goreleaser.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, got := localTargets(string(local)), releaseTargets(string(release))
+	if len(want) < 6 || len(got) < 6 {
+		t.Fatalf("read %d local and %d release targets; a parser has lost its way", len(want), len(got))
+	}
+	if !maps.Equal(want, got) {
+		t.Errorf("build/targets.txt %v and src/.goreleaser.yaml %v name different targets", slices.Sorted(maps.Keys(want)), slices.Sorted(maps.Keys(got)))
+	}
+}
+
+func localTargets(s string) map[string]bool {
+	out := map[string]bool{}
+	for _, line := range strings.Split(s, "\n") {
+		if f := strings.Fields(line); len(f) >= 2 && !strings.HasPrefix(f[0], "#") {
+			out[f[0]+"/"+f[1]] = true
+		}
+	}
+	return out
+}
+
+func releaseTargets(s string) map[string]bool {
+	list := func(key string) []string {
+		m := regexp.MustCompile(`(?m)^\s+` + key + `:\s*\[([^\]]*)\]`).FindStringSubmatch(s)
+		if m == nil {
+			return nil
+		}
+		var out []string
+		for _, v := range strings.Split(m[1], ",") {
+			out = append(out, strings.TrimSpace(v))
+		}
+		return out
+	}
+	out := map[string]bool{}
+	for _, goos := range list("goos") {
+		for _, goarch := range list("goarch") {
+			out[goos+"/"+goarch] = true
+		}
+	}
+	for _, m := range regexp.MustCompile(`\{\s*goos:\s*(\w+),\s*goarch:\s*(\w+)\s*\}`).FindAllStringSubmatch(s, -1) {
+		delete(out, m[1]+"/"+m[2])
+	}
+	return out
 }

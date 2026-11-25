@@ -12,7 +12,7 @@ import (
 // With a page open (its event stream is a request that never ends by itself), stopping the server returns at once
 // and cleanly; it used to wait the whole 5 s and then answer "context deadline exceeded".
 func TestShutdownDoesNotWaitForTheEventStream(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +23,7 @@ func TestShutdownDoesNotWaitForTheEventStream(t *testing.T) {
 	go func() { done <- s.Run(ctx) }()
 	req, _ := http.NewRequest("GET", "http://"+ln.Addr().String()+"/api/v1/events", nil)
 	req.Host = host
-	req.Header.Set("Authorization", "Bearer tok")
+	req.Header.Set("Authorization", "Bearer "+apiTok)
 	var resp *http.Response
 	for range 50 {
 		if resp, err = http.DefaultClient.Do(req); err == nil {

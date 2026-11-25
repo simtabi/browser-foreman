@@ -17,7 +17,7 @@ import (
 // A webhook's address is often a secret in itself (Slack, Discord): only the owner's GET /webhooks may show it, never
 // the event stream every viewer and every "*" webhook receives.
 func TestWebhookCreatedDoesNotCarryItsAddress(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	ch, stop := s.Bus.Subscribe(4)
 	defer stop()
 	target := "https://hooks.example.com/" + rand.Text()
@@ -39,7 +39,7 @@ func TestWebhookCreatedDoesNotCarryItsAddress(t *testing.T) {
 // Asking to connect is for an extension on this computer; one elsewhere pairs with a code. The Origin header alone
 // proves nothing: any program can send it.
 func TestOnlyThisComputerMayAskToConnect(t *testing.T) {
-	h := newServer(t, "tok").Handler()
+	h := newServer(t, apiTok).Handler()
 	for addr, refused := range map[string]bool{"192.0.2.7:5000": true, "127.0.0.1:5000": false} {
 		r := httptest.NewRequest("POST", "/api/v1/extension/requests", strings.NewReader(`{"browser":"Google Chrome","version":"0.1.8"}`))
 		r.Host, r.RemoteAddr = host, addr
@@ -54,7 +54,7 @@ func TestOnlyThisComputerMayAskToConnect(t *testing.T) {
 
 // Every phase of a request has a limit, so slow clients cannot pile up connections.
 func TestTheServerTimesOutSlowClients(t *testing.T) {
-	srv := newServer(t, "tok").httpServer()
+	srv := newServer(t, apiTok).httpServer()
 	if srv.ReadHeaderTimeout <= 0 || srv.ReadTimeout <= 0 || srv.IdleTimeout <= 0 {
 		t.Fatalf("header %v, read %v, idle %v", srv.ReadHeaderTimeout, srv.ReadTimeout, srv.IdleTimeout)
 	}

@@ -46,7 +46,7 @@ func selfSigned(t *testing.T) (certFile, keyFile string) {
 // With a certificate the server speaks https, so nothing crosses the network in clear text.
 func TestTheServerServesHTTPSWithACertificate(t *testing.T) {
 	cert, key := selfSigned(t)
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	s.Cfg.Server.TLSCert, s.Cfg.Server.TLSKey = cert, key
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -78,7 +78,7 @@ func TestTheServerServesHTTPSWithACertificate(t *testing.T) {
 
 // X-Forwarded-* is believed only from a listed proxy: from anyone else it is a header any client can set.
 func TestOnlyATrustedProxyIsBelieved(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	s.Cfg.Server.TrustedProxy = []string{"10.0.0.0/8"}
 	req := func(remote string) *http.Request {
 		r := httptest.NewRequest("GET", "/", nil)
@@ -97,7 +97,7 @@ func TestOnlyATrustedProxyIsBelieved(t *testing.T) {
 
 // accounts mode beyond this computer, with nothing encrypting the traffic, says so when the server starts.
 func TestPlainHTTPForOtherComputersIsWarnedAbout(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	s.Cfg.Server.Mode, s.Cfg.Server.Addr = config.ModeAccounts, "0.0.0.0:8765"
 	if !strings.Contains(s.clearTextWarning(), "clear text") {
 		t.Fatal("no warning for accounts mode on 0.0.0.0 over plain http")

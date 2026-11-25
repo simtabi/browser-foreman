@@ -101,14 +101,14 @@ func fakeChrome(t *testing.T, ran *[]string) Runner {
 func TestSnapKeepsASmallJPEG(t *testing.T) {
 	s := Store{Dir: t.TempDir()}
 	var ran []string
-	public := func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("93.184.216.34")}, nil }
+	public := func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("203.0.113.10")}, nil }
 	sn := Snapper{Store: s, Chrome: "/x/chrome", Run: fakeChrome(t, &ran), Resolve: public}
 	if err := sn.Snap(context.Background(), "https://go.dev/"); err != nil {
 		t.Fatal(err)
 	}
 	joined := strings.Join(ran, " ")
 	for _, want := range []string{"--headless=new", "--user-data-dir=", "--incognito", "https://go.dev/", "--window-size=1280,800", "--virtual-time-budget=8000",
-		"--host-resolver-rules=MAP go.dev 93.184.216.34"} {
+		"--host-resolver-rules=MAP go.dev 203.0.113.10"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing %s in %s", want, joined)
 		}
@@ -173,7 +173,7 @@ func TestPinRuleBracketsIPv6(t *testing.T) {
 }
 
 func TestRenderOpensThePageInAThrowawayProfile(t *testing.T) {
-	public := func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("93.184.216.34")}, nil }
+	public := func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("203.0.113.10")}, nil }
 	var argv []string
 	sn := Snapper{Chrome: "/x/chrome", Resolve: public, Dump: func(_ context.Context, a []string) ([]byte, error) {
 		argv = a
@@ -182,7 +182,7 @@ func TestRenderOpensThePageInAThrowawayProfile(t *testing.T) {
 	dom, err := sn.Render(context.Background(), "https://site.example/a?b=1")
 	got := strings.Join(argv, " ")
 	if err != nil || string(dom) != "<html><title>Hi</title></html>" || !strings.Contains(got, "--dump-dom https://site.example/a?b=1") ||
-		!strings.Contains(got, "--host-resolver-rules=MAP site.example 93.184.216.34") || !strings.Contains(got, "--user-data-dir=") ||
+		!strings.Contains(got, "--host-resolver-rules=MAP site.example 203.0.113.10") || !strings.Contains(got, "--user-data-dir=") ||
 		!strings.Contains(got, "--incognito") {
 		t.Fatalf("%v %q %s", err, dom, got)
 	}

@@ -18,7 +18,7 @@ func TestAnUnreachableRecheckStillMovesOn(t *testing.T) {
 		w.WriteHeader(http.StatusTooManyRequests) // "slow down": the check cannot tell anything
 	}))
 	defer site.Close()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	ctx := context.Background()
 	linkWorkspace(t, s, site.URL)
 	old := time.Now().Add(-40 * 24 * time.Hour)

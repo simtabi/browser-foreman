@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -19,7 +20,7 @@ func TestBackupRestoreReplacesNothing(t *testing.T) {
 		w.Head, w.Notes, w.Locked = 3, "before the move", true
 		_ = s.UpdateWorkspace(ctx, w)
 		_ = s.SaveLinks(ctx, []LinkResult{{URL: "https://go.example/", Status: "ok", Checked: t0}})
-		_ = s.CreateUser(ctx, User{Name: "ada", Role: RoleOwner, PasswordHash: "$argon2id$secret-hash", Created: t0})
+		_ = s.CreateUser(ctx, User{Name: "ada", Role: RoleOwner, PasswordHash: "$argon2id$" + rand.Text(), Created: t0})
 
 		b, err := MakeBackup(ctx, s, t0)
 		if err != nil {

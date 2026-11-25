@@ -13,11 +13,11 @@ import (
 func TestDeliveryLog(t *testing.T) {
 	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(418) }))
 	defer receiver.Close()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	s.Deliveries = webhooks.NewLog(t.TempDir())
 	s.Dispatch.Log = func(d webhooks.Delivery) { _ = s.Deliveries.Add(d) }
 	h := s.Handler()
-	w := send(h, "POST", "/api/v1/webhooks", `{"url":"`+receiver.URL+`/hook","events":["*"],"secret":"0123456789abcdef"}`)
+	w := send(h, "POST", "/api/v1/webhooks", `{"url":"`+receiver.URL+`/hook","events":["*"],"secret":"`+hookSecret+`"}`)
 	var hook struct{ ID string }
 	_ = json.Unmarshal(w.Body.Bytes(), &hook)
 	if w.Code != 201 || hook.ID == "" {
@@ -34,7 +34,7 @@ func TestDeliveryLog(t *testing.T) {
 	if w := send(h, "GET", "/api/v1/webhooks/deliveries?limit=0", ""); w.Code != 400 {
 		t.Fatalf("limit 0: %d", w.Code)
 	}
-	if strings.Contains(send(h, "GET", "/api/v1/webhooks/deliveries", "").Body.String(), "0123456789abcdef") {
+	if strings.Contains(send(h, "GET", "/api/v1/webhooks/deliveries", "").Body.String(), hookSecret) {
 		t.Fatal("a secret reached the delivery log")
 	}
 }

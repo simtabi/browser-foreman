@@ -57,7 +57,7 @@ func (r atOne) Workspace(ctx context.Context, id string) (store.Workspace, error
 // stay in use. Each delete used to check before the other wrote, so both could go.
 func TestTwoDeletesAtOnceKeepOneWorkspace(t *testing.T) {
 	for round := range 5 {
-		s := newServer(t, "tok")
+		s := newServer(t, apiTok)
 		ctx := context.Background()
 		for _, id := range []string{"a", "b"} {
 			if _, err := s.Data.CreateWorkspace(ctx, id, id, time.Now()); err != nil {
@@ -92,7 +92,7 @@ func TestTwoDeletesAtOnceKeepOneWorkspace(t *testing.T) {
 // the rename could bring the workspace back out of the Trash, or the delete undo the rename.
 func TestARenameAndADeleteKeepEachOthersChanges(t *testing.T) {
 	for round := range 5 {
-		s := newServer(t, "tok")
+		s := newServer(t, apiTok)
 		ctx := context.Background()
 		for _, id := range []string{"keep", "x"} {
 			_, _ = s.Data.CreateWorkspace(ctx, id, id, time.Now())

@@ -12,7 +12,7 @@ import (
 // A write-back nobody waits for any more (it timed out, or the page went away) is never handed to the extension
 // afterwards: it would be applied with no read-back, after the person was told it failed.
 func TestACommandNobodyWaitsForIsNotRunLater(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	chrome := paired(t, s, h, "Google Chrome")
 	_, err := serverExtension{s}.Run(context.Background(), "Google Chrome", map[string]any{"kind": "write-bookmarks", "workspace": "main"}, "write", 50*time.Millisecond)
@@ -33,7 +33,7 @@ func (b *brokenWriter) Write([]byte) (int, error) { return 0, errors.New("connec
 
 // Commands whose answer never reached the extension wait for its next poll instead of being marked sent and lost.
 func TestCommandsWhoseAnswerWasLostAreQueuedAgain(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	chrome := paired(t, s, h, "Google Chrome")
 	if w := send(h, "POST", "/api/v1/extension/commands", `{"browser":"Google Chrome","kind":"open","urls":["https://go.dev/"]}`); w.Code != 202 {

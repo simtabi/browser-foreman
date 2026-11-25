@@ -17,17 +17,18 @@ import (
 func TestSignVerifyRoundTripAndTampering(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	body := []byte(`{"id":1}`)
-	h := Sign("s3cret-s3cret-s3cret", now, body)
-	if err := Verify("s3cret-s3cret-s3cret", h, body, now, 5*time.Minute); err != nil {
+	secret := rand.Text()
+	h := Sign(secret, now, body)
+	if err := Verify(secret, h, body, now, 5*time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if Verify("s3cret-s3cret-s3cret", h, []byte(`{"id":2}`), now, 5*time.Minute) == nil {
+	if Verify(secret, h, []byte(`{"id":2}`), now, 5*time.Minute) == nil {
 		t.Fatal("changed body accepted")
 	}
-	if Verify("wrong-wrong-wrong-wrong", h, body, now, 5*time.Minute) == nil {
+	if Verify(rand.Text(), h, body, now, 5*time.Minute) == nil {
 		t.Fatal("wrong secret accepted")
 	}
-	if Verify("s3cret-s3cret-s3cret", h, body, now.Add(10*time.Minute), 5*time.Minute) == nil {
+	if Verify(secret, h, body, now.Add(10*time.Minute), 5*time.Minute) == nil {
 		t.Fatal("old signature accepted")
 	}
 }
@@ -61,7 +62,7 @@ func TestPatterns(t *testing.T) {
 
 func TestDeliverSignsRetriesAndStopsOnRefusal(t *testing.T) {
 	var calls atomic.Int32
-	secret := "0123456789abcdef0123"
+	secret := rand.Text()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := calls.Add(1)
 		body, _ := io.ReadAll(r.Body)
@@ -103,13 +104,13 @@ func TestDeliverSignsRetriesAndStopsOnRefusal(t *testing.T) {
 
 func TestStoreValidatesAndRemoves(t *testing.T) {
 	st := NewStore(t.TempDir())
-	if _, err := st.Add(Subscription{ID: "x", URL: "http://169.254.169.254/", Events: []string{"*"}, Secret: "0123456789abcdef"}); err == nil {
+	if _, err := st.Add(Subscription{ID: "x", URL: "http://169.254.169.254/", Events: []string{"*"}, Secret: rand.Text()}); err == nil {
 		t.Fatal("metadata address accepted")
 	}
-	if _, err := st.Add(Subscription{ID: "x", URL: "https://a.example/", Events: []string{"*"}, Secret: "short"}); err == nil {
+	if _, err := st.Add(Subscription{ID: "x", URL: "https://a.example/", Events: []string{"*"}, Secret: rand.Text()[:5]}); err == nil {
 		t.Fatal("short secret accepted")
 	}
-	if _, err := st.Add(Subscription{ID: "x", URL: "https://a.example/", Events: []string{"*"}, Secret: "0123456789abcdef"}); err != nil {
+	if _, err := st.Add(Subscription{ID: "x", URL: "https://a.example/", Events: []string{"*"}, Secret: rand.Text()}); err != nil {
 		t.Fatal(err)
 	}
 	if ok, _ := st.Remove("x"); !ok {

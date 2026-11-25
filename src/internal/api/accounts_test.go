@@ -28,7 +28,7 @@ func pw(t *testing.T) string {
 
 func accountsServer(t *testing.T) *Server {
 	t.Helper()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	s.Cfg.Server.Mode = config.ModeAccounts
 	return s
 }
@@ -145,7 +145,7 @@ func TestRolesAndTokens(t *testing.T) {
 	addUser(t, s, "bob", store.RoleViewer, pv)
 	h := s.Handler()
 
-	if w := do(h, "GET", "/api/v1/workspaces", "", host, "", "tok"); w.Code != 401 {
+	if w := do(h, "GET", "/api/v1/workspaces", "", host, "", apiTok); w.Code != 401 {
 		t.Fatalf("accounts mode must refuse the config token: %d", w.Code)
 	}
 
