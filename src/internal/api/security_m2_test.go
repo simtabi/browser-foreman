@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/rand"
 	"encoding/json"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +28,22 @@ func TestWebhookCreatedDoesNotCarryItsAddress(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("no webhook.created event")
+	}
+}
+
+// Asking to connect is for an extension on this computer; one elsewhere pairs with a code. The Origin header alone
+// proves nothing: any program can send it.
+func TestOnlyThisComputerMayAskToConnect(t *testing.T) {
+	h := newServer(t, "tok").Handler()
+	for addr, refused := range map[string]bool{"192.0.2.7:5000": true, "127.0.0.1:5000": false} {
+		r := httptest.NewRequest("POST", "/api/v1/extension/requests", strings.NewReader(`{"browser":"Google Chrome","version":"0.1.8"}`))
+		r.Host, r.RemoteAddr = host, addr
+		r.Header.Set("Origin", "chrome-extension://abcdefghijklmnopabcdefghijklmnop")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if refused != (w.Code == 403) {
+			t.Errorf("from %s: %d %s", addr, w.Code, w.Body)
+		}
 	}
 }
 
