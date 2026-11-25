@@ -490,6 +490,8 @@ func (s *Server) updateWorkspace(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
+	s.meta.Lock() // read, change and write as one step: see Server.meta
+	defer s.meta.Unlock()
 	x, ok := s.workspace(w, r)
 	if !ok {
 		return
