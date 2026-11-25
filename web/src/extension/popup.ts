@@ -63,10 +63,16 @@ $("read").onclick = async () => {
   try { say("readMsg", "Reading…"); say("readMsg", (await ask({ kind: "read" })).summary); await show(); }
   catch (e) { say("readMsg", (e as Error).message, true); }
 };
+// What Write applies: the workspace previewed, onto the bookmarks as they were when previewed. Another choice of
+// workspace needs a new preview.
+let previewed: { workspace: string; expect: string } | null = null;
+($("ws") as HTMLSelectElement).onchange = () => { previewed = null; $("apply").hidden = true; say("planMsg", ""); };
 $("preview").onclick = async () => {
-  $("apply").hidden = true;
+  $("apply").hidden = true; previewed = null;
   try {
-    const p = await ask({ kind: "plan", workspace: ($("ws") as HTMLSelectElement).value });
+    const workspace = ($("ws") as HTMLSelectElement).value;
+    const p = await ask({ kind: "plan", workspace });
+    previewed = { workspace, expect: p.expect };
     if (!p.steps) return say("planMsg", "This browser already matches that workspace.");
     say("planMsg", `${p.created} added, ${p.updated} renamed or readdressed, ${p.moved} moved, ` +
       `${p.removedBookmarks} bookmark${p.removedBookmarks === 1 ? "" : "s"} and ${p.removedFolders} folder${p.removedFolders === 1 ? "" : "s"} removed.`, p.removedBookmarks > 0);
@@ -76,7 +82,8 @@ $("preview").onclick = async () => {
 $("apply").onclick = async () => {
   if (!confirm("Write this workspace into this browser's bookmarks? The bookmarks as they are now are saved to Browser Foreman first.")) return;
   $("apply").hidden = true;
-  try { say("planMsg", "Writing…"); const r = await ask({ kind: "apply", workspace: ($("ws") as HTMLSelectElement).value }); say("planMsg", `Done. Saved first: ${r.backup}`); }
+  if (!previewed) return;
+  try { say("planMsg", "Writing…"); const r = await ask({ kind: "apply", ...previewed }); previewed = null; say("planMsg", `Done. Saved first: ${r.backup}`); }
   catch (e) { say("planMsg", (e as Error).message, true); }
 };
 $("unpair").onclick = async () => { await ask({ kind: "unpair" }); await show(); };

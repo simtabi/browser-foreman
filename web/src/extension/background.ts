@@ -160,7 +160,7 @@ async function readInto(c: Client, workspace?: string): Promise<string> {
   return (await c.sendBookmarks(nodes, workspace)).entry.summary;
 }
 /** Writes a workspace into this browser: refuses if the browser's bookmarks are no longer the ones the plan was made
- *  against (expect, the server's ExtFingerprint; the popup passes none, as it plans right here); saves the bookmarks as
+ *  against (expect: the server's ExtFingerprint, or the one the popup's preview took); saves the bookmarks as
  *  they are to the server first; writes; fixes any order a browser placed differently; reads the result back into the
  *  workspace, so its ids are the browser's and a second write changes nothing. Returns the counts. */
 async function writeWorkspace(c: Client, workspace: string, expect?: string): Promise<Record<string, unknown>> {
@@ -219,11 +219,16 @@ async function handle(msg: any): Promise<unknown> {
     case "workspaces": { const c = await client(); if (!c) throw new Error("not paired"); return c.workspaces(); }
     case "plan": case "apply": {
       const c = await client(); if (!c) throw new Error("not paired");
+      if (msg.kind === "apply") {
+        // Exactly what the popup previewed: that workspace, onto the bookmarks as they were then (expect), or nothing.
+        if (!msg.expect) throw new Error("preview the change first");
+        return writeWorkspace(c, msg.workspace, msg.expect);
+      }
+      const tree = await ext.bookmarks.getTree() as ExtBookmark[];
       const ws = (await c.workspace(msg.workspace)).tree.root as WsNode;
-      const p = plan(await ext.bookmarks.getTree() as ExtBookmark[], ws);
-      const counts = { created: p.created, updated: p.updated, moved: p.moved, removedBookmarks: p.removedBookmarks, removedFolders: p.removedFolders, steps: p.steps.length };
-      if (msg.kind === "plan") return counts;
-      return writeWorkspace(c, msg.workspace);
+      const p = plan(tree, ws);
+      return { created: p.created, updated: p.updated, moved: p.moved, removedBookmarks: p.removedBookmarks, removedFolders: p.removedFolders,
+        steps: p.steps.length, expect: await extFingerprint(tree as any) };
     }
   }
   throw new Error("unknown request");
