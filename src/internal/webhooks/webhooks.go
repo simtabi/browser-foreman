@@ -229,8 +229,10 @@ func (d *Dispatcher) Deliver(ctx context.Context, e events.Event) []Delivery {
 	return out
 }
 
-// queueSize is how many events wait for one webhook while its receiver is busy or down.
-const queueSize = 64
+// queueSize is how many events wait for one webhook while its receiver is busy or down. It is well above the event
+// bus's own buffer (256, in api.Run), so a healthy receiver never loses an event the bus kept, even through a burst
+// such as a link check reporting thousands of changed links.
+const queueSize = 1024
 
 type job struct {
 	sub  Subscription
@@ -241,6 +243,7 @@ type job struct {
 // Run delivers the events from ch until ctx ends or ch closes. Each webhook gets its own queue and worker, so a slow
 // or dead receiver delays only its own deliveries, retries included. When its queue is full, the event is recorded
 // (through Log) as not sent rather than dropped without a trace.
+// A webhook's queue is made the first time it gets an event; one removed later keeps an idle worker until Run ends.
 func (d *Dispatcher) Run(ctx context.Context, ch <-chan events.Event) {
 	queues := map[string]chan job{}
 	var wg sync.WaitGroup
