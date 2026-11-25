@@ -66,9 +66,8 @@ func TestEveryRouteIsDocumented(t *testing.T) {
 	}
 	docs := allDocs(t)
 	for r, file := range routes {
-		// "/linkchecks/{id}/resume" may be written as "…/pause`, `/resume`" in a row covering several.
-		last := r[strings.LastIndex(r, "/"):]
-		if !strings.Contains(docs, r) && !strings.Contains(docs, "`"+last+"`") && !strings.Contains(docs, last+"`") {
+		// The whole path, so "/resume" written alone does not stand for every route that ends in it.
+		if !strings.Contains(docs, r) {
 			t.Errorf("%s (registered in %s) is not in docs/", r, file)
 		}
 	}

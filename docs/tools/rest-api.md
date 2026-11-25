@@ -77,7 +77,7 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `GET` | `/api/v1/workspaces/{id}/links` | viewer | `200 {"links": {url: result}}`: what the last checks found for this workspace's links |
 | `POST` | `/api/v1/linkchecks` | editor | body `{workspace, nodes?}`: check the links (under `nodes`, or all) in the background; `202 {"job"}`, `409` while another runs. See [link checks](link-checks.md) |
 | `GET` | `/api/v1/linkchecks/{id}` | viewer | progress; `?results=1` adds every result so far, and `previous`: for each link this run changed, its status before (`""` when never checked) |
-| `POST` | `/api/v1/linkchecks/{id}/pause`, `/resume`, `/cancel` | editor | `200`, or `409` when the check is not in a state to do that |
+| `POST` | `/api/v1/linkchecks/{id}/pause`, `/api/v1/linkchecks/{id}/resume`, `/api/v1/linkchecks/{id}/cancel` | editor | `200`, or `409` when the check is not in a state to do that |
 | `PATCH` | `/api/v1/workspaces/{id}` | editor | body any of `{name, notes, locked, archived, color, icon}` (`color`: blue, azure, indigo, purple, pink, red, orange, yellow, lime, green, teal or cyan; `icon`: a Tabler icon name; `""` resets either); a locked workspace accepts only `{"locked": false}` and its colour and icon (`423` otherwise) |
 | `GET` | `/api/v1/webhooks/deliveries` | owner | the latest deliveries, newest first; `?subscription=`, `?limit=` (1–1000) |
 | `GET` | `/api/v1/backup` | owner | every workspace with its history, and the link results, as gzipped JSON; see [backup](backup.md) |
@@ -88,7 +88,7 @@ role each needs in `x-role`); a test fails if a route and the document ever disa
 | `GET` | `/api/v1/workspaces/{id}/opened` | owner | when each bookmark was last opened and how often, from the browsers' own history; `no-store`, never kept. See [labels](labels.md) |
 | `POST` | `/api/v1/workspaces/{id}/open` | editor | records the workspace in use, so background tab snapshots go into its pool; see [workspaces](workspaces.md) |
 | `PUT` | `/api/v1/workspaces/{id}/tabs` | owner | body `{"own": true}` gives the workspace its own tab snapshots, `false` returns it to the shared ones; see [workspaces](workspaces.md) |
-| `GET` | `/api/v1/tabs` and the `/api/v1/tabs/…` routes | viewer to owner | open tabs, snapshots, timeline (`?days=` or `?from=`/`?to=`), `tabs/stored` counts, restore, close; `?workspace=` picks the workspace's pool; see [browsers and tabs](browsers-and-tabs.md) |
+| `GET` | `/api/v1/tabs` and the `/api/v1/tabs/…` routes | viewer to owner | open tabs, snapshots, timeline (`?days=` or `?from=`/`?to=`), `/api/v1/tabs/stored` counts, restore, close; `?workspace=` picks the workspace's pool; see [browsers and tabs](browsers-and-tabs.md) |
 | `GET` | `/api/v1/linkchecks` | viewer | the running check and earlier ones, with links newly broken and fixed |
 | `POST`, `GET` | `/api/v1/extension/…` | see [browser extension](browser-extension.md) | pairing, tabs and groups, bookmarks, commands |
 | `GET` | `/api/v1/history`, `/api/v1/history/access`; `POST` `/api/v1/history/access/open-settings` | owner | search the browsers' history, which profiles can be read, open Full Disk Access; see [browser history](browser-history.md) |

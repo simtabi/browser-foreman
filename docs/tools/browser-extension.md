@@ -169,7 +169,7 @@ again, so a fresh `make extension` takes effect without visiting the browser's e
 | `POST /api/v1/extension/requests` | an extension's origin, from this computer | ask to connect in one click: an id, a poll secret, a match code (an extension on another computer pairs with a code instead) |
 | `POST /api/v1/extension/requests/{id}/poll` | the asker (poll secret) | the answer; approved, the token, once |
 | `GET /api/v1/extension/requests` | owner | the requests waiting, with their match codes |
-| `POST /api/v1/extension/requests/{id}/approve`, `…/deny` | owner | answer one |
+| `POST /api/v1/extension/requests/{id}/approve`, `POST /api/v1/extension/requests/{id}/deny` | owner | answer one |
 | `GET /api/v1/extension/guide` | owner | each installed browser's build, whether it is built, its extensions page; each extension's version |
 | `POST /api/v1/extension/setup` | owner | open a browser's extensions page and show the build in Finder |
 | `GET /api/v1/extension/status` | viewer | the connected extensions |
