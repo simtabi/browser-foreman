@@ -310,8 +310,9 @@ func (s *Server) queueCommand(w http.ResponseWriter, r *http.Request) {
 	s.ext.byID[in.ID] = &in
 	close(s.ext.wake) // wake every waiting extension
 	s.ext.wake = make(chan struct{})
+	answer := in // copied under the lock: a waiting extension may mark it sent the moment the lock is let go
 	s.ext.mu.Unlock()
-	writeJSON(w, 202, map[string]any{"command": in})
+	writeJSON(w, 202, map[string]any{"command": answer})
 }
 
 // nextCommands answers an extension's long poll (?wait= up to 25 seconds) with the commands queued for its browser.

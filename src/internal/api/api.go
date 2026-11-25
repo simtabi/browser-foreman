@@ -440,11 +440,7 @@ func (s *Server) testHook(w http.ResponseWriter, r *http.Request) {
 func (s *Server) Run(ctx context.Context) error {
 	ch, stop := s.Bus.Subscribe(256)
 	defer stop()
-	go func() {
-		for e := range ch {
-			s.Dispatch.Deliver(ctx, e)
-		}
-	}()
+	go s.Dispatch.Run(ctx, ch) // one queue per webhook: a dead receiver holds up only itself
 	srv := &http.Server{Addr: s.Cfg.Server.Addr, Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	errc := make(chan error, 1)
 	if s.Listener != nil { // bound by the caller, which handles a port already in use
