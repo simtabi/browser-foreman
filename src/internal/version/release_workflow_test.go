@@ -187,3 +187,23 @@ func TestLocalLintIsCIsLint(t *testing.T) {
 		t.Fatal("make lint does not run the pinned version")
 	}
 }
+
+// make test runs the race detector, and CI runs make test, so a data race fails a pull request.
+func TestTheTestsRunUnderTheRaceDetector(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	mk, err := os.ReadFile(filepath.Join(root, "Makefile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ci, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := regexp.MustCompile(`(?m)^test:.*\n\t(.+)$`).FindSubmatch(mk)
+	if target == nil || !strings.Contains(string(target[1]), "go -C src test -race") {
+		t.Fatalf("make test does not run go test -race: %q", target)
+	}
+	if !regexp.MustCompile(`(?m)run: make .*\btest\b`).Match(ci) {
+		t.Fatal("CI does not run make test")
+	}
+}

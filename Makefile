@@ -18,8 +18,8 @@ build: web  ## this machine: build/<os>/browser-foreman
 	mkdir -p build/$(HOST_OS)
 	CGO_ENABLED=0 go -C src build -trimpath -ldflags '$(LDFLAGS)' -o ../build/$(HOST_OS)/$(BINARY) ./cmd/$(BINARY)
 
-test:  ## unit tests
-	go -C src test -count=1 ./...
+test:  ## unit tests, under the race detector (CI runs this too)
+	go -C src test -race -count=1 ./...
 
 vet:  ## go vet
 	go -C src vet ./...
