@@ -116,10 +116,10 @@ func (s *SQLiteStore) CreateWorkspace(ctx context.Context, id, name string, at t
 }
 
 func (s *SQLiteStore) Workspaces(ctx context.Context) ([]Workspace, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id, w.name, w.created, COALESCE(MAX(e.seq), 0),
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id, w.name, w.created, COALESCE((SELECT MAX(e.seq) FROM entries e WHERE e.ws = w.id), 0),
 	  COALESCE(m.notes, ''), COALESCE(m.locked, 0), COALESCE(m.archived, 0), COALESCE(m.deleted, ''),
 	  COALESCE(m.color, ''), COALESCE(m.icon, '') FROM workspaces w
-	  LEFT JOIN entries e ON e.ws = w.id LEFT JOIN workspace_meta m ON m.id = w.id GROUP BY w.id ORDER BY w.id`)
+	  LEFT JOIN workspace_meta m ON m.id = w.id ORDER BY w.id`)
 	if err != nil {
 		return nil, err
 	}

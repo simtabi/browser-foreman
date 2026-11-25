@@ -47,8 +47,19 @@ func (t sqlTx) QueryContext(ctx context.Context, q string, a ...any) (*sql.Rows,
 func (t sqlTx) QueryRowContext(ctx context.Context, q string, a ...any) *sql.Row {
 	return t.Tx.QueryRowContext(ctx, bind(q, t.pg), args(a, t.pg)...)
 }
-func (t sqlTx) PrepareContext(ctx context.Context, q string) (*sql.Stmt, error) {
-	return t.Tx.PrepareContext(ctx, bind(q, t.pg))
+func (t sqlTx) PrepareContext(ctx context.Context, q string) (sqlStmt, error) {
+	st, err := t.Tx.PrepareContext(ctx, bind(q, t.pg))
+	return sqlStmt{st, t.pg}, err
+}
+
+// sqlStmt is a prepared statement on a sqlTx, converting its arguments the same way.
+type sqlStmt struct {
+	*sql.Stmt
+	pg bool
+}
+
+func (st sqlStmt) ExecContext(ctx context.Context, a ...any) (sql.Result, error) {
+	return st.Stmt.ExecContext(ctx, args(a, st.pg)...)
 }
 
 // args sends Go booleans to Postgres as 0 and 1: the columns are INTEGER, as SQLite keeps them, and Postgres does not

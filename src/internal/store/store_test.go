@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -250,4 +251,47 @@ func TestFilesArePrivate(t *testing.T) {
 			t.Errorf("%s: %v %v (others must not read it)", p, st.Mode().Perm(), err)
 		}
 	}
+}
+
+// Commits made at once on one head: exactly one lands, the others are refused as conflicts, never as a database
+// error (Postgres runs them side by side; the row lock is what makes the second see the first).
+func TestConcurrentCommitsOnOneHead(t *testing.T) {
+	each(t, func(t *testing.T, s Store) {
+		ctx := context.Background()
+		if _, err := s.CreateWorkspace(ctx, "w", "W", t0); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Commit(ctx, "w", 0, Change{Op: "import", Tree: tree("a")}, t0); err != nil {
+			t.Fatal(err)
+		}
+		const n = 24
+		errs, start := make(chan error, n), make(chan struct{})
+		for i := range n {
+			go func() {
+				<-start // all at once
+				_, err := s.Commit(ctx, "w", 1, Change{Op: "edit", Tree: tree("a", string(rune('b'+i)))}, t0)
+				errs <- err
+			}()
+		}
+		var warm sync.WaitGroup // open the pool's connections first, so the commits do not wait on dialing in turn
+		for range n {
+			warm.Go(func() { _, _ = s.Workspaces(ctx) })
+		}
+		warm.Wait()
+		close(start)
+		ok, conflicts := 0, 0
+		for range n {
+			switch err := <-errs; {
+			case err == nil:
+				ok++
+			case errors.Is(err, ErrConflict):
+				conflicts++
+			default:
+				t.Errorf("not a conflict: %v", err)
+			}
+		}
+		if ok != 1 || conflicts != n-1 {
+			t.Fatalf("%d landed, %d conflicts", ok, conflicts)
+		}
+	})
 }
