@@ -129,7 +129,7 @@ func (s *Server) requestPairing(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	now := s.Now()
-	key := "pairreq:" + clientKey(r)
+	key := "pairreq:" + s.clientKey(r)
 	if ok, until := s.Limit.Allowed(key, now); !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(int(until.Sub(now).Seconds())+1))
 		writeErr(w, http.StatusTooManyRequests, "too many requests to connect; try again later")

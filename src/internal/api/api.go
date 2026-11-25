@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"net"
@@ -445,16 +446,37 @@ func (s *Server) httpServer() *http.Server {
 		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 10 * time.Minute, IdleTimeout: 2 * time.Minute}
 }
 
+// clearTextWarning is what serve says when people will sign in over plain http from other computers: accounts mode on
+// an address beyond this one, with no certificate and no trusted TLS proxy in front.
+func (s *Server) clearTextWarning() string {
+	sc := s.Cfg.Server
+	host, _, _ := net.SplitHostPort(sc.Addr)
+	ip := net.ParseIP(host)
+	if sc.Mode != config.ModeAccounts || host == "localhost" || (ip != nil && ip.IsLoopback()) || sc.TLSCert != "" || len(sc.TrustedProxy) > 0 {
+		return ""
+	}
+	return "Warning: accounts mode on " + sc.Addr + " serves plain http, so passwords and session cookies cross the network in clear text. Set server.tls_cert and server.tls_key, or put a TLS proxy in front and list it in server.trusted_proxy."
+}
+
 // Run serves until ctx ends, delivering every published event to the webhooks in the background.
 func (s *Server) Run(ctx context.Context) error {
 	ch, stop := s.Bus.Subscribe(256)
 	defer stop()
 	go s.Dispatch.Run(ctx, ch) // one queue per webhook: a dead receiver holds up only itself
 	srv := s.httpServer()
+	cert, key := s.Cfg.Server.TLSCert, s.Cfg.Server.TLSKey
+	if w := s.clearTextWarning(); w != "" && s.Console != nil {
+		fmt.Fprintln(s.Console, w)
+	}
 	errc := make(chan error, 1)
-	if s.Listener != nil { // bound by the caller, which handles a port already in use
+	switch {
+	case s.Listener != nil && cert != "": // bound by the caller, which handles a port already in use
+		go func() { errc <- srv.ServeTLS(s.Listener, cert, key) }()
+	case s.Listener != nil:
 		go func() { errc <- srv.Serve(s.Listener) }()
-	} else {
+	case cert != "":
+		go func() { errc <- srv.ListenAndServeTLS(cert, key) }()
+	default:
 		go func() { errc <- srv.ListenAndServe() }()
 	}
 	_, _ = s.Bus.Publish("server.started", map[string]string{"addr": s.Cfg.Server.Addr, "version": version.Version})

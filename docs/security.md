@@ -67,11 +67,17 @@ What Browser Foreman protects, and how. Report a weakness privately: see [SECURI
 
 `server.mode: accounts` turns on sign-in. It is the mode to use when the server listens beyond loopback.
 
+- **Encrypt the traffic.** Over plain `http`, passwords, session cookies and tokens cross the network in clear text.
+  Serve `https` directly with `server.tls_cert` and `server.tls_key`, or put a TLS proxy in front and list it in
+  `server.trusted_proxy`: only from those addresses are `X-Forwarded-Proto` (which makes the cookie `Secure`) and
+  `X-Forwarded-For` (which keys sign-in limits per client, not per proxy) believed. `serve` warns when `accounts` mode
+  listens beyond this computer with neither.
+
 - **Passwords** are hashed with argon2id (64 MiB, 3 passes, 2 lanes, 16-byte random salt) and stored as a PHC string;
   at least 12 characters. The CLI reads them without echo, or from `--password-stdin`, never from an argument.
 - **Sign-in** costs the same time for an unknown name as for a wrong password. Five failures in 15 minutes lock that
   name and that address out for 15 minutes (`429` with `Retry-After`).
-- **Sessions** are 256-bit random ids in an `HttpOnly`, `SameSite=Strict` cookie (`Secure` over TLS); only their
+- **Sessions** are 256-bit random ids in an `HttpOnly`, `SameSite=Strict` cookie (`Secure` over TLS, served here or through a trusted proxy); only their
   SHA-256 is stored. They last `auth.session_ttl` (24 hours by default) and end at sign-out.
 - **CSRF.** A change made with a session must send the session's `X-CSRF-Token`.
 - **API tokens** are `brofo_` plus 256 random bits, shown once and stored as SHA-256. Disabling a person stops their

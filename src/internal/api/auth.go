@@ -98,10 +98,33 @@ func (s *Server) require(role string, next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func clientKey(r *http.Request) string {
+// fromProxy reports whether the request came through a TLS proxy listed in server.trusted_proxy.
+func (s *Server) fromProxy(r *http.Request) bool {
+	h, _, err := net.SplitHostPort(r.RemoteAddr)
+	ip := net.ParseIP(h)
+	return err == nil && ip != nil && s.Cfg.Server.Behind(ip)
+}
+
+// secure reports whether the visit is https: served with TLS here, or through a trusted proxy that says so.
+func (s *Server) secure(r *http.Request) bool {
+	return r.TLS != nil || (s.fromProxy(r) && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"))
+}
+
+// clientKey is who sends a request, for rate limits: the connecting address, or, through a trusted proxy, the
+// address the proxy saw (the last X-Forwarded-For entry, the one it added itself). Without this every client behind a
+// proxy shared one key, so one person's mistakes locked everyone out.
+func (s *Server) clientKey(r *http.Request) string {
 	h, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		h = r.RemoteAddr
+	}
+	if s.fromProxy(r) {
+		if xff := r.Header.Values("X-Forwarded-For"); len(xff) > 0 {
+			parts := strings.Split(xff[len(xff)-1], ",")
+			if last := strings.TrimSpace(parts[len(parts)-1]); net.ParseIP(last) != nil {
+				return last
+			}
+		}
 	}
 	return h
 }
@@ -127,7 +150,7 @@ func (s *Server) signIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := s.Now()
-	keys := []string{"user:" + strings.ToLower(in.Username), "addr:" + clientKey(r)}
+	keys := []string{"user:" + strings.ToLower(in.Username), "addr:" + s.clientKey(r)}
 	for _, k := range keys {
 		if ok, until := s.Limit.Allowed(k, now); !ok {
 			w.Header().Set("Retry-After", strconv.Itoa(int(until.Sub(now).Seconds())+1))
@@ -162,7 +185,7 @@ func (s *Server) signIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: sid, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode,
-		Secure: r.TLS != nil, MaxAge: int(ttl.Seconds())})
+		Secure: s.secure(r), MaxAge: int(ttl.Seconds())})
 	_, _ = s.Bus.Publish("auth.signed_in", map[string]string{"user": u.Name})
 	writeJSON(w, 200, map[string]any{"user": Principal{User: u.Name, Role: u.Role, Via: "session"}, "csrf": csrf})
 }

@@ -46,6 +46,9 @@ on. Each setting shows where its value comes from (the default, a config file, `
 | `server.addr` | `BROFO_SERVER_ADDR` | `127.0.0.1:8765` | where the server listens |
 | `server.open` | `BROFO_SERVER_OPEN` | `auto` | open the page in the default browser when `serve` starts: `auto` (when started from a terminal), `always` or `never`; `--open` and `--no-open` override it |
 | `server.mode` | `BROFO_SERVER_MODE` | `local` | `local`: one owner, loopback only, no sign-in; `accounts`: people sign in; see [security](security.md#accounts) |
+| `server.tls_cert` | `BROFO_SERVER_TLS_CERT` | — | a PEM certificate file: serve `https` directly (with `server.tls_key`); for `accounts` mode reached from other computers |
+| `server.tls_key` | `BROFO_SERVER_TLS_KEY` | — | the certificate's PEM private key file; both or neither |
+| `server.trusted_proxy` | — | — | addresses or CIDR ranges of a TLS proxy in front of the server; only from them are `X-Forwarded-Proto` (for the `Secure` cookie) and `X-Forwarded-For` (for sign-in limits) believed |
 | `storage.driver` | `BROFO_STORAGE_DRIVER` | `sqlite` | `sqlite` or `json`; see [storage](tools/storage.md) |
 | `storage.path` | `BROFO_STORAGE_PATH` | the state folder | where data is kept |
 | `webhooks.timeout` | `BROFO_WEBHOOK_TIMEOUT` | `10s` | per delivery attempt, `1s`–`2m` |

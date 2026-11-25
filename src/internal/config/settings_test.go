@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -262,4 +263,31 @@ func mustDescribe(t *testing.T, p Paths) []Field {
 		t.Fatal(err)
 	}
 	return fs
+}
+
+// A certificate needs its key, and a trusted proxy must be an address or a range.
+func TestTLSAndProxySettingsAreChecked(t *testing.T) {
+	c := Defaults()
+	c.Server.TLSCert = "/no/such/cert.pem"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "together") {
+		t.Fatalf("a certificate without a key: %v", err)
+	}
+	c.Server.TLSKey = "/no/such/key.pem"
+	if err := c.Validate(); err == nil {
+		t.Fatal("unreadable certificate files were accepted")
+	}
+	c = Defaults()
+	c.Server.TrustedProxy = []string{"10.0.0.0/8", "192.0.2.1", "not-an-address"}
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "not-an-address") {
+		t.Fatalf("a bad proxy entry: %v", err)
+	}
+	c.Server.TrustedProxy = c.Server.TrustedProxy[:2]
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for ip, want := range map[string]bool{"10.9.8.7": true, "192.0.2.1": true, "192.0.2.2": false} {
+		if c.Server.Behind(net.ParseIP(ip)) != want {
+			t.Errorf("Behind(%s) != %v", ip, want)
+		}
+	}
 }

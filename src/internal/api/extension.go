@@ -134,7 +134,7 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := s.Now()
-	key := "pair:" + clientKey(r)
+	key := "pair:" + s.clientKey(r)
 	if ok, until := s.Limit.Allowed(key, now); !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(int(until.Sub(now).Seconds())+1))
 		writeErr(w, http.StatusTooManyRequests, "too many wrong codes; try again later")
