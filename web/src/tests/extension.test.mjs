@@ -108,6 +108,11 @@ eq(C.connectRefusal("http://127.0.0.1:8765", "http://127.0.0.1:8765", true), "",
 eq(C.connectRefusal("http://127.0.0.1:8768", "http://127.0.0.1:8765", false), "", "unconnected: the asking page's server, which must still approve it");
 ok(/disconnect it there/.test(C.connectRefusal("http://127.0.0.1:8768", "http://127.0.0.1:8765", true)), "connected: never taken by another port");
 ok(/on this computer/.test(C.connectRefusal("https://evil.example", "http://127.0.0.1:8765", false)), "not from the web");
+// Unconnected, it connects by itself only to its usual server; another page on this computer must be confirmed in the popup.
+eq(C.needsConfirmation("http://127.0.0.1:8765", "http://127.0.0.1:8765", false), false, "its usual server: at once");
+eq(C.needsConfirmation("http://127.0.0.1:8768", "http://127.0.0.1:8765", false), true, "another port: confirmed in the popup first");
+eq(C.needsConfirmation("http://localhost:8765", "http://127.0.0.1:8765", false), true, "another name for this computer is another origin");
+eq(C.needsConfirmation("http://127.0.0.1:8768", "http://127.0.0.1:8765", true), false, "connected: connectRefusal decides");
 ok(C.messageAllowed(true, "page-hello") && C.messageAllowed(true, "page-connect"), "a page's two requests");
 ok(!C.messageAllowed(true, "pair") && !C.messageAllowed(true, "apply") && !C.messageAllowed(true, "unpair") && !C.messageAllowed(true, undefined), "nothing else from a page");
 ok(!C.messageAllowed(false, "page-connect") && C.messageAllowed(false, "status"), "the popup keeps its own, not the bridge's");

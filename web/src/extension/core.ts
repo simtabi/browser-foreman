@@ -159,6 +159,14 @@ export function connectRefusal(origin: string, server: string, paired: boolean):
   return "";
 }
 
+/** Whether a page's request to connect waits for the person instead of going ahead: an unconnected extension connects
+ *  by itself only to its usual server (the one it last used, or the default address). Any other page on this computer,
+ *  which could be some other program's server, gets the address put in the popup, where Connect must be pressed. */
+export function needsConfirmation(origin: string, server: string, paired: boolean): boolean {
+  if (paired) return false; // a connected extension is held to its own server by connectRefusal
+  try { return new URL(origin).origin !== new URL(server).origin; } catch { return true; }
+}
+
 /** Which messages the background takes from whom: a page (through the bridge) only "page-hello" and "page-connect";
  *  the popup only its own, never those two. So no web page can ask for a pairing code, a write or an unpair. */
 export function messageAllowed(fromPage: boolean, kind: unknown): boolean {
