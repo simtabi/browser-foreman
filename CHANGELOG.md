@@ -30,6 +30,12 @@ CI and the release.
 
 ### Fixed
 
+- Blank page snapshots are taken again with a longer wait and never kept; blank ones kept already are taken again.
+- An undo made right after an edit no longer loses the edit.
+- A Chrome or Edge HTML export's loose top-level bookmarks are filed under *Other bookmarks*.
+- Queued webhook events follow the webhook as it is now: none after it is removed, the new address after a change.
+- A link check can no longer hang for good when more than 20,000 sites are known.
+- A state folder too deep for the notification socket is reported with its fix.
 - A torn last line in a workspace's history is repaired instead of stopping the workspace from loading, and a failed
   write no longer leaves a half-written line.
 - Every file the server writes goes through a temporary file, fsync and rename. A half-made workspace folder is
@@ -64,6 +70,17 @@ CI and the release.
 
 ### Added
 
+- Two-way sync: the extension's *Keep this browser and that workspace in sync* carries changes both ways
+  (`POST /api/v1/extension/sync`, `.../sync/adopt`). Where both sides changed one bookmark, the later change wins; what
+  the browser removes goes to the workspace's Trash; notes, ratings and tags stay with the workspace.
+- *Save this page* in the extension's popup (`POST /api/v1/extension/pages`): adds the tab's page, with a picture, to
+  a *Saved from <browser>* folder, and never changes anything else. A red `!` on the toolbar button marks a page
+  confirmed dead (`GET /api/v1/extension/link`). The extension asks for `activeTab` (0.1.10).
+- A `postgres` storage driver (`storage.driver`, with `BROFO_STORAGE_DSN` in `.env`), tested in CI against Postgres
+  18; `make testdb-up` starts a disposable one for local tests.
+- `browser-foreman webhook list|add|remove|test` and `browser-foreman doctor`.
+- `browser-foreman page-details FILE` brings the Python tool's page titles and descriptions into link results.
+- Link results reach the page while a check runs (`GET /api/v1/linkchecks/{id}?results=1&from=N`).
 - Releases carry `LICENSE` and `THIRD_PARTY_NOTICES`, the licence texts of every linked Go module and bundled npm
   package, written by `make notices` during the release.
 - `POST /api/v1/local/links` makes a one-time sign-in link (owner only); `GET /open/{code}` uses it.

@@ -70,5 +70,9 @@ delivery can take longer (measured 2026-11-16 on macOS: 5 to 9 seconds), so `pin
 notification still shows. The re-check's own notifications are sent by the server itself and are not limited this way.
 Output and any notification failure go to `service.log` in the state folder.
 
+The socket lives in the state folder, and a Unix socket's path can be at most about 100 bytes. When the state folder is
+deeper than that, `serve` says so at start and names the fix, a shorter `XDG_STATE_HOME`; banners still show, and only
+`ping` cannot reach the server. `browser-foreman doctor` reports it too.
+
 ---
 [← Docs index](../../README.md#documentation)
