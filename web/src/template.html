@@ -369,7 +369,7 @@ body.no-tree-thumbs .bm-fav { position: static; padding: 0; box-shadow: none; ba
 .ph.letter b { font-size: 1.6rem; line-height: 1; }
 .ph.letter span { font-size: .75rem; font-weight: 500; opacity: .8; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .th.ph.letter b { font-size: .95rem; }
-.ph.letter { background: hsl(var(--h, 210) 55% 95%); color: hsl(var(--h, 210) 45% 38%); }
+.ph.letter { background: hsl(var(--h, 210) 55% 95%); color: hsl(var(--h, 210) 45% 30%); } /* at least 4.98:1 for every hue; 38% gave 3.3 for yellow */
 [data-bs-theme="dark"] .ph.letter { background: hsl(var(--h, 210) 28% 21%); color: hsl(var(--h, 210) 55% 78%); border-color: hsl(var(--h, 210) 20% 28%); }
 .fv { width: 16px; height: 16px; flex: none; object-fit: contain; border-radius: var(--tblr-border-radius); margin-top: .15rem; }
 .fvd { width: 16px; height: 16px; flex: none; border-radius: var(--tblr-border-radius); color: #fff; font-size: .75rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-top: .15rem; }
@@ -811,7 +811,8 @@ body.is-busy, body.is-busy * { cursor: progress !important; }
 .ext-stepper { list-style: none; margin: .45rem 0 .2rem; padding: 0; display: grid; gap: .35rem; font-size: .875rem; }
 .ext-stepper li { display: flex; align-items: center; gap: .5rem; }
 .ext-step-n { flex: none; width: 1.2rem; height: 1.2rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-  font-size: .75rem; font-weight: 600; background: color-mix(in srgb, var(--tblr-primary) 14%, transparent); color: var(--tblr-primary); }
+  font-size: .75rem; font-weight: 600; background: color-mix(in srgb, var(--tblr-primary) 14%, transparent); color: color-mix(in srgb, var(--tblr-primary) 80%, #000); }
+[data-bs-theme="dark"] .ext-step-n { color: var(--tblr-primary); } /* light: 6.1:1 on its tint, where the plain blue was 4.1 */
 .ext-stepper .btn, .ext-check-note .btn { width: 1.5rem; height: 1.5rem; padding: 0; }
 .ext-hints { margin: .25rem 0 0; padding-left: 1.1rem; font-size: .8125rem; color: var(--tblr-secondary); }
 .ext-inline-ask { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .4rem; }
@@ -821,10 +822,11 @@ body.is-busy, body.is-busy * { cursor: progress !important; }
 .ext-code { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem 1rem; padding: .85rem 1rem; border-radius: var(--tblr-border-radius-lg); background: var(--tblr-primary-lt); }
 /* Labels (ts/labels.ts): the star rating and the tag editor. A star is grey until set, amber when set or hovered. */
 .star-rating { display: inline-flex; gap: 0; margin-left: -.4rem; }
-.star-rating .btn { font-size: 1.35rem; line-height: 1; width: 2rem; height: 2rem; padding: 0; color: var(--tblr-border-color-dark, #c8d1dc); }
-.star-rating .btn.on, .star-rating .btn.hover { color: #f59f00; }
+.star-rating .btn { font-size: 1.35rem; line-height: 1; width: 2rem; height: 2rem; padding: 0; color: #8a93a0; } /* an empty star, 3:1 or more on both themes */
+.star-rating .btn.on, .star-rating .btn.hover { color: #d97706; } /* 3.2:1 on white; the brighter amber was 2.1 */
+[data-bs-theme="dark"] .star-rating .btn.on, [data-bs-theme="dark"] .star-rating .btn.hover, [data-bs-theme="dark"] .stars-inline { color: #f59f00; }
 .star-rating .btn:disabled { opacity: 1; }
-.stars-inline { color: #f59f00; letter-spacing: .05em; font-size: .8125rem; white-space: nowrap; }
+.stars-inline { color: #d97706; letter-spacing: .05em; font-size: .8125rem; white-space: nowrap; }
 .bm-tags { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .25rem; } .bm-tags .badge { font-weight: 500; font-size: .75rem; }
 .bm-labels { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
 .tag-editor { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
