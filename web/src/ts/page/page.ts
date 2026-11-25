@@ -161,6 +161,7 @@ function persist() {
 // Never lose the last half-second of edits: when the page is hidden or closed, write at once.
 function persistNow() { clearTimeout(saveTimer); const s = st(); if (s.edited) store.set("tree-" + mode, {root: plain(s.root), titles: s.titles, notes: s.notes, ratings: s.ratings, tags: s.tags, gone: [...s.gone], trashFrom: s.trashFrom}); }
 addEventListener("pagehide", persistNow);
+WS?.onFlush?.(persistNow); // an undo or a dialog right after an edit first hands that edit to the server
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") persistNow(); });
 // With a server the edits are saved in the workspace (with its history); opened as a file, they stay in this browser.
 const EDITED = () => WS ? "Edited · saved in this workspace, with its history" : "Edited · kept in this browser";

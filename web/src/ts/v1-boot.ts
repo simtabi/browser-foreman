@@ -100,8 +100,11 @@ if (boot) {
   const schedule = (): void => { clearTimeout(timer); if (document.visibilityState === "hidden") { flush(); return; } timer = setTimeout(flush, 400); };
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && timer) flush(); });
   addEventListener("pagehide", () => { if (timer) flush(); });
+  // The page holds an edit for its own short timer before handing it over (page.ts persist); it registers how to hand
+  // it over at once, so an undo or a dialog right after an edit finds it here.
+  let flushPage = (): void => {};
   /** Every edit made on this page has reached the server. */
-  const settle = async (): Promise<void> => { if (timer) flush(); while (sending) await sending; };
+  const settle = async (): Promise<void> => { flushPage(); if (timer) flush(); while (sending) await sending; };
 
   const step = (verb: "undo" | "redo") => async (): Promise<void> => {
     await settle(); // an edit still waiting on its timer is sent first, so undo takes back the newest change
@@ -229,6 +232,8 @@ if (boot) {
     /** Resolves once every edit made on this page has reached the server: for a change sent another way (a dialog's
      *  own call), so it lands on top of them rather than racing them. */
     saved: settle,
+    /** The page's own hand-over, run first by saved(), undo and redo. */
+    onFlush: (f: () => void): void => { flushPage = f; },
   };
   window.BM_WS = ws;
 }
