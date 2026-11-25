@@ -1825,7 +1825,9 @@ function trackJob(job, total) {
     $("#jobPause").disabled = $("#jobCancel").disabled = true; $("#jobTitle").textContent = "Stopping…";
     ctl("cancel");
   };
-  let misses = 0, changed = 0; const kept0 = new Set();  // ids whose earlier status was kept
+  // was: each link's status before this refresh (first result seen); kept0: links whose earlier status was kept because
+  // this check could not reach them. Both are by id, so a link answered twice (a later try) counts once.
+  let misses = 0; const kept0 = new Set(), was = new Map();
   const now = Date.now(), kept = store.get("refreshed") || {}, applied = new Map();  // id -> the result applied
   // apply takes results as they arrive, while the check runs and at its end; a result already applied is skipped, so
   // the counts hold, and a later try of the same link (a changed result) applies again.
@@ -1836,9 +1838,10 @@ function trackJob(job, total) {
       applied.set(id, seen);
       const i = ITEM.get(+id); if (!i) continue;
       any = true;
+      if (!was.has(id)) was.set(id, i.s);
       // A timeout or a blocked check says nothing new: keep what was known rather than downgrade a link to "could not verify".
       if (r.s === "unverified" && i.s !== "unverified" && i.s !== "unchecked") { kept0.add(id); if (r.h) { i.h = r.h; thumbVer.set(r.h, now); } continue; }
-      if (i.s !== r.s) changed++;
+      kept0.delete(id); // a later try reached it
       i.s = r.s; i.n = r.n; if (r.h) { i.h = r.h; thumbVer.set(r.h, now); }
       // Every check field: a newer result clears what an older one set (n is set above).
       for (const k of LINK_FIELDS) if (k !== "n") { if (k in r) i[k] = r[k]; else delete i[k]; }
@@ -1872,6 +1875,7 @@ function trackJob(job, total) {
   };
   const finish = j => {
     apply(j.results);
+    let changed = 0; for (const [id, s0] of was) if (ITEM.get(+id)?.s !== s0) changed++;
     jobRunning = false; panel.hidden = true; $("#job").hidden = true; summary(); build();
     const got = j.checked ?? Object.keys(j.results).length, what = `${got.toLocaleString()} of ${total.toLocaleString()} checked · ${changed} changed status · ${j.rendered} new snapshot${j.rendered === 1 ? "" : "s"}` +
       (kept0.size ? ` · ${kept0.size} could not be reached this time, so their earlier status is kept` : "");
