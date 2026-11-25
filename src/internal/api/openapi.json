@@ -2263,6 +2263,36 @@
           }
         }
       }
+    },
+    "/api/v1/extension/pages": {
+      "post": {
+        "summary": "Save the page a tab shows into a workspace",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "extension",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Body: {workspace, url, title, picture?}; picture is a JPEG or PNG data URL up to 8 MB. Adds one bookmark to the top folder \"Saved from <browser>\"; 201 with the entry, or 200 {already, node} when the workspace holds the address."
+      }
+    },
+    "/api/v1/extension/link": {
+      "get": {
+        "summary": "What is known about one address, for the toolbar badge",
+        "tags": [
+          "Extension"
+        ],
+        "x-role": "extension",
+        "responses": {
+          "default": {
+            "description": "JSON; errors are {\"error\": \"message\"}"
+          }
+        },
+        "description": "Query: url. {status, confirmed, archive, checked}, or {status: \"unchecked\"}."
+      }
     }
   }
 }

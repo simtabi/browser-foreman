@@ -2,7 +2,7 @@
 // waits for the server's commands (open links, open a tab group, read the bookmarks), and carries out what the popup asks.
 
 import { ext, type ExtBookmark } from "./ext";
-import { browserName, Client, connectRefusal, connectStep, extFingerprint, groupColor, isLoopback, messageAllowed, newInstance, tabReport, webOnly, workerGone, type Command, needsConfirmation } from "./core";
+import { browserName, Client, connectRefusal, linkBadge, connectStep, extFingerprint, groupColor, isLoopback, messageAllowed, newInstance, tabReport, webOnly, workerGone, type Command, needsConfirmation } from "./core";
 import { plan, run, type WsNode } from "./apply";
 
 interface Settings { server?: string; token?: string; browser?: string }
@@ -54,6 +54,19 @@ const soon = (): void => { clearTimeout(timer); timer = setTimeout(() => backgro
 for (const h of [ext.tabs.onCreated, ext.tabs.onRemoved, ext.tabs.onMoved, ext.tabs.onAttached, ext.windows.onCreated, ext.windows.onRemoved]) h.addListener(soon);
 ext.tabs.onUpdated.addListener((_id, change) => { if (change.url || change.title || change.status === "complete") soon(); });
 ext.tabGroups?.onUpdated.addListener(soon);
+
+// ---- the toolbar badge: "!" on a page Browser Foreman has confirmed dead ----
+async function markTab(tabId: number): Promise<void> {
+  const c = await client(); if (!c) return;  // not connected: the icon shows the connecting letters instead
+  const tab = await ext.tabs.get(tabId).catch(() => null);
+  if (!tab?.url || !/^https?:\/\//i.test(tab.url)) return;
+  const b = linkBadge(await c.link(tab.url).catch(() => ({ status: "unchecked" })));
+  await ext.action?.setBadgeText({ tabId, text: b.text }).catch(() => {});
+  if (b.text) await ext.action?.setBadgeBackgroundColor({ tabId, color: "#c0392b" }).catch(() => {});
+  await ext.action?.setTitle({ tabId, title: b.title || DEFAULT_TITLE }).catch(() => {});
+}
+ext.tabs.onActivated.addListener(info => background(() => markTab(info.tabId)));
+ext.tabs.onUpdated.addListener((id, change) => { if (change.status === "complete") background(() => markTab(id)); });
 
 // ---- commands ----
 let polling = false;
@@ -223,6 +236,15 @@ async function handle(msg: any): Promise<unknown> {
     case "report": await report(); return { ok: true };
     case "read": { const c = await client(); if (!c) throw new Error("not paired"); return { summary: await readInto(c, msg.workspace || undefined) }; }
     case "workspaces": { const c = await client(); if (!c) throw new Error("not paired"); return c.workspaces(); }
+    case "save": {
+      const c = await client(); if (!c) throw new Error("not paired");
+      const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.url || !/^https?:\/\//i.test(tab.url)) throw new Error("Only web pages (http or https) are saved");
+      // A picture of what the tab shows; some pages (the browser's own) cannot be pictured, and are saved without one.
+      const picture = await ext.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 70 }).catch(() => "");
+      const r = await c.savePage(msg.workspace, tab.url, tab.title ?? "", picture);
+      return { already: !!r.already, pictured: !!picture };
+    }
     case "plan": case "apply": {
       const c = await client(); if (!c) throw new Error("not paired");
       if (msg.kind === "apply") {

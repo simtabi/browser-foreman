@@ -42,6 +42,23 @@ const seen = [];
 const client = new C.Client("http://127.0.0.1:8765", "brofo_x", async (url, init) => { seen.push([url, init.headers.Authorization]); return { ok: false, status: 423, json: async () => ({ error: "locked" }) }; });
 await assert.rejects(client.sendBookmarks([]), /locked/); n++;
 eq(seen[0], ["http://127.0.0.1:8765/api/v1/extension/bookmarks", "Bearer brofo_x"]);
+// saving a page and asking about a link: the routes, the body and the address escaped
+{
+  const calls = [];
+  const c = new C.Client("http://127.0.0.1:8765", "brofo_x", async (url, init) => { calls.push([init.method, url, init.body]); return { ok: true, status: 200, json: async () => ({ status: "dead", confirmed: true }) }; });
+  await c.savePage("main", "https://a.example/x?y=1", "A", "data:image/jpeg;base64,AA==");
+  await c.savePage("main", "https://b.example/", "B");
+  await c.link("https://a.example/x?y=1&z=2");
+  eq(calls[0].slice(0, 2), ["POST", "http://127.0.0.1:8765/api/v1/extension/pages"]);
+  eq(JSON.parse(calls[0][2]), { workspace: "main", url: "https://a.example/x?y=1", title: "A", picture: "data:image/jpeg;base64,AA==" });
+  eq(JSON.parse(calls[1][2]), { workspace: "main", url: "https://b.example/", title: "B" }, "no picture: none sent");
+  eq(calls[2].slice(0, 2), ["GET", "http://127.0.0.1:8765/api/v1/extension/link?url=https%3A%2F%2Fa.example%2Fx%3Fy%3D1%26z%3D2"]);
+}
+// the badge: only a link confirmed dead is marked
+eq(C.linkBadge({ status: "dead", confirmed: true }).text, "!");
+eq(C.linkBadge({ status: "dead", confirmed: false }).text, "", "dead once is only a suspicion");
+eq(C.linkBadge({ status: "ok" }).text, "");
+eq(C.linkBadge({ status: "unchecked" }), { text: "", title: "" });
 
 // ---- apply: a fake bookmarks API that behaves like the browser's ----
 function fake(roots) {
