@@ -471,6 +471,12 @@ func (s *Server) Run(ctx context.Context) error {
 	defer stop()
 	go s.Dispatch.Run(ctx, ch) // one queue per webhook: a dead receiver holds up only itself
 	srv := s.httpServer()
+	// Every request's context ends when shutdown starts, so the event stream and the extension's long poll return at
+	// once instead of holding Shutdown for its whole timeout.
+	base, stopRequests := context.WithCancel(context.Background())
+	defer stopRequests()
+	srv.BaseContext = func(net.Listener) context.Context { return base }
+	srv.RegisterOnShutdown(stopRequests)
 	cert, key := s.Cfg.Server.TLSCert, s.Cfg.Server.TLSKey
 	if w := s.clearTextWarning(); w != "" && s.Console != nil {
 		fmt.Fprintln(s.Console, w)
