@@ -87,7 +87,8 @@ on. Each setting shows where its value comes from (the default, a config file, `
 `~/.config/browser-foreman/.env`:
 
 ```bash
-BROFO_API_TOKEN=paste-the-token-config-init-wrote
+# config init writes the token after the =
+BROFO_API_TOKEN=
 ```
 
 ## Rules the loader enforces

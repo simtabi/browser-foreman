@@ -82,7 +82,7 @@ A client that reconnects sends `Last-Event-ID` and receives what it missed. See 
 BROFO_WEBHOOK_SECRET=$(openssl rand -hex 32)  # keep it: the receiver checks signatures with it
 curl -X POST http://127.0.0.1:8765/api/v1/webhooks \
   -H "Authorization: Bearer $BROFO_API_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"url": "https://example.com/brofo", "events": ["*"], "secret": "'"$BROFO_WEBHOOK_SECRET"'"}'
+  -d "{\"url\": \"https://example.com/brofo\", \"events\": [\"*\"], \"secret\": \"$BROFO_WEBHOOK_SECRET\"}"
 ```
 
 Send it a test event, using the `id` the call returned:
