@@ -41,7 +41,7 @@ func find(fs []Field, key string) Field {
 }
 
 func TestDescribeNeverShowsASecret(t *testing.T) {
-	secret := "sk-" + strings.Repeat("x", 8) + "generated" // never a real key
+	secret := "sk-" + rand.Text()
 	p := setup(t, `{"ai":{"provider":"openai","model":"gpt-x"}}`, "# keys\nOPENAI_API_KEY="+secret+"\n")
 	fs, mode, err := Describe(p, noEnv)
 	if err != nil {

@@ -67,6 +67,7 @@ func TestTheCredentialCheckFindsWhatItLooksFor(t *testing.T) {
 		"env line":   "e := " + q("X_TO"+"KEN=abc\\n"),
 		"json":       "b := `{" + q("pass"+"word") + ":" + q("abc") + "}`",
 		"argument":   "s := serve(t, " + q("abc") + ")",
+		"built":      "secret := " + q("sk-") + " + strings.Repeat(" + q("x") + ", 8) + " + q("abc"),
 	}
 	params := map[string][]int{}
 	if err := credentialParams("decl.go", []byte("package p\nfunc serve(t int, token string) {}\n"), params); err != nil || len(params["serve"]) != 1 {
@@ -77,7 +78,7 @@ func TestTheCredentialCheckFindsWhatItLooksFor(t *testing.T) {
 			t.Errorf("%s: found %v in %s, want one", name, got, stmt)
 		}
 	}
-	clean := "package p\nfunc f() {\nx := Subscription{Secret: rand.Text()}\nh := " + q("Bear"+"er ") + " + tok\ne := " + q("X_TO"+"KEN=\\n") + "\ns := serve(t, tok)\nu := serve(t+1, tok)\n}\n"
+	clean := "package p\nfunc f() {\nx := Subscription{Secret: rand.Text()}\nh := " + q("Bear"+"er ") + " + tok\ne := " + q("X_TO"+"KEN=\\n") + "\nsecret := " + q("sk-") + " + rand.Text()\ns := serve(t, tok)\nu := serve(t+1, tok)\n}\n"
 	if got, _ := credentialLiterals("clean.go", []byte(clean), params); len(got) != 0 {
 		t.Errorf("found %v in made values", got)
 	}
@@ -91,6 +92,12 @@ var (
 		regexp.MustCompile(`(?i)"(token|secret|password)"\s*:\s*"[^"]+"`),
 	}
 )
+
+// written is any constant written in the source, an empty string included: joined to a literal it keeps it one.
+func written(e ast.Expr) bool {
+	_, ok := e.(*ast.BasicLit)
+	return ok
+}
 
 // parse reads a Go file: src, or the file at path when src is nil.
 func parse(fset *token.FileSet, path string, src []byte) (*ast.File, error) {
@@ -139,9 +146,23 @@ func credentialLiterals(path string, src []byte, params map[string][]int) ([]str
 	}
 	var found []string
 	report := func(n ast.Node, why string) { found = append(found, fset.Position(n.Pos()).String()+": "+why) }
-	literal := func(e ast.Expr) bool {
-		b, ok := e.(*ast.BasicLit)
-		return ok && b.Kind == token.STRING && len(b.Value) > 2
+	// literal is a value written in the source: a non-empty string, or strings joined and repeated from written parts.
+	var literal func(e ast.Expr) bool
+	literal = func(e ast.Expr) bool {
+		switch x := e.(type) {
+		case *ast.BasicLit:
+			return x.Kind == token.STRING && len(x.Value) > 2
+		case *ast.BinaryExpr:
+			l, r := literal(x.X), literal(x.Y)
+			return x.Op == token.ADD && (l || written(x.X)) && (r || written(x.Y)) && (l || r)
+		case *ast.CallExpr:
+			if sel, ok := x.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Repeat" && len(x.Args) == 2 {
+				return literal(x.Args[0])
+			}
+		case *ast.ParenExpr:
+			return literal(x.X)
+		}
+		return false
 	}
 	named := func(e ast.Expr) bool {
 		switch x := e.(type) {
