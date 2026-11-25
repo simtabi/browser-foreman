@@ -62,8 +62,11 @@ In local mode the answer also names the service, its version and its process.
 `browser-foreman stop` stops the running server, as Ctrl-C in its terminal would. Both `stop` and `--replace` signal
 only a process that answers as Browser Foreman and whose program is `browser-foreman`.
 
-A server on a fallback port records its address in `server.json` in the state folder. `mcp`, `pair`, `apply` and
-`stop` read it, so they find the server there. A browser extension paired with the usual address needs pairing again.
+`browser-foreman doctor` checks the configuration, the storage folder, the token, notifications, the running server and
+whether it can take page snapshots, one `ok`, `warn` or `fail` line each, and fails when any check fails.
+
+A server on a fallback port records its address in `server.json` in the state folder. `mcp`, `pair`, `apply`, `stop`,
+`webhook` and `doctor` read it, so they find the server there. A browser extension paired with the usual address needs pairing again.
 To keep one port, set `server.addr`.
 
 ## Watch events
