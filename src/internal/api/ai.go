@@ -144,6 +144,7 @@ func (s *Server) createAIJobs(w http.ResponseWriter, r *http.Request) {
 	for _, j := range jobs {
 		s.ai.add(j)
 	}
+	created := summaries(jobs) // taken under the lock: once runJobs starts it changes these jobs
 	s.aiSaveUnlock()
 	answeredBy := "an MCP client: it calls next_ai_jobs, or use the process-queue prompt"
 	if p := s.provider(); p != nil {
@@ -151,7 +152,7 @@ func (s *Server) createAIJobs(w http.ResponseWriter, r *http.Request) {
 		go s.runJobs(context.WithoutCancel(r.Context()), jobs)
 	}
 	_, _ = s.Bus.Publish("ai.jobs.created", map[string]any{"workspace": in.Workspace, "kind": in.Kind, "jobs": len(jobs)})
-	writeJSON(w, 201, map[string]any{"jobs": summaries(jobs), "answered_by": answeredBy})
+	writeJSON(w, 201, map[string]any{"jobs": created, "answered_by": answeredBy})
 }
 
 // buildJobs splits what in asks for into jobs of ai.MaxItems bookmarks or ai.MaxGroups groups.
