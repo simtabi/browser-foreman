@@ -36,8 +36,8 @@ tidy:  ## go.mod and go.sum hold exactly what the code needs (fails when go mod 
 vuln:  ## known vulnerabilities in code the binary calls (govulncheck at GOVULNCHECK_VERSION)
 	cd src && go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
-notices:  ## rewrite THIRD_PARTY_NOTICES from the linked Go modules and bundled npm packages (needs web/node_modules)
-	go -C src test -count=1 -run TestThirdPartyNoticesAreCurrent ./internal/version -update-notices
+notices:  ## .cache/notices/THIRD_PARTY_NOTICES for the release: licences of the linked Go modules and bundled npm packages (after make web)
+	go -C src test -count=1 -run TestThirdPartyNoticesCanBeWritten ./internal/version -notices-out "$(CURDIR)/.cache/notices/THIRD_PARTY_NOTICES"
 
 fmt:  ## gofmt check (fails when a file needs formatting)
 	@test -z "$$(gofmt -l src)" || (gofmt -l src; exit 1)

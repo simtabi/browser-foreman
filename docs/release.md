@@ -58,8 +58,11 @@ gh workflow run release.yml --repo simtabi/browser-foreman -f tag=vX.Y.Z
 `.github/workflows/release.yml` calls simtabi/.github's shared `go-release.yml`, which checks the tag, takes the
 `## [X.Y.Z]` CHANGELOG section as the notes (a final version without one is refused), pushes the `src/vX.Y.Z` module
 tag, and runs GoReleaser with `src/.goreleaser.yaml`. That stages the web interface, runs the tests, builds every
-target in `build/targets.txt` and the universal macOS binary, and publishes them with `checksums.txt` on the GitHub
-release, then attests their build provenance (public repositories only). This publishes for real.
+target in `build/targets.txt` and the universal macOS binary, and publishes them with `checksums.txt`, `LICENSE` and
+`THIRD_PARTY_NOTICES` on the GitHub release, then attests their build provenance (public repositories only). This
+publishes for real. `THIRD_PARTY_NOTICES` holds the licence texts of every Go module linked and npm package bundled;
+`make notices` writes it into the ignored `.cache/notices/` during the release, so it is never kept in the repository
+and always matches the dependencies being shipped.
 
 A local dry run builds the same assets into the ignored `.cache/goreleaser/`:
 
