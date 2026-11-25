@@ -10,6 +10,7 @@ import { DataTable, avatar, by, nameCell } from "./datatable";
 import { RangePicker } from "./rangepick";
 import { lookPicker, wsBadge } from "./wslook";
 import { busy } from "./busy";
+import { isWeb } from "./tabs";
 import { bridgeStale, extensionConnect, extensionHello, type ExtensionHello } from "./bridge";
 import { type DGroup, startsTicked, trashOps } from "./dupes";
 import { version as EXT_VERSION } from "../../package.json";  // the extension's manifest takes the same version
@@ -416,7 +417,7 @@ function install(W: V1): void {
       pick: { key: r => r.url, disabled: r => !!r.bookmarked, onPick: () => paintSave() },
       columns: [
         { label: "Page", cls: "text-wrap", sort: by(r => r.title || r.url), cell: r => {
-          const a = el("a", "text-reset", r.title || r.url); a.href = r.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+          const a = el("a", "text-reset", r.title || r.url); if (isWeb(r.url)) { a.href = r.url; a.target = "_blank"; a.rel = "noopener noreferrer"; }
           const t = el("span"); t.append(a);
           if (r.bookmarked) { const b = el("span", "badge bg-green-lt ms-2"); b.append(icon("ti-bookmark", "me-1"), "bookmarked"); t.append(b); }
           return nameCell(t, r.url);
