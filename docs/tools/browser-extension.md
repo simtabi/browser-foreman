@@ -44,6 +44,11 @@ no letters to compare, because both ends are in the same browser. This also reco
 disconnected or denied, which does not ask again by itself. Installed or reloaded the extension after opening the
 page? Reload the page: they find each other when the page loads.
 
+An unconnected extension (0.1.9 and later) connects this way at once only to its usual server: the one it last used,
+or `127.0.0.1:8765`. A page at any other address on this computer, such as Browser Foreman moved to the next free
+port, or some other program, puts its address in the extension's popup and shows `?` on the icon instead; press
+**Connect** there if it is yours.
+
 How the page reaches the extension: a small content script on pages from this computer (`127.0.0.1`, `localhost`,
 already in the extension's permissions) passes two questions, *are you here?* and *connect to me*, to the
 extension. The extension checks the page's origin as the browser reports it, answers only pages on this computer,

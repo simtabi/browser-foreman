@@ -15,7 +15,8 @@ const say = (id: string, text: string, bad = false) => { const el = $(id); el.te
 async function show(): Promise<void> {
   const s = await ask({ kind: "status" });
   $("unpaired").hidden = s.paired; $("paired").hidden = !s.paired; $("write").hidden = !s.paired; $("foot").hidden = !s.paired;
-  ($("server") as HTMLInputElement).value = s.server;
+  ($("server") as HTMLInputElement).value = s.offer && !s.paired ? s.offer : s.server;
+  if (s.offer && !s.paired) say("askMsg", `A Browser Foreman page at ${s.offer} asked to connect. Press Connect if it is yours.`);
   $("who").textContent = s.browser; $("where").textContent = s.server;
   $("last").textContent = s.lastError ? `Last report failed: ${s.lastError}` : s.lastReport ? `Tabs last sent ${new Date(s.lastReport).toLocaleTimeString()}` : "";
   if (s.paired) {

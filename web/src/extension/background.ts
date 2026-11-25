@@ -2,7 +2,7 @@
 // waits for the server's commands (open links, open a tab group, read the bookmarks), and carries out what the popup asks.
 
 import { ext, type ExtBookmark } from "./ext";
-import { browserName, Client, connectRefusal, connectStep, extFingerprint, groupColor, isLoopback, messageAllowed, newInstance, tabReport, webOnly, workerGone, type Command } from "./core";
+import { browserName, Client, connectRefusal, connectStep, extFingerprint, groupColor, isLoopback, messageAllowed, newInstance, tabReport, webOnly, workerGone, type Command, needsConfirmation } from "./core";
 import { plan, run, type WsNode } from "./apply";
 
 interface Settings { server?: string; token?: string; browser?: string }
@@ -190,7 +190,7 @@ async function handle(msg: any): Promise<unknown> {
   switch (msg.kind) {
     case "status": {
       const s = await settings();
-      const st = await ext.storage.local.get(["lastReport", "lastError"]);
+      const st = await ext.storage.local.get(["lastReport", "lastError", "offer"]);
       return { paired: !!s.token, server: s.server ?? "http://127.0.0.1:8765", browser: s.browser ?? thisBrowser(), ...st };
     }
     case "pair": {
@@ -204,7 +204,7 @@ async function handle(msg: any): Promise<unknown> {
       const server = new URL(msg.server).origin, browser = thisBrowser();
       const req = await Client.request(server, browser, VERSION(), (u, i) => fetch(u, i), await instanceId(), true); // Connect pressed: may replace another copy
       await ext.storage.local.set({ asking: { server, ...req }, unanswered: 0 });
-      await ext.storage.local.remove(["declined"]);
+      await ext.storage.local.remove(["declined", "offer"]);
       await badge(req.match);
       return { match: req.match };
     }
@@ -253,6 +253,12 @@ async function handlePage(kind: string, origin: string): Promise<unknown> {
   }
   const why = connectRefusal(origin, server, !!s.token);
   if (why) throw new Error(why);
+  if (needsConfirmation(origin, server, !!s.token)) {
+    const at = new URL(origin).origin;
+    await ext.storage.local.set({ offer: at });
+    await badge("?");
+    throw new Error(`To connect to Browser Foreman at ${at}, open this browser's Browser Foreman extension (its icon shows ?) and press Connect: it connects by itself only to ${new URL(server).origin}.`);
+  }
   if (s.token && same(server)) {
     // Connected here, it believes: check its key still works (another copy may have been pinned, revoking it).
     try { await new Client(origin, s.token, (u, i) => fetch(u, i)).workspaces(); return { connected: true }; } // a read: takes no queued command
