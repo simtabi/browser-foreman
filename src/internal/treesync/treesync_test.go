@@ -165,22 +165,28 @@ func TestTheWorkspacesOwnFieldsStay(t *testing.T) {
 	}
 }
 
-// After the merge is written into the browser, its tree comes back with new ids for what it made; adopting it keeps
-// each bookmark's note, rating and tags, and the workspace's Trash.
-func TestAdoptKeepsWhatOnlyTheWorkspaceKnows(t *testing.T) {
-	head := t3("bar[a,new]")
-	node(head, "a").Note = "by id"
-	n := node(head, "new")
-	n.Rating, n.Tags = 5, []string{"made on the page"}
-	head.Trash = []*store.Trashed{{Node: &store.Node{ID: "old", Kind: store.KindBookmark, Title: "old"}, From: "bar"}}
-	br := t3("bar[a,b9]") // the browser gave "new" the id b9
-	b9 := node(br, "b9")
-	b9.Title, b9.URL = "new", "https://new.example/"
-	got := Adopt(head, br)
-	if node(got, "a").Note != "by id" || node(got, "b9").Rating != 5 || len(node(got, "b9").Tags) != 1 || len(got.Trash) != 1 {
-		t.Fatalf("%s %+v", shape(got.Root), node(got, "b9"))
+// After the merge is written into the browser, the browser has new ids for what it made, folders and what is in them;
+// renaming the head to those ids keeps every note, rating and tag, and anything the workspace changed meanwhile.
+func TestNewIDsFollowWhatTheBrowserMade(t *testing.T) {
+	written := store.Tree{Root: fo("root", "", fo("ext-1", "Bar", bk("ext-2", "a"), fo("w1", "New", bk("w2", "x"))))}
+	read := store.Tree{Root: fo("root", "", fo("ext-1", "Bar", bk("ext-2", "a"), fo("ext-50", "New", bk("ext-51", "x")), bk("ext-60", "made meanwhile")))}
+	node(read, "ext-51").URL = node(written, "w2").URL // the same page, under the browser's new id
+	m := NewIDs(written, read)
+	if len(m) != 2 || m["w1"] != "ext-50" || m["w2"] != "ext-51" {
+		t.Fatalf("%v", m)
 	}
-	if node(br, "b9").Rating != 0 {
-		t.Fatal("Adopt changed the browser's tree it was given")
+	head := store.Tree{Root: fo("root", "", fo("ext-1", "Bar", bk("ext-2", "a renamed meanwhile"), fo("w1", "New", bk("w2", "x"))))}
+	node(head, "w2").Note, node(head, "w2").Tags = "keep me", []string{"t"}
+	head.Trash = []*store.Trashed{{Node: bk("old", "old"), From: "w1"}}
+	got := Rename(head, m)
+	x := node(got, "ext-51")
+	if x == nil || x.Note != "keep me" || len(x.Tags) != 1 || node(got, "ext-2").Title != "a renamed meanwhile" || got.Trash[0].From != "ext-50" {
+		t.Fatalf("%s %+v", shape(got.Root), got.Trash[0])
+	}
+	if node(head, "w2") == nil {
+		t.Fatal("Rename changed the tree it was given")
+	}
+	if err := got.Validate(); err != nil {
+		t.Fatal(err)
 	}
 }

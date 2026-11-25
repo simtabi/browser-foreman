@@ -194,7 +194,7 @@ again, so a fresh `make extension` takes effect without visiting the browser's e
 | `POST /api/v1/extension/commands/{id}/done` | the extension | what became of one |
 | `POST /api/v1/extension/pages` | the extension | body `{workspace, url, title, picture?}` (a JPEG or PNG data URL up to 8 MB): add the page to *Saved from <browser>*; `201` with the entry, or `200 {"already": true, "node"}` |
 | `POST /api/v1/extension/sync` | the extension | body `{workspace, base, changed, nodes}` (`base` 0: the last entry this browser and the workspace agreed on; `changed`: the browser's last bookmark change, Unix ms): merges and answers `{tree, conflicts, removed}` with the entry made, or `seq` when nothing changed |
-| `POST /api/v1/extension/sync/adopt` | the extension | body `{workspace, seq, nodes}`: the browser's bookmarks read back after writing the merge, taken under the browser's ids; `409` when the workspace moved on (sync again) |
+| `POST /api/v1/extension/sync/adopt` | the extension | body `{workspace, seq, nodes}`: the browser's bookmarks read back after writing merge entry `seq`; what the browser made takes its new ids (matched by folder path, title and address), on the workspace as it is now |
 | `GET /api/v1/extension/link?url=` | the extension | `{status, confirmed, archive, checked}` for one address, `{"status": "unchecked"}` when never checked |
 | `POST /api/v1/extension/commands` | owner | ask a browser to open links or a tab group, or to reload its extension (`"kind": "reload"`); at most 100 wait per browser, and each is forgotten after an hour |
 | `GET /api/v1/extension/commands/{id}` | viewer | a command and its state |

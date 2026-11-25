@@ -65,11 +65,29 @@ func TestSyncMergesTheBrowserAndItsWorkspace(t *testing.T) {
 	if code, out := call("sync", map[string]any{"workspace": ws, "base": e.Seq, "nodes": browser}); code != 200 || out["seq"] != float64(e.Seq) {
 		t.Fatalf("idle sync %d %v", code, out)
 	}
-	// An adopt that lost a race with another change is refused, so the extension syncs again.
+	// The browser makes the page's new bookmark under an id of its own; adopting takes that id, on the workspace as it
+	// is now, so a rename made in Browser Foreman meanwhile stays.
+	if w := send(h, "POST", "/api/v1/workspaces/"+ws+"/nodes", `{"parent":"ext-1","kind":"bookmark","title":"Nim","url":"https://nim.example/"}`); w.Code >= 300 {
+		t.Fatalf("add %d %s", w.Code, w.Body)
+	}
+	// The merge is the workspace as it is (only it changed), so nothing is committed: the answer names its head.
+	code, out = call("sync", map[string]any{"workspace": ws, "base": e.Seq, "nodes": browser})
+	if code != 200 || out["seq"] == nil {
+		t.Fatalf("sync after add %d %v", code, out)
+	}
+	writtenSeq := int(out["seq"].(float64))
 	_ = send(h, "PATCH", "/api/v1/workspaces/"+ws+"/nodes/ext-11", `{"title":"Rust lang"}`)
 	browser[0].Children[0].Children = append(browser[0].Children[0].Children, bm("14", "Nim"))
-	if code, _ := call("sync/adopt", map[string]any{"workspace": ws, "seq": e.Seq, "nodes": browser}); code != 409 {
-		t.Fatalf("stale adopt %d", code)
+	if code, out := call("sync/adopt", map[string]any{"workspace": ws, "seq": writtenSeq, "nodes": browser}); code != 201 {
+		t.Fatalf("adopt %d %v", code, out)
+	}
+	tr, _, _ = s.Data.State(context.Background(), ws, 0)
+	titles = titles[:0]
+	for _, n := range tr.Root.Children[0].Children {
+		titles = append(titles, n.ID+"="+n.Title)
+	}
+	if strings.Join(titles, ",") != "ext-10=Go (golang),ext-11=Rust lang,ext-13=Odin,ext-14=Nim" {
+		t.Fatalf("after adopt %v", titles)
 	}
 	// Only a workspace read from this browser, and only from a base it has.
 	_, _ = s.Data.CreateWorkspace(context.Background(), "work", "Work", time.Now())

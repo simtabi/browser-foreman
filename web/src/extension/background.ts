@@ -67,21 +67,29 @@ async function syncNow(): Promise<void> {
   const sync = st.sync as { workspace: string; base: number; changed?: number } | undefined;
   const c = await client();
   if (!sync?.workspace || !c || !ext.bookmarks) return;
-  const r = await c.sync(sync.workspace, sync.base, sync.changed ?? 0, await bookmarksApi().getTree());
-  let seq = r.entry?.seq ?? r.seq ?? sync.base;
-  const p = plan(await bookmarksApi().getTree() as ExtBookmark[], r.tree.root as WsNode);
+  const sent = await bookmarksApi().getTree() as ExtBookmark[];
+  const r = await c.sync(sync.workspace, sync.base, sync.changed ?? 0, sent);
+  const merged = r.entry?.seq ?? r.seq ?? sync.base;
+  let base = merged, failed: unknown = null;
+  // The plan is made against the bookmarks just sent, not read again: one made in the browser since is not in the
+  // merge, and a plan made now would remove it. It reaches the workspace with the next sync.
+  const p = plan(sent, r.tree.root as WsNode);
   if (p.steps.length) {
     applying = true;
     try {
-      await run(p, bookmarksApi());
-      const back = await c.adopt(sync.workspace, seq, await bookmarksApi().getTree());
-      seq = back.entry?.seq ?? back.seq ?? seq;
+      try { await run(p, bookmarksApi()); } catch (e) { failed = e; }
+      // What was written takes the browser's ids, even after a failure part way. After a failure the base stays where
+      // it was, so the next sync writes what is missing instead of taking it for removed in the browser.
+      const back = await c.adopt(sync.workspace, merged, await bookmarksApi().getTree());
+      base = failed ? sync.base : back.entry?.seq ?? back.seq ?? merged;
     } finally { setTimeout(() => { applying = false; }, 1500); } // the browser's events for this write arrive late
   }
   // A change the owner made while this ran is kept for the next sync (its own timer is already set).
   const now = (await ext.storage.local.get(["sync"])).sync;
   const later = now?.changed > started ? { changed: now.changed } : {};
-  await ext.storage.local.set({ sync: { workspace: sync.workspace, base: seq, ...later }, lastSync: Date.now(), lastSyncNote: r.conflicts || r.removed ? `${r.conflicts} conflict(s) settled, ${r.removed} removed to the Trash` : "" });
+  await ext.storage.local.set({ sync: { workspace: sync.workspace, base, ...later }, lastSync: Date.now(),
+    lastSyncNote: r.conflicts || r.removed ? `${r.conflicts} conflict(s) settled, ${r.removed} removed to the Trash` : "" });
+  if (failed) throw failed;
 }
 const queueSync = (): void => { syncing = syncing.then(syncNow).catch(async e => { await ext.storage.local.set({ lastError: (e as Error).message }); await unpairedIf(e); }); };
 const bookmarkChanged = async (): Promise<void> => {

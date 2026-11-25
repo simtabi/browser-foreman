@@ -2311,7 +2311,7 @@
     },
     "/api/v1/extension/sync/adopt": {
       "post": {
-        "summary": "Take the browser's ids after writing a merge into it",
+        "summary": "Give the workspace the browser's ids after a merge is written into it",
         "tags": [
           "Extension"
         ],
@@ -2321,7 +2321,7 @@
             "description": "JSON; errors are {\"error\": \"message\"}"
           }
         },
-        "description": "Body: {workspace, seq, nodes}. 409 when the workspace moved on since seq."
+        "description": "Body: {workspace, seq, nodes}. What the browser made when merge entry seq was written into it takes the browser's new ids, on the workspace as it is now."
       }
     }
   }

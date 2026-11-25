@@ -122,6 +122,42 @@ func Merge3(base, ws, br store.Tree, newer Side, at int64, reason string) Result
 			kept[id] = out{n, pick(bp.parent, wp.parent, rp.parent)}
 		}
 	}
+	// Two moves that cross (A into B on one side, B into A on the other) make a loop no root reaches: such a node
+	// goes back to its folder in the workspace, else in base, else to the top.
+	loop := func(id string) bool {
+		seen := map[string]bool{}
+		for p := id; p != "" && p != "root"; {
+			if seen[p] {
+				return true
+			}
+			seen[p] = true
+			o, ok := kept[p]
+			if !ok {
+				return false
+			}
+			p = o.parent
+		}
+		return false
+	}
+	order := make([]string, 0, len(kept))
+	for id := range kept {
+		order = append(order, id)
+	}
+	sort.Strings(order)
+	for _, id := range order {
+		if !loop(id) {
+			continue
+		}
+		o := kept[id]
+		for _, p := range []string{w[id].parent, b[id].parent, "root"} {
+			o.parent = p
+			kept[id] = o
+			if p != "" && !loop(id) {
+				break
+			}
+		}
+		res.Conflicts++
+	}
 	// Build the tree: each kept node under its parent, in index order. A node whose parent is gone goes to the nearest
 	// kept folder above it in base (or the workspace), else to the first top folder.
 	root := &store.Node{ID: "root", Kind: store.KindFolder}
@@ -163,8 +199,17 @@ func Merge3(base, ws, br store.Tree, newer Side, at int64, reason string) Result
 		}
 	}
 	attach(root)
-	// What went: only the topmost of each removed branch goes to the Trash, holding what was under it.
-	trash := slices.Clone(ws.Trash)
+	// What went: only the topmost of each removed branch goes to the Trash, holding what was under it but not what the
+	// merge keeps elsewhere. Something in the workspace's Trash that the merge brings back leaves the Trash.
+	var trash []*store.Trashed
+	for _, t := range ws.Trash {
+		if _, back := kept[t.Node.ID]; back {
+			continue
+		}
+		c := *t
+		c.Node = prune(t.Node, kept)
+		trash = append(trash, &c)
+	}
 	gone := map[string]bool{}
 	for _, p := range removed {
 		gone[p.node.ID] = true
@@ -174,8 +219,9 @@ func Merge3(base, ws, br store.Tree, newer Side, at int64, reason string) Result
 		if gone[p.parent] {
 			continue
 		}
-		trash = append(trash, &store.Trashed{Node: p.node, From: p.parent, Index: p.index, At: at, Reason: reason})
-		res.Removed += count(p.node)
+		n := prune(p.node, kept)
+		trash = append(trash, &store.Trashed{Node: n, From: p.parent, Index: p.index, At: at, Reason: reason})
+		res.Removed += count(n)
 	}
 	res.Tree = store.Tree{Root: root, Trash: trash}
 	return res
@@ -281,6 +327,18 @@ func copyNode(n, ws *store.Node) *store.Node {
 	return &c
 }
 
+// prune copies n without what the merge keeps in the tree, at any depth.
+func prune[V any](n *store.Node, kept map[string]V) *store.Node {
+	c := *n
+	c.Children = nil
+	for _, x := range n.Children {
+		if _, ok := kept[x.ID]; !ok {
+			c.Children = append(c.Children, prune(x, kept))
+		}
+	}
+	return &c
+}
+
 func count(n *store.Node) int {
 	k := 1
 	for _, c := range n.Children {
@@ -289,56 +347,87 @@ func count(n *store.Node) int {
 	return k
 }
 
-// Adopt takes the browser's tree, read back after the merge was written into it, as the workspace's next state: the
-// same bookmarks under the browser's ids. What only the workspace knows (note, description, rating, tags) comes along:
-// by id, and, for what the browser made anew (it gives a new id to each bookmark written into it), by folder, title
-// and address. The workspace's Trash is kept.
-func Adopt(head, browser store.Tree) store.Tree {
-	h := index(head)
-	out := store.Tree{Root: cloneTree(browser.Root), Trash: slices.Clone(head.Trash)}
-	r := index(out)
-	type key struct{ parent, title, url string }
-	spare := map[key][]*store.Node{} // workspace nodes the browser does not hold by id
-	for id, p := range h {
-		if _, ok := r[id]; !ok {
-			k := key{p.parent, p.node.Title, p.node.URL}
-			spare[k] = append(spare[k], p.node)
-		}
-	}
-	for _, list := range spare {
-		sort.Slice(list, func(i, j int) bool { return list[i].ID < list[j].ID })
-	}
+// NewIDs says which browser id each bookmark and folder written into the browser now has. written is the merge the
+// extension wrote; read is the browser's bookmarks read back after. The browser gives a new id to each one it made,
+// so those are matched by their folder path, title and address; what the browser held already keeps its id.
+func NewIDs(written, read store.Tree) map[string]string {
+	w, r := paths(written), paths(read)
+	type key struct{ path, title, url string }
+	made := map[key][]string{} // read ids written does not hold, by where and what they are
 	for id, p := range r {
-		from := (*store.Node)(nil)
-		if hp, ok := h[id]; ok {
-			from = hp.node
-		} else {
-			k := key{p.parent, p.node.Title, p.node.URL}
-			if list := spare[k]; len(list) > 0 {
-				from, spare[k] = list[0], list[1:]
-			}
+		if _, ok := w[id]; !ok {
+			k := key{p.path, p.node.Title, p.node.URL}
+			made[k] = append(made[k], id)
 		}
-		if from != nil {
-			p.node.Note, p.node.Description, p.node.Rating, p.node.Tags = from.Note, from.Description, from.Rating, from.Tags
-			if p.node.Added == 0 {
-				p.node.Added = from.Added
-			}
+	}
+	for _, ids := range made {
+		sort.Strings(ids)
+	}
+	var want []string // written ids the browser does not hold: written as new
+	for id := range w {
+		if _, ok := r[id]; !ok {
+			want = append(want, id)
+		}
+	}
+	sort.Strings(want)
+	out := map[string]string{}
+	for _, id := range want {
+		p := w[id]
+		k := key{p.path, p.node.Title, p.node.URL}
+		if ids := made[k]; len(ids) > 0 {
+			out[id], made[k] = ids[0], ids[1:]
 		}
 	}
 	return out
 }
 
-func cloneTree(n *store.Node) *store.Node {
-	if n == nil {
-		return nil
-	}
-	c := *n
-	c.Children = make([]*store.Node, len(n.Children))
-	for i, x := range n.Children {
-		c.Children[i] = cloneTree(x)
-	}
-	if len(n.Children) == 0 {
+// Rename gives t's nodes the ids in m (old → new), in the tree and the Trash, and leaves everything else as it is.
+func Rename(t store.Tree, m map[string]string) store.Tree {
+	var walk func(n *store.Node) *store.Node
+	walk = func(n *store.Node) *store.Node {
+		c := *n
+		if id, ok := m[n.ID]; ok {
+			c.ID = id
+		}
 		c.Children = nil
+		for _, x := range n.Children {
+			c.Children = append(c.Children, walk(x))
+		}
+		return &c
 	}
-	return &c
+	out := store.Tree{Root: walk(t.Root)}
+	for _, tr := range t.Trash {
+		c := *tr
+		c.Node = walk(tr.Node)
+		if id, ok := m[tr.From]; ok {
+			c.From = id
+		}
+		out.Trash = append(out.Trash, &c)
+	}
+	return out
+}
+
+// paths indexes a tree's nodes with the titles of the folders above them.
+func paths(t store.Tree) map[string]struct {
+	node *store.Node
+	path string
+} {
+	out := map[string]struct {
+		node *store.Node
+		path string
+	}{}
+	var walk func(n *store.Node, path string)
+	walk = func(n *store.Node, path string) {
+		for _, c := range n.Children {
+			out[c.ID] = struct {
+				node *store.Node
+				path string
+			}{c, path}
+			walk(c, path+"/"+c.Title)
+		}
+	}
+	if t.Root != nil {
+		walk(t.Root, "")
+	}
+	return out
 }

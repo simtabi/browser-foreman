@@ -93,9 +93,9 @@ func (s *Server) syncBookmarks(w http.ResponseWriter, r *http.Request, browser s
 	s.commitWith(w, r, x, x.Head, true, false, store.Change{Op: "sync", Summary: summary, Tree: res.Tree}, nil, "committed", answer, nil)
 }
 
-// adoptBookmarks records the browser's bookmarks, read back after the merge was written into them, as the workspace's
-// next entry: the same bookmarks under the browser's ids, keeping notes, ratings, tags and the Trash. seq is the entry
-// the merge made; if the workspace moved on since, it is refused (409) and the extension syncs again.
+// adoptBookmarks gives the workspace the browser's ids after the merge entry seq was written into the browser:
+// nodes, the browser's bookmarks read back, hold what it made under new ids. Only ids change, on the workspace as it
+// is now, so an edit made in Browser Foreman meanwhile is kept and nothing is refused.
 func (s *Server) adoptBookmarks(w http.ResponseWriter, r *http.Request, browser string) {
 	var in struct {
 		Workspace string             `json:"workspace"`
@@ -115,23 +115,28 @@ func (s *Server) adoptBookmarks(w http.ResponseWriter, r *http.Request, browser 
 	if !ok {
 		return
 	}
+	if in.Seq < 1 || in.Seq > x.Head {
+		writeErr(w, 400, fmt.Sprintf("seq must be an entry of the workspace (1 to %d): the merge written into the browser", x.Head))
+		return
+	}
+	written, _, err := s.Data.State(r.Context(), x.ID, in.Seq)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	ids := treesync.NewIDs(written, read)
+	if len(ids) == 0 {
+		writeJSON(w, 200, map[string]any{"seq": x.Head})
+		return
+	}
 	head, _, err := s.Data.State(r.Context(), x.ID, 0)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	next := treesync.Adopt(head, read)
-	a, _, _ := store.Hash(next)
-	b, _, _ := store.Hash(head)
-	if a == b {
-		writeJSON(w, 200, map[string]any{"seq": x.Head})
-		return
-	}
-	if in.Seq != x.Head {
-		writeErr(w, 409, fmt.Sprintf("the workspace is at %d now, not %d: sync again", x.Head, in.Seq))
-		return
-	}
-	s.commitWith(w, r, x, in.Seq, true, false, store.Change{Op: "sync", Summary: "Took " + browser + "'s ids after a sync", Tree: next}, nil, "committed", nil, nil)
+	next := treesync.Rename(head, ids)
+	summary := fmt.Sprintf("Took %s's ids for %d it made", browser, len(ids))
+	s.commitWith(w, r, x, x.Head, true, false, store.Change{Op: "sync", Summary: summary, Tree: next}, nil, "committed", nil, nil)
 }
 
 // lastAgreed is the last entry where the browser and the workspace held the same bookmarks: the last read from the
