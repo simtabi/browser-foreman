@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/simtabi/browser-foreman/src/internal/atomicfile"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -25,6 +26,9 @@ type aiState struct {
 	loaded bool
 	jobs   map[string]*ai.Job
 	order  []string
+	// finishing holds the jobs whose answer is being checked and written: a second answer to one of them (a provider
+	// and an MCP client both answering) is refused instead of applied twice.
+	finishing map[string]bool
 }
 
 // aiLock takes the queue, reading it from ai-jobs.json the first time, so jobs outlive a restart.
@@ -68,10 +72,7 @@ func (s *Server) aiSaveUnlock() {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return
 	}
-	tmp := path + ".tmp"
-	if os.WriteFile(tmp, b, 0o600) == nil {
-		_ = os.Rename(tmp, path)
-	}
+	_ = atomicfile.Write(path, b, 0o600)
 }
 
 func (s *Server) aiFile() string {
@@ -144,6 +145,7 @@ func (s *Server) createAIJobs(w http.ResponseWriter, r *http.Request) {
 	for _, j := range jobs {
 		s.ai.add(j)
 	}
+	created := summaries(jobs) // taken under the lock: once runJobs starts it changes these jobs
 	s.aiSaveUnlock()
 	answeredBy := "an MCP client: it calls next_ai_jobs, or use the process-queue prompt"
 	if p := s.provider(); p != nil {
@@ -151,7 +153,7 @@ func (s *Server) createAIJobs(w http.ResponseWriter, r *http.Request) {
 		go s.runJobs(context.WithoutCancel(r.Context()), jobs)
 	}
 	_, _ = s.Bus.Publish("ai.jobs.created", map[string]any{"workspace": in.Workspace, "kind": in.Kind, "jobs": len(jobs)})
-	writeJSON(w, 201, map[string]any{"jobs": summaries(jobs), "answered_by": answeredBy})
+	writeJSON(w, 201, map[string]any{"jobs": created, "answered_by": answeredBy})
 }
 
 // buildJobs splits what in asks for into jobs of ai.MaxItems bookmarks or ai.MaxGroups groups.
@@ -296,7 +298,10 @@ func (s *Server) runJobs(ctx context.Context, jobs []*ai.Job) {
 			s.aiSaveUnlock()
 			continue
 		}
-		res, err := p.Answer(ctx, snap)
+		// Answered within the lease, or not at all: past it an MCP client may take the job too.
+		actx, cancel := context.WithTimeout(ctx, jobLease-time.Minute)
+		res, err := p.Answer(actx, snap)
+		cancel()
 		if err != nil {
 			s.failJob(j, err)
 			continue
@@ -307,6 +312,10 @@ func (s *Server) runJobs(ctx context.Context, jobs []*ai.Job) {
 
 func (s *Server) failJob(j *ai.Job, err error) {
 	s.aiLock()
+	if j.State == ai.Done { // answered meanwhile: a late failure (a provider timing out) does not undo that
+		s.ai.mu.Unlock()
+		return
+	}
 	j.State, j.Error, j.Finished = ai.Failed, err.Error(), s.Now().UTC()
 	s.aiSaveUnlock()
 	_, _ = s.Bus.Publish("ai.job.failed", map[string]any{"id": j.ID, "workspace": j.Workspace, "error": err.Error()})
@@ -320,12 +329,21 @@ func (s *Server) finishJob(ctx context.Context, id string, res ai.Results, by st
 		s.ai.mu.Unlock()
 		return errNoJob
 	}
-	if j.State == ai.Done {
+	if j.State == ai.Done || s.ai.finishing[id] {
 		s.ai.mu.Unlock()
 		return errors.New("that job is answered already")
 	}
+	if s.ai.finishing == nil {
+		s.ai.finishing = map[string]bool{}
+	}
+	s.ai.finishing[id] = true // claimed: until this returns, any other answer is refused
 	snap := *j
 	s.ai.mu.Unlock()
+	defer func() {
+		s.ai.mu.Lock()
+		delete(s.ai.finishing, id)
+		s.ai.mu.Unlock()
+	}()
 	checked, err := ai.Check(snap, res)
 	if err != nil {
 		s.failJob(j, err)

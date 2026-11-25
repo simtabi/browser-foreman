@@ -229,7 +229,7 @@ func TestAskExtensionToReadWaitsForItsAnswer(t *testing.T) {
 		mux := http.NewServeMux()
 		mux.HandleFunc("POST /api/v1/extension/commands", func(w http.ResponseWriter, r *http.Request) {
 			_ = json.NewDecoder(r.Body).Decode(&posted)
-			if r.Header.Get("Authorization") != "Bearer tok" {
+			if r.Header.Get("Authorization") != "Bearer "+apiTok {
 				http.Error(w, `{"error":"no token"}`, http.StatusUnauthorized)
 				return
 			}
@@ -244,7 +244,7 @@ func TestAskExtensionToReadWaitsForItsAnswer(t *testing.T) {
 			_, _ = w.Write([]byte(`{"command":{"id":"cmd_1","state":"` + state + `","error":"no access"}}`))
 		})
 		srv := httptest.NewServer(mux)
-		err := askExtensionToRead(context.Background(), srv.URL, "tok", "Chrome", 10*time.Second)
+		err := askExtensionToRead(context.Background(), srv.URL, apiTok, "Chrome", 10*time.Second)
 		srv.Close()
 		if posted["kind"] != "read-bookmarks" || posted["browser"] != "Chrome" || polls != 2 {
 			t.Fatalf("%s: posted %v, polled %d times", final, posted, polls)
@@ -281,7 +281,7 @@ func TestAWriteSendsItsPlanAndReturnsTheExtensionsCounts(t *testing.T) {
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
-	res, err := runExtensionCommand(context.Background(), srv.URL, "tok", "Google Chrome",
+	res, err := runExtensionCommand(context.Background(), srv.URL, apiTok, "Google Chrome",
 		map[string]any{"kind": "write-bookmarks", "workspace": "google-chrome-target", "expect": strings.Repeat("a", 64)}, "write the plan", 5*time.Second)
 	if err != nil || string(res) != `{"created":3,"moved":2}` {
 		t.Fatalf("%s %v", res, err)

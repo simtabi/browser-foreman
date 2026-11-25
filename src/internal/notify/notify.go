@@ -36,6 +36,23 @@ func New(c config.Config, log io.Writer) (*notifykit.Notifier, error) {
 	})
 }
 
+// maxSocket is the longest socket path go-notifykit's Listen accepts (Unix sockets allow 104 bytes on macOS).
+const maxSocket = 100
+
+// ListenProblem says why the listener cannot start, in terms the user can act on, or "" when it can. Banners show
+// either way; only `browser-foreman notify ping` and scripts need the listener.
+func ListenProblem(n *notifykit.Notifier) string {
+	ep, err := n.Endpoint()
+	if err != nil {
+		return err.Error()
+	}
+	if len(ep.Socket) > maxSocket {
+		return fmt.Sprintf("its socket path %s is %d bytes, longer than the %d a Unix socket allows; set XDG_STATE_HOME "+
+			"to a shorter folder. Banners still show; `browser-foreman notify ping` cannot reach this server", ep.Socket, len(ep.Socket), maxSocket)
+	}
+	return ""
+}
+
 // Sweep is the one banner for a scheduled re-check, or false when it found nothing new. addr is where the page is,
 // which a click opens.
 func Sweep(workspace string, broken, fixed int, addr string) (notifykit.Notification, bool) {

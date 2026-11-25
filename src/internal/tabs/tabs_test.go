@@ -61,7 +61,7 @@ func (c *closer) Close(_ context.Context, _ string, items []CloseItem) (int, []s
 
 func service(t *testing.T) (*Service, *reader, *platform, *closer) {
 	t.Helper()
-	data, err := store.Open("json", t.TempDir())
+	data, err := store.Open("json", t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -76,15 +76,17 @@ if (boot) {
     } catch (e) { banner("Not saved", String(e), "danger"); }
   };
 
-  let timer: ReturnType<typeof setTimeout> | undefined, sending: Promise<void> | null = null, dirty = false;
+  let timer: ReturnType<typeof setTimeout> | undefined, sending: Promise<void> | null = null, dirty = false, lastSent = "";
   const send = async (): Promise<void> => {
     dirty = false;
     const body = JSON.stringify(fromPage(state, urls, page, newId));
+    if (body === lastSent) return; // nothing changed since the last save (hiding the tab re-saved the whole tree)
     const r = await fetch(`${base}/tree`, { method: "PUT", headers: { ...headers(), "If-Match": `"${head}"` }, body, keepalive: body.length < 60_000 });
     if (r.status === 412) return banner("Changed somewhere else", "Another window, the extension or the API changed these bookmarks after this page loaded, so your last edit was not saved yet.", "warning",
       [{ label: "Reload", run: () => location.reload(), primary: true }, { label: "Keep my change", run: () => void keepMine() }]);
     const j = await r.json().catch(() => ({})) as { error?: string; entry?: { seq: number; summary: string } | null };
     if (!r.ok) return banner("Not saved", j.error ?? `The server answered ${r.status}.`, "danger", [{ label: "Try again", run: () => flush(), primary: true }]);
+    lastSent = body;
     if (j.entry) { head = j.entry.seq; ws.can = { undo: j.entry.summary, redo: null }; }
     document.getElementById("bfSaveBanner")?.remove();
   };
@@ -93,11 +95,19 @@ if (boot) {
     if (sending) { dirty = true; return; }
     sending = send().catch(e => banner("Not saved", `${unreachable(e).message} Your edit is still on this page.`, "danger", [{ label: "Try again", run: () => flush(), primary: true }])).finally(() => { sending = null; if (dirty) flush(); });
   };
-  const schedule = (): void => { clearTimeout(timer); timer = setTimeout(flush, 400); };
+  // A page being hidden or closed sends at once: a timer does not fire during unload, so an edit made just before
+  // closing used to be lost.
+  const schedule = (): void => { clearTimeout(timer); if (document.visibilityState === "hidden") { flush(); return; } timer = setTimeout(flush, 400); };
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && timer) flush(); });
+  addEventListener("pagehide", () => { if (timer) flush(); });
+  // The page holds an edit for its own short timer before handing it over (page.ts persist); it registers how to hand
+  // it over at once, so an undo or a dialog right after an edit finds it here.
+  let flushPage = (): void => {};
+  /** Every edit made on this page has reached the server. */
+  const settle = async (): Promise<void> => { flushPage(); if (timer) flush(); while (sending) await sending; };
 
   const step = (verb: "undo" | "redo") => async (): Promise<void> => {
-    if (sending) await sending;
+    await settle(); // an edit still waiting on its timer is sent first, so undo takes back the newest change
     const r = await fetch(`${base}/${verb}`, { method: "POST", headers: headers() });
     if (r.ok) return location.reload();
     const j = await r.json().catch(() => ({})) as { error?: string };
@@ -110,6 +120,8 @@ if (boot) {
     ? Object.assign(new Error(`Browser Foreman is not answering at ${location.origin}: it has stopped, or now runs on another address. Start it (browser-foreman serve, or service install) and this page carries on.`), { status: 0, offline: true })
     : e as Error;
   const call = async <T>(method: string, path: string, body?: unknown): Promise<T> => {
+    // A change to a workspace from a dialog lands on top of this page's own edits, never racing one still on its timer.
+    if (method !== "GET" && path.startsWith("workspaces/")) await settle();
     const r = await fetch(`api/v1/${path}`, { method, headers: headers(), body: body === undefined ? undefined : JSON.stringify(body) }).catch(e => { throw unreachable(e); });
     const j = await r.json().catch(() => ({})) as T & { error?: string };
     if (!r.ok) throw new Error(j.error ?? `the server answered ${r.status}`);
@@ -145,7 +157,7 @@ if (boot) {
   for (const i of page.data.keep) pageIdsByURL.set(i.u, [...(pageIdsByURL.get(i.u) ?? []), i.id]);
   // A refresh re-checks links and takes snapshots: of the chosen pages again, or (for very many, Refresh all) of those
   // with none yet, since each snapshot starts a browser. No Chrome installed: checking alone.
-  type SnapView = { id: string; total: number; done: number; failed: number; skipped: number; state: string };
+  type SnapView = { id: string; total: number; done: number; failed: number; skipped: number; kept?: number; state: string };
   const snapOf = new Map<string, { id: string; urls: string[] }>();
   const refresh = async (ids: number[]): Promise<{ job: string; total: number }> => {
     const nodes = ids.map(id => page.ids[id - 1]).filter((x): x is string => !!x);
@@ -156,23 +168,28 @@ if (boot) {
     } catch { /* no browser to take snapshots with, or snapshots already running */ }
     return { job: job.id, total: job.total };
   };
+  const readSoFar = new Map<string, number>(); // check id -> results already read while it ran
   const thumbKey = async (u: string): Promise<string> =>
     Array.from(new Uint8Array(await crypto.subtle.digest("SHA-1", new TextEncoder().encode(u))), b => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
   const job = async (id: string): Promise<Record<string, unknown>> => {
-    let j: { job: CheckView; results?: Record<string, V1Link> };
-    try { j = await call("GET", `linkchecks/${encodeURIComponent(id)}`); } catch { return { done: true, state: "lost", results: {}, rendered: 0 }; }
-    const v = j.job;
-    const results: Record<string, unknown> = {};
+    let j: { job: CheckView; results?: Record<string, V1Link>; next?: number };
+    // While it runs, only the results that arrived since the last poll; once done, all of them.
+    const from = readSoFar.get(id) ?? 0;
+    try { j = await call("GET", `linkchecks/${encodeURIComponent(id)}?results=1&from=${from}`); } catch { return { done: true, state: "lost", results: {}, rendered: 0 }; }
+    let v = j.job;
     if (v.done) {
       j = await call("GET", `linkchecks/${encodeURIComponent(id)}?results=1`);
-      for (const [url, l] of Object.entries(j.results ?? {})) for (const pid of pageIdsByURL.get(url) ?? []) results[pid] = linkFields(l);
-    }
+      v = j.job;
+      readSoFar.delete(id);
+    } else readSoFar.set(id, j.next ?? from);
+    const results: Record<string, unknown> = {};
+    for (const [url, l] of Object.entries(j.results ?? {})) for (const pid of pageIdsByURL.get(url) ?? []) results[pid] = linkFields(l);
     const base = { state: v.state === "done" ? "done" : v.state, checked: v.checked, total: v.total, started: Date.parse(v.started) / 1000, results };
     const snap = snapOf.get(id);
-    if (!v.done || !snap) return { ...base, phase: "checking", done: v.done, rendered: 0, render_total: 0 };
+    if (!v.done || !snap) return { ...base, phase: "checking", done: v.done, rendered: 0, render_total: 0 };  // results so far apply now
     let sv: SnapView;
     try { sv = (await call<{ job: SnapView }>("GET", `snapshots/${encodeURIComponent(snap.id)}`)).job; } catch { return { ...base, phase: "rendering", done: true, rendered: 0, render_total: 0 }; }
-    const rendered = sv.done + sv.failed + sv.skipped;
+    const rendered = sv.done + sv.failed + sv.skipped + (sv.kept ?? 0);
     if (sv.state === "running") return { ...base, phase: "rendering", done: false, rendered, render_total: sv.total };
     for (const u of snap.urls) {  // only beside a check result: a snapshot alone must not clear a page's status
       const pids = (pageIdsByURL.get(u) ?? []).filter(pid => results[pid]);
@@ -214,10 +231,9 @@ if (boot) {
     redo: step("redo"),
     /** Resolves once every edit made on this page has reached the server: for a change sent another way (a dialog's
      *  own call), so it lands on top of them rather than racing them. */
-    async saved(): Promise<void> {
-      if (timer) flush();
-      while (sending) await sending;
-    },
+    saved: settle,
+    /** The page's own hand-over, run first by saved(), undo and redo. */
+    onFlush: (f: () => void): void => { flushPage = f; },
   };
   window.BM_WS = ws;
 }

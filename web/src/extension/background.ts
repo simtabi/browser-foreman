@@ -2,7 +2,7 @@
 // waits for the server's commands (open links, open a tab group, read the bookmarks), and carries out what the popup asks.
 
 import { ext, type ExtBookmark } from "./ext";
-import { browserName, Client, connectRefusal, connectStep, extFingerprint, groupColor, isLoopback, messageAllowed, newInstance, tabReport, webOnly, workerGone, type Command } from "./core";
+import { browserName, Client, connectRefusal, linkBadge, connectStep, extFingerprint, groupColor, isLoopback, messageAllowed, newInstance, tabReport, webOnly, workerGone, type Command, needsConfirmation } from "./core";
 import { plan, run, type WsNode } from "./apply";
 
 interface Settings { server?: string; token?: string; browser?: string }
@@ -54,6 +54,65 @@ const soon = (): void => { clearTimeout(timer); timer = setTimeout(() => backgro
 for (const h of [ext.tabs.onCreated, ext.tabs.onRemoved, ext.tabs.onMoved, ext.tabs.onAttached, ext.windows.onCreated, ext.windows.onRemoved]) h.addListener(soon);
 ext.tabs.onUpdated.addListener((_id, change) => { if (change.url || change.title || change.status === "complete") soon(); });
 ext.tabGroups?.onUpdated.addListener(soon);
+
+// ---- two-way sync with one workspace (the popup's Keep in sync) ----
+// A change on either side reaches the other: the browser's own bookmark events (a few seconds after the last one) and
+// each minute's alarm (for changes made in Browser Foreman) send the bookmarks to the server, which merges them with
+// the workspace and answers the merge; the extension writes it into the browser and reads the result back. Its own
+// writes are not taken for the owner's changes (applying), and one sync runs at a time.
+let applying = false, syncing: Promise<void> = Promise.resolve(), syncTimer: ReturnType<typeof setTimeout> | undefined;
+async function syncNow(): Promise<void> {
+  const started = Date.now();
+  const st = await ext.storage.local.get(["sync"]);
+  const sync = st.sync as { workspace: string; base: number; changed?: number } | undefined;
+  const c = await client();
+  if (!sync?.workspace || !c || !ext.bookmarks) return;
+  const sent = await bookmarksApi().getTree() as ExtBookmark[];
+  const r = await c.sync(sync.workspace, sync.base, sync.changed ?? 0, sent);
+  const merged = r.entry?.seq ?? r.seq ?? sync.base;
+  let base = merged, failed: unknown = null;
+  // The plan is made against the bookmarks just sent, not read again: one made in the browser since is not in the
+  // merge, and a plan made now would remove it. It reaches the workspace with the next sync.
+  const p = plan(sent, r.tree.root as WsNode);
+  if (p.steps.length) {
+    applying = true;
+    try {
+      try { await run(p, bookmarksApi()); } catch (e) { failed = e; }
+      // What was written takes the browser's ids, even after a failure part way. After a failure the base stays where
+      // it was, so the next sync writes what is missing instead of taking it for removed in the browser.
+      const back = await c.adopt(sync.workspace, merged, await bookmarksApi().getTree());
+      base = failed ? sync.base : back.entry?.seq ?? back.seq ?? merged;
+    } finally { setTimeout(() => { applying = false; }, 1500); } // the browser's events for this write arrive late
+  }
+  // A change the owner made while this ran is kept for the next sync (its own timer is already set).
+  const now = (await ext.storage.local.get(["sync"])).sync;
+  const later = now?.changed > started ? { changed: now.changed } : {};
+  await ext.storage.local.set({ sync: { workspace: sync.workspace, base, ...later }, lastSync: Date.now(),
+    lastSyncNote: r.conflicts || r.removed ? `${r.conflicts} conflict(s) settled, ${r.removed} removed to the Trash` : "" });
+  if (failed) throw failed;
+}
+const queueSync = (): void => { syncing = syncing.then(syncNow).catch(async e => { await ext.storage.local.set({ lastError: (e as Error).message }); await unpairedIf(e); }); };
+const bookmarkChanged = async (): Promise<void> => {
+  if (applying) return;
+  const st = await ext.storage.local.get(["sync"]);
+  if (!st.sync?.workspace) return;
+  await ext.storage.local.set({ sync: { ...st.sync, changed: Date.now() } });
+  clearTimeout(syncTimer); syncTimer = setTimeout(queueSync, 3000);
+};
+for (const h of [ext.bookmarks?.onCreated, ext.bookmarks?.onRemoved, ext.bookmarks?.onChanged, ext.bookmarks?.onMoved, ext.bookmarks?.onChildrenReordered]) h?.addListener(() => background(bookmarkChanged));
+
+// ---- the toolbar badge: "!" on a page Browser Foreman has confirmed dead ----
+async function markTab(tabId: number): Promise<void> {
+  const c = await client(); if (!c) return;  // not connected: the icon shows the connecting letters instead
+  const tab = await ext.tabs.get(tabId).catch(() => null);
+  if (!tab?.url || !/^https?:\/\//i.test(tab.url)) return;
+  const b = linkBadge(await c.link(tab.url).catch(() => ({ status: "unchecked" })));
+  await ext.action?.setBadgeText({ tabId, text: b.text }).catch(() => {});
+  if (b.text) await ext.action?.setBadgeBackgroundColor({ tabId, color: "#c0392b" }).catch(() => {});
+  await ext.action?.setTitle({ tabId, title: b.title || DEFAULT_TITLE }).catch(() => {});
+}
+ext.tabs.onActivated.addListener(info => background(() => markTab(info.tabId)));
+ext.tabs.onUpdated.addListener((id, change) => { if (change.status === "complete") background(() => markTab(id)); });
 
 // ---- commands ----
 let polling = false;
@@ -148,7 +207,7 @@ async function autoConnect(): Promise<void> {
 }
 
 background(async () => { await ext.alarms.create("tick", { periodInMinutes: 1 }); });
-const everything = (): void => { background(report); background(poll); background(autoConnect); };
+const everything = (): void => { background(report); background(poll); background(autoConnect); queueSync(); };
 ext.alarms.onAlarm.addListener(a => { if (a.name === "tick") everything(); });
 ext.runtime.onStartup.addListener(everything);
 ext.runtime.onInstalled.addListener(everything); // after an install, update or reload too: commands waiting are taken at once, not at the next minute
@@ -156,42 +215,48 @@ ext.runtime.onInstalled.addListener(everything); // after an install, update or 
 // ---- the popup's requests ----
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 async function readInto(c: Client, workspace?: string): Promise<string> {
-  const nodes = await ext.bookmarks.getTree();
+  const nodes = await bookmarksApi().getTree();
   return (await c.sendBookmarks(nodes, workspace)).entry.summary;
 }
 /** Writes a workspace into this browser: refuses if the browser's bookmarks are no longer the ones the plan was made
- *  against (expect, the server's ExtFingerprint; the popup passes none, as it plans right here); saves the bookmarks as
+ *  against (expect: the server's ExtFingerprint, or the one the popup's preview took); saves the bookmarks as
  *  they are to the server first; writes; fixes any order a browser placed differently; reads the result back into the
  *  workspace, so its ids are the browser's and a second write changes nothing. Returns the counts. */
 async function writeWorkspace(c: Client, workspace: string, expect?: string): Promise<Record<string, unknown>> {
   if (expect) {
-    const now = await extFingerprint(await ext.bookmarks.getTree() as any);
+    const now = await extFingerprint(await bookmarksApi().getTree() as any);
     if (now !== expect) throw new Error("this browser's bookmarks changed since the plan was made: nothing was written; plan again");
   }
   const ws = (await c.workspace(workspace)).tree.root as WsNode;
-  const p = plan(await ext.bookmarks.getTree() as ExtBookmark[], ws);
+  const p = plan(await bookmarksApi().getTree() as ExtBookmark[], ws);
   const counts = { created: p.created, updated: p.updated, moved: p.moved, removedBookmarks: p.removedBookmarks, removedFolders: p.removedFolders, steps: p.steps.length };
   // The browser's bookmarks as they are now go to the server first, so this write can be undone from there.
   const backup = await readInto(c, `${slug(thisBrowser())}-before-write`);
-  const made = await run(p, ext.bookmarks);
+  const made = await run(p, bookmarksApi());
   // Browsers differ on how a move's index counts within one folder: re-plan and fix any order left over.
   for (let i = 0; i < 3; i++) {
-    const fix = plan(await ext.bookmarks.getTree() as ExtBookmark[], ws, made);
+    const fix = plan(await bookmarksApi().getTree() as ExtBookmark[], ws, made);
     if (!fix.steps.length) break;
     if (fix.steps.some(s => s.op === "create" || s.op === "remove")) throw new Error("the browser's bookmarks changed while writing; read them again and retry");
-    await run(fix, ext.bookmarks);
+    await run(fix, bookmarksApi());
   }
   // Read the result back, so the workspace's ids are the browser's and the next write matches nothing twice.
   const reread = await readInto(c, workspace);
   return { ...counts, backup, reread };
 }
 
+/** The browser's bookmarks API, or a plain error where there is none: Safari gives its extensions no bookmarks API,
+ *  so reading or writing bookmarks there says so instead of failing on a missing object. */
+function bookmarksApi(): NonNullable<typeof ext.bookmarks> {
+  if (!ext.bookmarks) throw new Error("this browser gives extensions no access to bookmarks: import its bookmarks file in Browser Foreman instead");
+  return ext.bookmarks;
+}
 async function handle(msg: any): Promise<unknown> {
   switch (msg.kind) {
     case "status": {
       const s = await settings();
-      const st = await ext.storage.local.get(["lastReport", "lastError"]);
-      return { paired: !!s.token, server: s.server ?? "http://127.0.0.1:8765", browser: s.browser ?? thisBrowser(), ...st };
+      const st = await ext.storage.local.get(["lastReport", "lastError", "offer", "sync", "lastSync", "lastSyncNote"]);
+      return { paired: !!s.token, server: s.server ?? "http://127.0.0.1:8765", browser: s.browser ?? thisBrowser(), bookmarks: !!ext.bookmarks, ...st };
     }
     case "pair": {
       const browser = thisBrowser();
@@ -204,7 +269,7 @@ async function handle(msg: any): Promise<unknown> {
       const server = new URL(msg.server).origin, browser = thisBrowser();
       const req = await Client.request(server, browser, VERSION(), (u, i) => fetch(u, i), await instanceId(), true); // Connect pressed: may replace another copy
       await ext.storage.local.set({ asking: { server, ...req }, unanswered: 0 });
-      await ext.storage.local.remove(["declined"]);
+      await ext.storage.local.remove(["declined", "offer"]);
       await badge(req.match);
       return { match: req.match };
     }
@@ -217,13 +282,34 @@ async function handle(msg: any): Promise<unknown> {
     case "report": await report(); return { ok: true };
     case "read": { const c = await client(); if (!c) throw new Error("not paired"); return { summary: await readInto(c, msg.workspace || undefined) }; }
     case "workspaces": { const c = await client(); if (!c) throw new Error("not paired"); return c.workspaces(); }
+    case "keepInSync": { // on: start from when this browser and the workspace last agreed; off: stop
+      if (!msg.workspace) { await ext.storage.local.remove(["sync"]); return { sync: null }; }
+      await ext.storage.local.set({ sync: { workspace: msg.workspace, base: 0 }, lastError: "" });
+      queueSync(); await syncing;
+      const st = await ext.storage.local.get(["lastError", "sync"]);
+      return { sync: st.sync, error: st.lastError };
+    }
+    case "save": {
+      const c = await client(); if (!c) throw new Error("not paired");
+      const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.url || !/^https?:\/\//i.test(tab.url)) throw new Error("Only web pages (http or https) are saved");
+      // A picture of what the tab shows; some pages (the browser's own) cannot be pictured, and are saved without one.
+      const picture = await ext.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 70 }).catch(() => "");
+      const r = await c.savePage(msg.workspace, tab.url, tab.title ?? "", picture);
+      return { already: !!r.already, pictured: !!picture };
+    }
     case "plan": case "apply": {
       const c = await client(); if (!c) throw new Error("not paired");
+      if (msg.kind === "apply") {
+        // Exactly what the popup previewed: that workspace, onto the bookmarks as they were then (expect), or nothing.
+        if (!msg.expect) throw new Error("preview the change first");
+        return writeWorkspace(c, msg.workspace, msg.expect);
+      }
+      const tree = await bookmarksApi().getTree() as ExtBookmark[];
       const ws = (await c.workspace(msg.workspace)).tree.root as WsNode;
-      const p = plan(await ext.bookmarks.getTree() as ExtBookmark[], ws);
-      const counts = { created: p.created, updated: p.updated, moved: p.moved, removedBookmarks: p.removedBookmarks, removedFolders: p.removedFolders, steps: p.steps.length };
-      if (msg.kind === "plan") return counts;
-      return writeWorkspace(c, msg.workspace);
+      const p = plan(tree, ws);
+      return { created: p.created, updated: p.updated, moved: p.moved, removedBookmarks: p.removedBookmarks, removedFolders: p.removedFolders,
+        steps: p.steps.length, expect: await extFingerprint(tree as any) };
     }
   }
   throw new Error("unknown request");
@@ -253,6 +339,12 @@ async function handlePage(kind: string, origin: string): Promise<unknown> {
   }
   const why = connectRefusal(origin, server, !!s.token);
   if (why) throw new Error(why);
+  if (needsConfirmation(origin, server, !!s.token)) {
+    const at = new URL(origin).origin;
+    await ext.storage.local.set({ offer: at });
+    await badge("?");
+    throw new Error(`To connect to Browser Foreman at ${at}, open this browser's Browser Foreman extension (its icon shows ?) and press Connect: it connects by itself only to ${new URL(server).origin}.`);
+  }
   if (s.token && same(server)) {
     // Connected here, it believes: check its key still works (another copy may have been pinned, revoking it).
     try { await new Client(origin, s.token, (u, i) => fetch(u, i)).workspaces(); return { connected: true }; } // a read: takes no queued command

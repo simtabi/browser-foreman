@@ -13,7 +13,7 @@ browser-foreman service uninstall
 ```
 
 `install` starts `browser-foreman serve --no-open` now and at every login, from the binary you ran it with. Nothing
-installs it for you.
+installs it for you. Open the page with `browser-foreman open`, which signs your browser in with a one-time link.
 
 | System | What it installs | Its output |
 |---|---|---|
@@ -69,6 +69,10 @@ through Browser Foreman's name and icon. It waits 5 seconds for the server to an
 delivery can take longer (measured 2026-11-16 on macOS: 5 to 9 seconds), so `ping` may say *no answer* while the
 notification still shows. The re-check's own notifications are sent by the server itself and are not limited this way.
 Output and any notification failure go to `service.log` in the state folder.
+
+The socket lives in the state folder, and a Unix socket's path can be at most about 100 bytes. When the state folder is
+deeper than that, `serve` says so at start and names the fix, a shorter `XDG_STATE_HOME`; banners still show, and only
+`ping` cannot reach the server. `browser-foreman doctor` reports it too.
 
 ---
 [← Docs index](../../README.md#documentation)

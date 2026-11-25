@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/simtabi/browser-foreman/src/internal/atomicfile"
 	"os"
 	"path/filepath"
 	"sync"
@@ -72,11 +73,7 @@ func (l *Log) rewrite(keep []Delivery) error {
 		b, _ := json.Marshal(d)
 		buf.Write(append(b, '\n'))
 	}
-	tmp := l.path + ".tmp"
-	if err := os.WriteFile(tmp, buf.Bytes(), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, l.path)
+	return atomicfile.Write(l.path, buf.Bytes(), 0o600)
 }
 
 // Recent returns up to limit deliveries, newest first, for one subscription or ("") all.

@@ -12,6 +12,7 @@ package config
 
 import (
 	"bufio"
+	"crypto/tls"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -41,11 +42,34 @@ type Server struct {
 	// Open says whether serve opens its page in the default browser when it starts: auto (when started from a
 	// terminal), always or never.
 	Open string `json:"open" env:"BROFO_SERVER_OPEN" choices:"auto,always,never" help:"Open the page in your browser when the server starts."`
+	// TLSCert and TLSKey serve https directly: for accounts mode reached from other computers, so passwords,
+	// session cookies and tokens are not sent in clear text. Both or neither.
+	TLSCert string `json:"tls_cert,omitempty" env:"BROFO_SERVER_TLS_CERT" ui:"risky" help:"A PEM certificate file to serve https with. Needs tls_key."`
+	TLSKey  string `json:"tls_key,omitempty" env:"BROFO_SERVER_TLS_KEY" ui:"risky" help:"The certificate's PEM private key file."`
+	// TrustedProxy lists the addresses or ranges (CIDR) of a TLS proxy in front of the server. Only from those are
+	// X-Forwarded-Proto (is the visit https?) and X-Forwarded-For (who is the client?) believed.
+	TrustedProxy []string `json:"trusted_proxy,omitempty" ui:"risky" help:"Addresses or CIDR ranges of a TLS proxy in front of the server; only its X-Forwarded headers are believed."`
+}
+
+// Behind says whether ip is one of the trusted proxies.
+func (s Server) Behind(ip net.IP) bool {
+	for _, p := range s.TrustedProxy {
+		if _, n, err := net.ParseCIDR(p); err == nil && n.Contains(ip) {
+			return true
+		}
+		if q := net.ParseIP(p); q != nil && q.Equal(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 type Storage struct {
-	Driver string `json:"driver" env:"BROFO_STORAGE_DRIVER" ui:"risky" choices:"sqlite,json" help:"Where data is kept. Move it first with storage migrate."` // sqlite or json
-	Path   string `json:"path" env:"BROFO_STORAGE_PATH" ui:"risky" help:"The data folder; empty uses the state folder."`                                     // empty: the state directory
+	Driver string `json:"driver" env:"BROFO_STORAGE_DRIVER" ui:"risky" choices:"sqlite,json,postgres" help:"Where data is kept. Move it first with storage migrate."` // sqlite, json or postgres
+	Path   string `json:"path" env:"BROFO_STORAGE_PATH" ui:"risky" help:"The data folder; empty uses the state folder."`                                              // empty: the state directory
+	// DSN is the postgres driver's connection string. It can hold a password, so it is a secret: read only from .env or
+	// the environment, never from a JSON file, and never shown back.
+	DSN string `json:"-" env:"BROFO_STORAGE_DSN" ui:"secret,risky" help:"The Postgres connection string (postgres driver only)."`
 }
 
 type Webhooks struct {
@@ -91,7 +115,7 @@ type AI struct {
 	Model     string `json:"model,omitempty" env:"BROFO_AI_MODEL" ui:"live" help:"The model. Needed for OpenAI and Ollama; Anthropic uses claude-opus-5-5 when empty."`          // anthropic: claude-opus-5-5 when empty; openai and ollama: required
 	Effort    string `json:"effort,omitempty" ui:"live" choices:"low,medium,high" help:"How hard Anthropic's model thinks."`                                                     // anthropic: low, medium or high; empty: low
 	OllamaURL string `json:"ollama_url,omitempty" ui:"live" help:"Ollama's address."`                                                                                            // http://127.0.0.1:11434 when empty
-	OpenAIURL string `json:"openai_url,omitempty" ui:"live" help:"OpenAI's address, or any server with the same API."`                                                           // https://api.openai.com/v1 when empty; any server speaking the same API
+	OpenAIURL string `json:"openai_url,omitempty" ui:"live,risky" help:"OpenAI's address, or any server with the same API. Your OpenAI key is sent there."`                      // https://api.openai.com/v1 when empty; any server speaking the same API
 	// OpenAIKey is OPENAI_API_KEY, from .env or the environment only.
 	OpenAIKey string `json:"-" env:"OPENAI_API_KEY" ui:"secret,live" help:"Your OpenAI API key. Kept in .env, never shown again."`
 	// AnthropicKey is ANTHROPIC_API_KEY, from .env or the environment only; empty lets the SDK use `ant auth login`.
@@ -252,8 +276,11 @@ func apply(c *Config, get func(string) string) error {
 		"BROFO_SERVER_ADDR":      func(v string) error { c.Server.Addr = v; return nil },
 		"BROFO_SERVER_MODE":      func(v string) error { c.Server.Mode = Mode(v); return nil },
 		"BROFO_SERVER_OPEN":      func(v string) error { c.Server.Open = v; return nil },
+		"BROFO_SERVER_TLS_CERT":  func(v string) error { c.Server.TLSCert = v; return nil },
+		"BROFO_SERVER_TLS_KEY":   func(v string) error { c.Server.TLSKey = v; return nil },
 		"BROFO_STORAGE_DRIVER":   func(v string) error { c.Storage.Driver = v; return nil },
 		"BROFO_STORAGE_PATH":     func(v string) error { c.Storage.Path = v; return nil },
+		"BROFO_STORAGE_DSN":      func(v string) error { c.Storage.DSN = v; return nil },
 		"BROFO_API_TOKEN":        func(v string) error { c.APIToken = v; return nil },
 		"BROFO_AI_PROVIDER":      func(v string) error { c.AI.Provider = v; return nil },
 		"BROFO_AI_MODEL":         func(v string) error { c.AI.Model = v; return nil },
@@ -308,11 +335,27 @@ func (c Config) Validate() error {
 	default:
 		return fmt.Errorf("server.mode %q: use local or accounts", c.Server.Mode)
 	}
+	if (c.Server.TLSCert == "") != (c.Server.TLSKey == "") {
+		return fmt.Errorf("server.tls_cert and server.tls_key go together: set both, or neither")
+	}
+	if c.Server.TLSCert != "" {
+		if _, err := tls.LoadX509KeyPair(c.Server.TLSCert, c.Server.TLSKey); err != nil {
+			return fmt.Errorf("server.tls_cert/tls_key: %w", err)
+		}
+	}
+	for _, p := range c.Server.TrustedProxy {
+		if _, _, err := net.ParseCIDR(p); err != nil && net.ParseIP(p) == nil {
+			return fmt.Errorf("server.trusted_proxy %q: use an address or a CIDR range", p)
+		}
+	}
 	if o := c.Server.Open; o != "auto" && o != "always" && o != "never" {
 		return fmt.Errorf("server.open %q: use auto, always or never", o)
 	}
-	if c.Storage.Driver != "sqlite" && c.Storage.Driver != "json" {
-		return fmt.Errorf("storage.driver %q: use sqlite or json", c.Storage.Driver)
+	if c.Storage.Driver != "sqlite" && c.Storage.Driver != "json" && c.Storage.Driver != "postgres" {
+		return fmt.Errorf("storage.driver %q: use sqlite, json or postgres", c.Storage.Driver)
+	}
+	if c.Storage.Driver == "postgres" && c.Storage.DSN == "" {
+		return errors.New("storage.driver postgres needs BROFO_STORAGE_DSN (in .env): its connection string")
 	}
 	if c.Webhooks.Attempts < 1 || c.Webhooks.Attempts > 20 {
 		return fmt.Errorf("webhooks.attempts %d: use 1-20", c.Webhooks.Attempts)

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -21,9 +22,9 @@ func (p namedProvider) Answer(context.Context, ai.Job) (ai.Results, error) {
 
 func editableServer(t *testing.T) (*Server, config.Paths) {
 	t.Helper()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	p := config.Paths{Config: t.TempDir(), State: t.TempDir()}
-	if err := os.WriteFile(filepath.Join(p.Config, ".env"), []byte("# mine\nBROFO_API_TOKEN=tok\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(p.Config, ".env"), []byte("# mine\nBROFO_API_TOKEN="+apiTok+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	s.ConfigPaths, s.Getenv = p, func(string) string { return "" }
@@ -39,13 +40,13 @@ func editableServer(t *testing.T) (*Server, config.Paths) {
 func TestSettingsEditFromThisComputerOnly(t *testing.T) {
 	s, p := editableServer(t)
 	h := s.Handler()
-	key := strings.Repeat("q", 14)
+	key := rand.Text()
 	body := `{"values":{"OPENAI_API_KEY":"` + key + `","ai.provider":"openai","ai.model":"gpt-x"}}`
 
 	// From another computer: refused, nothing written.
 	r := httptest.NewRequest("PUT", "/api/v1/settings", strings.NewReader(body))
 	r.Host, r.RemoteAddr = host, "192.0.2.7:5000"
-	r.Header.Set("Authorization", "Bearer tok")
+	r.Header.Set("Authorization", "Bearer "+apiTok)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	if w.Code != 403 {
@@ -54,7 +55,7 @@ func TestSettingsEditFromThisComputerOnly(t *testing.T) {
 
 	r = httptest.NewRequest("PUT", "/api/v1/settings", strings.NewReader(body))
 	r.Host, r.RemoteAddr = host, "127.0.0.1:5000"
-	r.Header.Set("Authorization", "Bearer tok")
+	r.Header.Set("Authorization", "Bearer "+apiTok)
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	if w.Code != 200 || strings.Contains(w.Body.String(), key) {
@@ -80,7 +81,7 @@ func TestSettingsEditFromThisComputerOnly(t *testing.T) {
 	// A risky setting in safe mode: 403.
 	r = httptest.NewRequest("PUT", "/api/v1/settings", strings.NewReader(`{"values":{"server.addr":"127.0.0.1:9"},"confirm":true}`))
 	r.Host, r.RemoteAddr = host, "127.0.0.1:5000"
-	r.Header.Set("Authorization", "Bearer tok")
+	r.Header.Set("Authorization", "Bearer "+apiTok)
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	if w.Code != 403 {

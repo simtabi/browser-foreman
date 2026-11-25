@@ -5,15 +5,29 @@ A webhook (a callback) is a URL that receives the [events](events.md) it subscri
 ## Subscribe
 
 ```bash
+BROFO_WEBHOOK_SECRET=$(openssl rand -hex 32)  # keep it: the receiver checks signatures with it
 curl -X POST http://127.0.0.1:8765/api/v1/webhooks \
   -H "Authorization: Bearer $BROFO_API_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"url": "https://example.com/brofo", "events": ["bookmark.*", "tabs.snapshot.saved"], "secret": "a-long-random-secret-value"}'
+  -d "{\"url\": \"https://example.com/brofo\", \"events\": [\"bookmark.*\", \"tabs.snapshot.saved\"], \"secret\": \"$BROFO_WEBHOOK_SECRET\"}"
 ```
 
 - `events`: exact types, a family (`bookmark.*`) or everything (`*`).
 - `secret`: at least 16 characters; only you and Browser Foreman know it. It is never returned.
 - `url`: `http` or `https`, no credentials in it. Link-local, multicast, unspecified and cloud metadata addresses are
-  refused; loopback is fine.
+  refused, both as typed and for whatever address the name resolves to when a delivery connects; loopback and the
+  local network are fine. Redirects are not followed: a `3xx` answer is a failed delivery, not retried.
+
+From the command line, against the running server (local mode, with the token from `.env`):
+
+```bash
+browser-foreman webhook add https://example.com/brofo --events 'bookmark.*,tabs.snapshot.saved'
+browser-foreman webhook list
+browser-foreman webhook test wh_0123456789abcdef
+browser-foreman webhook remove wh_0123456789abcdef
+```
+
+`add` signs with `BROFO_WEBHOOK_SECRET` when it is set; otherwise it makes a secret and prints it once, for the
+receiver. `list` never shows a secret.
 
 ## A delivery
 
@@ -33,9 +47,12 @@ X-Brofo-Signature: t=1731434400,v1=5f2b…
 
 ## Retries
 
-A `2xx` answer is success. A network error, a `5xx` or a `429` is retried with exponential backoff (2 s, 4 s, 8 s, …)
+A `2xx` answer is success. A network error, a `5xx` or a `429` is retried with exponential backoff (2 s, 4 s, 8 s, …, at most 5 minutes apart)
 up to `webhooks.attempts` tries (default 5), each limited to `webhooks.timeout` (default 10 s). Any other `4xx` means the
 receiver refused it, so it is not retried. Failed deliveries are reported in the server's log.
+
+Each attempt uses the webhook as it is then: an event still waiting when its webhook is removed or turned off is not
+sent, and one waiting when its address or secret changes goes to the new address, signed with the new secret.
 
 ## The delivery log
 

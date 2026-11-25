@@ -3,7 +3,11 @@ package notify
 import (
 	"bytes"
 	"image/png"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/simtabi/browser-foreman/src/internal/config"
 
 	notifykit "github.com/simtabi/go-notifykit/src"
 )
@@ -53,5 +57,22 @@ func TestTheIconIsTheMark(t *testing.T) {
 	}
 	if _, g, _, _ := at(512, 760); g>>8 != 0x6f {
 		t.Error("the notch is filled") // (32, 47.5): below the notch's apex at 41
+	}
+}
+
+// A state folder too deep for a Unix socket is reported with what the user can change, before Listen fails on it.
+func TestAStateFolderTooDeepForTheSocketIsExplained(t *testing.T) {
+	deep := filepath.Join(t.TempDir(), strings.Repeat("d", 120))
+	t.Setenv("XDG_STATE_HOME", deep)
+	n, err := New(config.Defaults(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if why := ListenProblem(n); !strings.Contains(why, "XDG_STATE_HOME") || !strings.Contains(why, "Banners still show") {
+		t.Fatalf("%q", why)
+	}
+	t.Setenv("XDG_STATE_HOME", "/tmp/bf") // Endpoint only names the path; nothing is made there
+	if n, _ = New(config.Defaults(), nil); ListenProblem(n) != "" {
+		t.Fatalf("a short folder reported: %q", ListenProblem(n))
 	}
 }

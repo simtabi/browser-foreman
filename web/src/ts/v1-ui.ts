@@ -10,6 +10,7 @@ import { DataTable, avatar, by, nameCell } from "./datatable";
 import { RangePicker } from "./rangepick";
 import { lookPicker, wsBadge } from "./wslook";
 import { busy } from "./busy";
+import { isWeb } from "./tabs";
 import { bridgeStale, extensionConnect, extensionHello, type ExtensionHello } from "./bridge";
 import { type DGroup, startsTicked, trashOps } from "./dupes";
 import { version as EXT_VERSION } from "../../package.json";  // the extension's manifest takes the same version
@@ -41,10 +42,10 @@ function install(W: V1): void {
   /** A dialog: its title carries an icon, as every dialog in the page does (template.html). */
   function modal(id: string, title: string, size: "lg" | "xl" = "lg", ic = ""): { body: HTMLElement; foot: HTMLElement; dock: HTMLElement } {
     document.getElementById(id)?.remove();
-    const m = el("div", "modal modal-blur"); m.id = id; m.tabIndex = -1; m.setAttribute("role", "dialog"); m.setAttribute("aria-label", title);
+    const m = el("div", "modal modal-blur"); m.id = id; m.tabIndex = -1; m.setAttribute("role", "dialog"); m.setAttribute("aria-label", title); m.setAttribute("aria-modal", "true");
     const dlg = el("div", `modal-dialog modal-dialog-top modal-dialog-scrollable modal-${size}`), box = el("div", "modal-content");
     const head = el("div", "modal-header"), close = el("button", "btn-close");
-    close.type = "button"; close.setAttribute("aria-label", "Close"); close.onclick = () => hideModal("#" + id);
+    close.type = "button"; close.setAttribute("aria-label", "Close"); close.dataset.close = ""; close.onclick = () => hideModal("#" + id);
     const h = el("h5", "modal-title"); if (ic) h.append(icon(ic, "me-2")); h.append(title);
     head.append(h, close);
     // dock: a strip between the scrolling body and the footer buttons, for a list's pager, so it is always in view.
@@ -416,7 +417,7 @@ function install(W: V1): void {
       pick: { key: r => r.url, disabled: r => !!r.bookmarked, onPick: () => paintSave() },
       columns: [
         { label: "Page", cls: "text-wrap", sort: by(r => r.title || r.url), cell: r => {
-          const a = el("a", "text-reset", r.title || r.url); a.href = r.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+          const a = el("a", "text-reset", r.title || r.url); if (isWeb(r.url)) { a.href = r.url; a.target = "_blank"; a.rel = "noopener noreferrer"; }
           const t = el("span"); t.append(a);
           if (r.bookmarked) { const b = el("span", "badge bg-green-lt ms-2"); b.append(icon("ti-bookmark", "me-1"), "bookmarked"); t.append(b); }
           return nameCell(t, r.url);
@@ -679,7 +680,11 @@ function install(W: V1): void {
       let list: Waiting[];
       learnCopy(await extensionHello());
       try { list = (await W.call<{ requests: Waiting[] }>("GET", "extension/requests")).requests; }
-      catch { watching = false; clearInterval(timer); return; }  // not the owner (or the server is gone): stop asking
+      catch (e) {
+        // Not the owner: stop asking. Anything else (the server restarting, a dropped connection) is tried next tick.
+        if (/owner role|sign in/i.test(String((e as Error)?.message))) { watching = false; clearInterval(timer); }
+        return;
+      }
       const q = list.find(x => !answered.has(x.id) && approvableHere(x)); if (!q) return; // strict: only this browser's own
       answered.add(q.id); asking = true;
       try { await answerRequest(q); } finally { asking = false; }
@@ -1009,8 +1014,15 @@ function install(W: V1): void {
     foot.append(close, make);
     list.append(el("div", "text-secondary small py-2", "Asking which browsers are connected…"));
     showModal("#v1Extensions"); await load();
-    // While the dialog is open, a browser being set up or asking to connect shows up by itself.
-    const refresh = setInterval(() => { if (!document.getElementById("v1Extensions")?.classList.contains("show")) clearInterval(refresh); else void load(); }, 3000);
+    // While this dialog is open, a browser being set up or asking to connect shows up by itself. The timer belongs to
+    // this dialog: reopened, the old one is gone and its timer stops, instead of refreshing beside the new one's.
+    const me = document.getElementById("v1Extensions");
+    let refreshing = false;
+    const refresh = setInterval(() => {
+      if (!me?.isConnected || !me.classList.contains("show")) { clearInterval(refresh); return; }
+      if (refreshing) return; // the last refresh is still answering
+      refreshing = true; void load().finally(() => { refreshing = false; });
+    }, 3000);
   }
 
   function menu(): HTMLElement {

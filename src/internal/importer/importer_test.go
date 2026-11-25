@@ -79,7 +79,8 @@ func TestNetscapeFile(t *testing.T) {
 	}
 	var b strings.Builder
 	shape(tr.Root, 0, &b)
-	want := "[Bookmarks bar]\n  Go & friends https://go.dev/\n  [Dev]\n    Laravel https://laravel.com/docs\nLoose at the top https://example.com/\n"
+	// A Chromium export: what is loose at the top is its Other bookmarks.
+	want := "[Bookmarks bar]\n  Go & friends https://go.dev/\n  [Dev]\n    Laravel https://laravel.com/docs\n[Other bookmarks]\n  Loose at the top https://example.com/\n"
 	if b.String() != want {
 		t.Fatalf("got\n%s\nwant\n%s", b.String(), want)
 	}
@@ -106,6 +107,34 @@ func TestNotABookmarksFile(t *testing.T) {
 	for _, s := range []string{"hello", "", "<html><body>no list</body></html>", `{"roots": {}}`} {
 		if _, _, err := Read(strings.NewReader(s)); err == nil {
 			t.Errorf("%q accepted", s)
+		}
+	}
+}
+
+// Only a Chromium export files its loose items: Firefox's loose items are its menu, and a file with no bar folder is
+// someone's own layout.
+func TestOnlyAChromiumExportFilesItsLooseItems(t *testing.T) {
+	for name, c := range map[string]struct{ file, want string }{
+		"firefox": {`<DL><p><DT><H3 PERSONAL_TOOLBAR_FOLDER="true">Bookmarks Toolbar</H3><DL><p></DL><p>
+<DT><A HREF="https://menu.example/">In the menu</A>
+<DT><H3 UNFILED_BOOKMARKS_FOLDER="true">Other Bookmarks</H3><DL><p></DL><p></DL>`,
+			"[Bookmarks Toolbar]\nIn the menu https://menu.example/\n[Other Bookmarks]\n"},
+		"no bar": {`<DL><p><DT><H3>Bookmarks</H3><DL><p></DL><p><DT><A HREF="https://a.example/">A</A></DL>`,
+			"[Bookmarks]\nA https://a.example/\n"},
+		"chrome, with its folder": {`<DL><p><DT><H3 PERSONAL_TOOLBAR_FOLDER="true">Bookmarks bar</H3><DL><p></DL><p>
+<DT><A HREF="https://loose.example/">Loose</A><DT><H3>Other bookmarks</H3><DL><p><DT><A HREF="https://in.example/">In</A></DL><p></DL>`,
+			"[Bookmarks bar]\n[Other bookmarks]\n  In https://in.example/\n  Loose https://loose.example/\n"},
+		"edge, nothing loose": {`<DL><p><DT><H3 PERSONAL_TOOLBAR_FOLDER="true">Favorites bar</H3><DL><p></DL><p></DL>`,
+			"[Favorites bar]\n"},
+	} {
+		tr, _, err := Read(strings.NewReader("<!DOCTYPE NETSCAPE-Bookmark-file-1>\n" + c.file))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		var b strings.Builder
+		shape(tr.Root, 0, &b)
+		if b.String() != c.want {
+			t.Errorf("%s: got\n%s\nwant\n%s", name, b.String(), c.want)
 		}
 	}
 }

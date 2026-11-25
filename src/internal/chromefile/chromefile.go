@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/simtabi/browser-foreman/src/internal/atomicfile"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -241,31 +242,54 @@ func Checksum(roots map[string]any) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// Running says whether the browser that owns the profile folder is running: Chromium holds a SingletonLock link in
-// its user data folder (the profile folder's parent) while it runs.
+// Running says whether the browser that owns the profile folder is running, from the lock Chromium keeps in its user
+// data folder (the profile folder's parent) while it runs. How that lock looks differs by system; see running.
 func Running(profileDir string) bool {
-	_, err := os.Lstat(filepath.Join(filepath.Dir(profileDir), "SingletonLock"))
-	return err == nil
+	return running(filepath.Dir(profileDir))
 }
 
 // Replace writes data as the profile's Bookmarks file, after copying the file as it is to keep (a path beside it that
-// Chromium never writes). The new content goes to a temporary file first and is renamed into place, so the file is
-// never half written.
-func Replace(path string, data []byte, keep string) error {
+// Chromium never writes). keep is never overwritten: when a copy by that name exists (two write-backs in one second),
+// the next free name keep-2, keep-3, … is used, and Replace answers the name it kept the file under. The new content
+// goes to a temporary file first and is renamed into place, so the file is never half written.
+func Replace(path string, data []byte, keep string) (string, error) {
 	old, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return "", err
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return err
+		return "", err
 	}
-	if err := os.WriteFile(keep, old, 0o600); err != nil {
-		return fmt.Errorf("keeping the file as it was: %w", err)
+	kept, err := keepCopy(keep, old)
+	if err != nil {
+		return "", fmt.Errorf("keeping the file as it was: %w", err)
 	}
-	tmp := path + ".browser-foreman-tmp"
-	if err := os.WriteFile(tmp, data, info.Mode().Perm()); err != nil {
-		return err
+	return kept, atomicfile.Write(path, data, info.Mode().Perm())
+}
+
+// keepCopy writes b to name, or to name-2, name-3, … when that one exists, and answers the name used.
+func keepCopy(name string, b []byte) (string, error) {
+	for n := 1; n < 1000; n++ {
+		try := name
+		if n > 1 {
+			try = fmt.Sprintf("%s-%d", name, n)
+		}
+		f, err := os.OpenFile(try, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		_, err = f.Write(b)
+		if err == nil {
+			err = f.Sync()
+		}
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+		return try, err
 	}
-	return os.Rename(tmp, path)
+	return "", fmt.Errorf("999 copies named %s already exist", name)
 }

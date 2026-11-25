@@ -1,0 +1,22 @@
+# A disposable Postgres for the storage driver's tests: data in memory (tmpfs), no fsync, nothing kept across a restart,
+# reachable only from this computer. Never point real data at it. `make testdb-up` starts it, `make testdb-down` drops it.
+# The major version is in three places (image, PGDATA, tmpfs) and changes in all three at once, with CI's service.
+name: brofo-testdb
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: brofo
+      POSTGRES_DB: brofo_test
+      POSTGRES_HOST_AUTH_METHOD: trust # no password to write down: it listens on 127.0.0.1 only
+      PGDATA: /var/lib/postgresql/18/data
+    command: ["postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"]
+    tmpfs:
+      - /var/lib/postgresql/18/data
+    ports:
+      - "127.0.0.1:55433:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "brofo", "-d", "brofo_test"]
+      interval: 1s
+      timeout: 3s
+      retries: 30

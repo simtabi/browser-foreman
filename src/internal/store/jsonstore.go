@@ -1,11 +1,12 @@
 package store
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/simtabi/browser-foreman/src/internal/atomicfile"
 	"os"
 	"path/filepath"
 	"sort"
@@ -42,13 +43,7 @@ func (s *JSONStore) Close() error { return nil }
 
 func (s *JSONStore) wsDir(id string) string { return filepath.Join(s.root, "workspaces", id) }
 
-func writeAtomic(path string, b []byte) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
-}
+func writeAtomic(path string, b []byte) error { return atomicfile.Write(path, b, 0o600) }
 
 type wsFile struct {
 	Name     string    `json:"name"`
@@ -67,14 +62,22 @@ func (s *JSONStore) CreateWorkspace(_ context.Context, id, name string, at time.
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	made := true
 	if err := os.Mkdir(s.wsDir(id), 0o700); err != nil {
-		if errors.Is(err, os.ErrExist) {
+		if !errors.Is(err, os.ErrExist) {
+			return Workspace{}, err
+		}
+		// A folder with no workspace.json is a create that failed halfway: it may be made again.
+		if _, err := os.Stat(filepath.Join(s.wsDir(id), "workspace.json")); !errors.Is(err, os.ErrNotExist) {
 			return Workspace{}, fmt.Errorf("workspace %q already exists", id)
 		}
-		return Workspace{}, err
+		made = false
 	}
 	b, _ := json.Marshal(wsFile{Name: name, Created: at.UTC()})
 	if err := writeAtomic(filepath.Join(s.wsDir(id), "workspace.json"), b); err != nil {
+		if made {
+			_ = os.Remove(s.wsDir(id)) // the empty folder this call made, so a retry starts clean
+		}
 		return Workspace{}, err
 	}
 	return Workspace{ID: id, Name: name, Created: at.UTC()}, nil
@@ -91,6 +94,9 @@ func (s *JSONStore) Workspaces(ctx context.Context) ([]Workspace, error) {
 			continue
 		}
 		w, err := s.Workspace(ctx, e.Name())
+		if errors.Is(err, ErrNotFound) {
+			continue // a folder with no workspace.json: a create that failed halfway, not a workspace
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -148,29 +154,50 @@ func (s *JSONStore) UpdateWorkspace(_ context.Context, w Workspace) error {
 	return writeAtomic(filepath.Join(s.wsDir(w.ID), "workspace.json"), b)
 }
 
+// history reads a workspace's entries. A last line with no newline is a write that never finished (a crash or a
+// full disk mid-append): it was never confirmed to anyone, so it is not an entry, and the next Commit trims it. Any
+// other line that does not parse is real damage and is reported.
 func (s *JSONStore) history(id string) ([]Entry, error) {
-	f, err := os.Open(filepath.Join(s.wsDir(id), "history.jsonl"))
+	b, err := os.ReadFile(filepath.Join(s.wsDir(id), "history.jsonl"))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	if i := bytes.LastIndexByte(b, '\n'); i < len(b)-1 {
+		b = b[:i+1] // drop the torn tail
+	}
 	var out []Entry
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 64<<10), 16<<20)
-	for sc.Scan() {
-		if len(sc.Bytes()) == 0 {
+	for line := range bytes.SplitSeq(b, []byte{'\n'}) {
+		if len(line) == 0 {
 			continue
 		}
 		var e Entry
-		if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
+		if err := json.Unmarshal(line, &e); err != nil {
 			return nil, fmt.Errorf("workspace %s history: %w", id, err)
 		}
 		out = append(out, e)
 	}
-	return out, sc.Err()
+	return out, nil
+}
+
+// trimTornTail cuts a half-written last line off an append-only file, so the next append starts on a line of its
+// own instead of joining the fragment into one line nothing can read. It answers the size the file now has.
+func trimTornTail(f *os.File) (int64, error) {
+	st, err := f.Stat()
+	if err != nil || st.Size() == 0 {
+		return 0, err
+	}
+	b, err := os.ReadFile(f.Name())
+	if err != nil {
+		return 0, err
+	}
+	keep := int64(bytes.LastIndexByte(b, '\n') + 1)
+	if keep == int64(len(b)) {
+		return keep, nil
+	}
+	return keep, f.Truncate(keep)
 }
 
 func (s *JSONStore) History(_ context.Context, id string) ([]Entry, error) {
@@ -220,11 +247,17 @@ func (s *JSONStore) Commit(_ context.Context, id string, base int, c Change, at 
 	if err != nil {
 		return Entry{}, err
 	}
-	if _, err := f.Write(append(line, '\n')); err != nil {
+	size, err := trimTornTail(f)
+	if err != nil {
 		f.Close()
 		return Entry{}, err
 	}
-	if err := f.Sync(); err != nil {
+	_, err = f.Write(append(line, '\n'))
+	if err == nil {
+		err = f.Sync()
+	}
+	if err != nil {
+		_ = f.Truncate(size) // take back a partial line, so this failure cannot damage the file
 		f.Close()
 		return Entry{}, err
 	}

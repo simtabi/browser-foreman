@@ -11,13 +11,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
-	_ "modernc.org/sqlite" // pure Go: no C toolchain, so every target cross-compiles and the universal build works
+	_ "github.com/jackc/pgx/v5/stdlib" // the postgres driver
+	_ "modernc.org/sqlite"             // pure Go: no C toolchain, so every target cross-compiles and the universal build works
 )
 
 // SQLiteStore keeps everything in <dir>/browser-foreman.sqlite3 (0600), in WAL mode. Each Commit is one transaction.
-type SQLiteStore struct{ db *sql.DB }
+type SQLiteStore struct{ db sqlDB }
 
 const schema = `
 CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, created TEXT NOT NULL);
@@ -42,14 +44,37 @@ func OpenSQLite(dir string) (*SQLiteStore, error) {
 	} else {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=secure_delete(1)")
+	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=secure_delete(1)")
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(1) // one writer; keeps every Commit's read-check-write in one connection
-	if _, err := db.Exec(schema + accountsSchema + linksSchema + prefsSchema + sourcesSchema + tabNotesSchema); err != nil {
+	conn.SetMaxOpenConns(1) // one writer; keeps every Commit's read-check-write in one connection
+	return openSQL(sqlDB{DB: conn})
+}
+
+// OpenPostgres keeps everything in the Postgres database dsn names, with the same tables as SQLite (BYTEA for BLOB).
+// Commits lock their workspace's row, so two servers or processes sharing the database cannot both write one head.
+func OpenPostgres(dsn string) (*SQLiteStore, error) {
+	conn, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return nil, err
+	}
+	if err := conn.Ping(); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("postgres: %w", err)
+	}
+	return openSQL(sqlDB{DB: conn, pg: true})
+}
+
+// openSQL makes the tables (and the columns added since the first release) and returns the store.
+func openSQL(db sqlDB) (*SQLiteStore, error) {
+	all := schema + accountsSchema + linksSchema + prefsSchema + sourcesSchema + tabNotesSchema
+	if db.pg {
+		all = strings.ReplaceAll(all, " BLOB", " BYTEA")
+	}
+	if _, err := db.Exec(all); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("sqlite schema: %w", err)
+		return nil, fmt.Errorf("schema: %w", err)
 	}
 	// Columns added after the first release: an older database gains them here (the error for one already there is
 	// the expected answer and ignored).
@@ -60,7 +85,7 @@ func OpenSQLite(dir string) (*SQLiteStore, error) {
 	_, _ = db.Exec(`ALTER TABLE workspace_meta ADD COLUMN color TEXT NOT NULL DEFAULT ''`)
 	_, _ = db.Exec(`ALTER TABLE workspace_meta ADD COLUMN icon TEXT NOT NULL DEFAULT ''`)
 	// Each snapshot's tab pool, listed with the row; rows saved before it existed take it from their document once.
-	if _, err := db.Exec(`ALTER TABLE tabs ADD COLUMN pool TEXT NOT NULL DEFAULT ''`); err == nil {
+	if _, err := db.Exec(`ALTER TABLE tabs ADD COLUMN pool TEXT NOT NULL DEFAULT ''`); err == nil && !db.pg {
 		_, _ = db.Exec(`UPDATE tabs SET pool = COALESCE(json_extract(windows, '$.workspace'), '') WHERE json_valid(windows)`)
 	}
 	return &SQLiteStore{db: db}, nil
@@ -68,7 +93,12 @@ func OpenSQLite(dir string) (*SQLiteStore, error) {
 
 func (s *SQLiteStore) Close() error { return s.db.Close() }
 
-const ts = time.RFC3339Nano
+// ts is how times are written: fixed width, so text order is time order ("…:05Z" sorted after "…:05.001Z" with
+// RFC3339Nano, which drops trailing zeros). tsRead reads both, so rows written before the change still parse.
+const (
+	ts     = "2006-01-02T15:04:05.000000000Z07:00"
+	tsRead = time.RFC3339Nano
+)
 
 func (s *SQLiteStore) CreateWorkspace(ctx context.Context, id, name string, at time.Time) (Workspace, error) {
 	if err := ValidID(id); err != nil {
@@ -86,10 +116,10 @@ func (s *SQLiteStore) CreateWorkspace(ctx context.Context, id, name string, at t
 }
 
 func (s *SQLiteStore) Workspaces(ctx context.Context) ([]Workspace, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id, w.name, w.created, COALESCE(MAX(e.seq), 0),
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id, w.name, w.created, COALESCE((SELECT MAX(e.seq) FROM entries e WHERE e.ws = w.id), 0),
 	  COALESCE(m.notes, ''), COALESCE(m.locked, 0), COALESCE(m.archived, 0), COALESCE(m.deleted, ''),
 	  COALESCE(m.color, ''), COALESCE(m.icon, '') FROM workspaces w
-	  LEFT JOIN entries e ON e.ws = w.id LEFT JOIN workspace_meta m ON m.id = w.id GROUP BY w.id ORDER BY w.id`)
+	  LEFT JOIN workspace_meta m ON m.id = w.id ORDER BY w.id`)
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +131,8 @@ func (s *SQLiteStore) Workspaces(ctx context.Context) ([]Workspace, error) {
 		if err := rows.Scan(&w.ID, &w.Name, &created, &w.Head, &w.Notes, &w.Locked, &w.Archived, &deleted, &w.Color, &w.Icon); err != nil {
 			return nil, err
 		}
-		w.Created, _ = time.Parse(ts, created)
-		w.Deleted, _ = time.Parse(ts, deleted)
+		w.Created, _ = time.Parse(tsRead, created)
+		w.Deleted, _ = time.Parse(tsRead, deleted)
 		out = append(out, w)
 	}
 	return out, rows.Err()
@@ -118,8 +148,8 @@ func (s *SQLiteStore) Workspace(ctx context.Context, id string) (Workspace, erro
 	if errors.Is(err, sql.ErrNoRows) {
 		return Workspace{}, ErrNotFound
 	}
-	w.Created, _ = time.Parse(ts, created)
-	w.Deleted, _ = time.Parse(ts, deleted)
+	w.Created, _ = time.Parse(tsRead, created)
+	w.Deleted, _ = time.Parse(tsRead, deleted)
 	return w, err
 }
 
@@ -162,6 +192,13 @@ func (s *SQLiteStore) Commit(ctx context.Context, id string, base int, c Change,
 		return Entry{}, err
 	}
 	defer func() { _ = tx.Rollback() }() // a no-op once committed
+	if tx.pg {
+		// Postgres runs commits side by side: hold the workspace's row, so the head read below is the one this commit
+		// builds on. A second commit on the same workspace waits here, then finds the new head and is refused.
+		if _, err := tx.ExecContext(ctx, `SELECT id FROM workspaces WHERE id = ? FOR UPDATE`, id); err != nil {
+			return Entry{}, err
+		}
+	}
 	var head, exists, locked int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE((SELECT MAX(seq) FROM entries WHERE ws = ?), 0),
 	  COALESCE((SELECT locked FROM workspace_meta WHERE id = ?), 0) FROM workspaces WHERE id = ?`, id, id, id).Scan(&exists, &head, &locked); err != nil {
@@ -180,7 +217,7 @@ func (s *SQLiteStore) Commit(ctx context.Context, id string, base int, c Change,
 	if err != nil {
 		return Entry{}, err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO snapshots (hash, body) VALUES (?, ?)`, hash, packed); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO snapshots (hash, body) VALUES (?, ?) ON CONFLICT (hash) DO NOTHING`, hash, packed); err != nil {
 		return Entry{}, err
 	}
 	e := Entry{Seq: head + 1, At: at.UTC(), Op: c.Op, Summary: c.Summary, Base: base, Snap: hash, Undid: c.Undid, Redone: c.Redone}
@@ -207,7 +244,7 @@ func (s *SQLiteStore) History(ctx context.Context, id string) ([]Entry, error) {
 		if err := rows.Scan(&e.Seq, &at, &e.Op, &e.Summary, &e.Base, &e.Snap, &e.Undid, &e.Redone); err != nil {
 			return nil, err
 		}
-		e.At, _ = time.Parse(ts, at)
+		e.At, _ = time.Parse(tsRead, at)
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -234,7 +271,7 @@ func (s *SQLiteStore) State(ctx context.Context, id string, seq int) (Tree, Entr
 	if err != nil {
 		return Tree{}, Entry{}, err
 	}
-	e.At, _ = time.Parse(ts, at)
+	e.At, _ = time.Parse(tsRead, at)
 	if body, err = unpackSnapshot(body); err != nil {
 		return Tree{}, e, err
 	}
@@ -278,7 +315,8 @@ func (s *SQLiteStore) SaveTabs(ctx context.Context, t TabSnapshot) error {
 	if w == nil {
 		w = json.RawMessage("null")
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO tabs (id, at, reason, pool, windows) VALUES (?, ?, ?, ?, ?)`, t.ID, t.At.UTC().Format(ts), t.Reason, t.Pool, []byte(w))
+	_, err := s.db.ExecContext(ctx, `INSERT INTO tabs (id, at, reason, pool, windows) VALUES (?, ?, ?, ?, ?)
+	  ON CONFLICT (id) DO UPDATE SET at = excluded.at, reason = excluded.reason, pool = excluded.pool, windows = excluded.windows`, t.ID, t.At.UTC().Format(ts), t.Reason, t.Pool, []byte(w))
 	return err
 }
 
@@ -299,7 +337,7 @@ func (s *SQLiteStore) TabSnapshots(ctx context.Context, limit int) ([]TabSnapsho
 		if err := rows.Scan(&t.ID, &at, &t.Reason, &t.Pool); err != nil {
 			return nil, err
 		}
-		t.At, _ = time.Parse(ts, at)
+		t.At, _ = time.Parse(tsRead, at)
 		out = append(out, t)
 	}
 	return out, rows.Err()
@@ -313,7 +351,7 @@ func (s *SQLiteStore) TabSnapshot(ctx context.Context, id string) (TabSnapshot, 
 	if errors.Is(err, sql.ErrNoRows) {
 		return TabSnapshot{}, ErrNotFound
 	}
-	t.At, _ = time.Parse(ts, at)
+	t.At, _ = time.Parse(tsRead, at)
 	t.Windows = w
 	return t, err
 }
@@ -343,6 +381,5 @@ func (s *SQLiteStore) PurgeWorkspace(ctx context.Context, id string) error {
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
-	return err
+	return s.db.scrub(ctx)
 }

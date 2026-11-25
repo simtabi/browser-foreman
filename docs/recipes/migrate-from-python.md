@@ -25,6 +25,16 @@ restored main
 - **Private windows** in tab snapshots keep their pages only where the Python tool kept them.
 - **Settings** apply only to a store whose preferences were never set; restoring never replaces anything, so a
   workspace whose id is taken comes back beside it.
+- **Page details.** The Python renderer kept each page's title, description and final address in
+  `storage/thumbs/_meta.jsonl`. Add them to the link results that have none (a result is never made, a status never
+  changed, and a value already there is kept):
+
+  ```bash
+  browser-foreman page-details ~/path/to/the/python/checkout/storage/thumbs/_meta.jsonl
+  ```
+
+  Its `_failed.json` lists the pages the renderer could not draw; it says nothing about the links, so it is not
+  brought over: *Refresh* takes those snapshots again.
 
 Checked on a real store on 2026-11-13: all 34 entries held the same number of bookmarks in both tools (5,412 at the
 newest), and the Trash the same 43 bookmarks, plus the 535 merged duplicates.

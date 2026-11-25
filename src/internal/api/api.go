@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"net"
@@ -78,6 +79,11 @@ type Server struct {
 	ConfigPaths config.Paths
 	Getenv      func(string) string
 	ai          aiState
+	links       localLinks // one-time links that sign a browser in, in local mode
+	// meta makes each change to a workspace's own record (rename, notes, lock, archive, Trash, restore, purge) one
+	// step: they read the whole record and write it back, so two at once lost one change, a rename racing a delete
+	// brought the workspace back out of the Trash, and two deletes could trash the last two workspaces.
+	meta sync.Mutex
 	// Notifier shows desktop notifications (a scheduled re-check's result); nil shows none.
 	Notifier *notifykit.Notifier
 	snaps    snapRunner
@@ -202,6 +208,10 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/extension/bookmarks", s.requireExtension(s.readBookmarks))
 	m.HandleFunc("GET /api/v1/extension/commands", s.requireExtension(s.nextCommands))
 	m.HandleFunc("POST /api/v1/extension/commands/{id}/done", s.requireExtension(s.commandDone))
+	m.HandleFunc("POST /api/v1/extension/pages", s.requireExtension(s.savePage))
+	m.HandleFunc("GET /api/v1/extension/link", s.requireExtension(s.pageLink))
+	m.HandleFunc("POST /api/v1/extension/sync", s.requireExtension(s.syncBookmarks))
+	m.HandleFunc("POST /api/v1/extension/sync/adopt", s.requireExtension(s.adoptBookmarks))
 	m.HandleFunc("POST /api/v1/extension/commands", s.require(store.RoleOwner, s.queueCommand))
 	m.HandleFunc("POST /api/v1/writeback/preview", s.require(store.RoleOwner, s.previewWriteback))
 	m.HandleFunc("POST /api/v1/writeback/apply", s.require(store.RoleOwner, s.applyWriteback))
@@ -211,6 +221,8 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/ai/jobs/next", s.require(store.RoleOwner, s.nextAIJobs))
 	m.HandleFunc("POST /api/v1/ai/jobs/{id}/results", s.require(store.RoleOwner, s.submitAIResults))
 	m.HandleFunc("GET /api/v1/extension/commands/{id}", s.require(store.RoleViewer, s.getCommand))
+	m.HandleFunc("POST /api/v1/local/links", s.require(store.RoleOwner, s.createLocalLink))
+	m.HandleFunc("GET /open/{code}", s.openLink)
 	m.HandleFunc("GET /{$}", s.page)
 	m.Handle("GET /assets/", s.assets())
 	return s.guard(m)
@@ -375,7 +387,8 @@ func (s *Server) addHook(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	_, _ = s.Bus.Publish("webhook.created", map[string]string{"id": sub.ID, "url": sub.URL})
+	// Only the id: a webhook's address is often a secret itself, and every viewer and every "*" webhook sees events.
+	_, _ = s.Bus.Publish("webhook.created", map[string]string{"id": sub.ID})
 	writeJSON(w, 201, redact(sub))
 }
 
@@ -436,20 +449,51 @@ func (s *Server) testHook(w http.ResponseWriter, r *http.Request) {
 	writeErr(w, 404, "no webhook with that id")
 }
 
+// httpServer is the server Run listens with. A slow client cannot hold a connection open for ever: headers must
+// arrive in 10 s, a whole request (up to a 256 MB backup) in 10 minutes, and an idle keep-alive closes after 2. There
+// is no write timeout on purpose: the event stream, the extension's long poll and large exports write for longer.
+func (s *Server) httpServer() *http.Server {
+	return &http.Server{Addr: s.Cfg.Server.Addr, Handler: s.Handler(),
+		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 10 * time.Minute, IdleTimeout: 2 * time.Minute}
+}
+
+// clearTextWarning is what serve says when people will sign in over plain http from other computers: accounts mode on
+// an address beyond this one, with no certificate and no trusted TLS proxy in front.
+func (s *Server) clearTextWarning() string {
+	sc := s.Cfg.Server
+	host, _, _ := net.SplitHostPort(sc.Addr)
+	ip := net.ParseIP(host)
+	if sc.Mode != config.ModeAccounts || host == "localhost" || (ip != nil && ip.IsLoopback()) || sc.TLSCert != "" || len(sc.TrustedProxy) > 0 {
+		return ""
+	}
+	return "Warning: accounts mode on " + sc.Addr + " serves plain http, so passwords and session cookies cross the network in clear text. Set server.tls_cert and server.tls_key, or put a TLS proxy in front and list it in server.trusted_proxy."
+}
+
 // Run serves until ctx ends, delivering every published event to the webhooks in the background.
 func (s *Server) Run(ctx context.Context) error {
 	ch, stop := s.Bus.Subscribe(256)
 	defer stop()
-	go func() {
-		for e := range ch {
-			s.Dispatch.Deliver(ctx, e)
-		}
-	}()
-	srv := &http.Server{Addr: s.Cfg.Server.Addr, Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	go s.Dispatch.Run(ctx, ch) // one queue per webhook: a dead receiver holds up only itself
+	srv := s.httpServer()
+	// Every request's context ends when shutdown starts, so the event stream and the extension's long poll return at
+	// once instead of holding Shutdown for its whole timeout.
+	base, stopRequests := context.WithCancel(context.Background())
+	defer stopRequests()
+	srv.BaseContext = func(net.Listener) context.Context { return base }
+	srv.RegisterOnShutdown(stopRequests)
+	cert, key := s.Cfg.Server.TLSCert, s.Cfg.Server.TLSKey
+	if w := s.clearTextWarning(); w != "" && s.Console != nil {
+		fmt.Fprintln(s.Console, w)
+	}
 	errc := make(chan error, 1)
-	if s.Listener != nil { // bound by the caller, which handles a port already in use
+	switch {
+	case s.Listener != nil && cert != "": // bound by the caller, which handles a port already in use
+		go func() { errc <- srv.ServeTLS(s.Listener, cert, key) }()
+	case s.Listener != nil:
 		go func() { errc <- srv.Serve(s.Listener) }()
-	} else {
+	case cert != "":
+		go func() { errc <- srv.ListenAndServeTLS(cert, key) }()
+	default:
 		go func() { errc <- srv.ListenAndServe() }()
 	}
 	_, _ = s.Bus.Publish("server.started", map[string]string{"addr": s.Cfg.Server.Addr, "version": version.Version})

@@ -31,7 +31,7 @@ func (f *fakeTabs) Close(_ context.Context, _ string, items []tabs.CloseItem) (i
 }
 
 func TestTabsRoutes(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	if w := send(h, "GET", "/api/v1/tabs", ""); w.Code != 200 || strings.Contains(w.Body.String(), "private.example") || !strings.Contains(w.Body.String(), `"incognito_tabs":1`) {
 		t.Fatalf("live %d %s", w.Code, w.Body)
@@ -116,7 +116,7 @@ func TestTabsRoutes(t *testing.T) {
 }
 
 func TestScheduledRecheckTakesOnlyStaleResults(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	ctx := context.Background()
 	linkWorkspace(t, s, "https://a.example") // links https://a.example/a and /b
 	old := time.Now().Add(-10 * 24 * time.Hour)

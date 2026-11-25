@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -44,7 +45,7 @@ func serve(t *testing.T, o Options, inProcess bool, client string) (*mcp.ClientS
 	}
 	c := config.Defaults()
 	c.APIToken = token
-	data, err := store.Open("json", t.TempDir())
+	data, err := store.Open("json", t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +239,7 @@ func TestAPIErrorsCarryTheServersMessage(t *testing.T) {
 	if ok || !strings.Contains(toJSON(out), "404") {
 		t.Fatalf("missing workspace: %v", out)
 	}
-	dead := NewAPI("http://127.0.0.1:1", "x")
+	dead := NewAPI("http://127.0.0.1:1", rand.Text())
 	if err := dead.get(context.Background(), "workspaces", nil); err == nil || !strings.Contains(err.Error(), "browser-foreman serve") {
 		t.Fatalf("server down: %v", err)
 	}
@@ -326,7 +327,7 @@ func TestInProcessNeedsNoRunningServer(t *testing.T) {
 		t.Fatalf("the rename did not land: %v", out)
 	}
 	// The token still matters: a wrong one is refused, as over the network.
-	bad := InProcess(a.handler, "127.0.0.1:8765", "wrong")
+	bad := InProcess(a.handler, "127.0.0.1:8765", rand.Text())
 	if err := bad.get(context.Background(), "workspaces", &struct{}{}); err == nil {
 		t.Fatal("a wrong token was let in")
 	}

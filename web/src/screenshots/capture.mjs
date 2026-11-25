@@ -88,6 +88,9 @@ if (flag("--check")) {
 const browser = await puppeteer.launch({ executablePath: chrome, headless: true, userDataDir: join(tmp, "chrome"),
   defaultViewport: { width: 1440, height: 900, deviceScaleFactor: 2 }, args: ["--no-first-run", "--no-default-browser-check"] });
 const page = await browser.newPage();
+// Local mode opens the page only through a one-time link (POST local/links), which signs this browser in.
+const { url: signIn } = await api("POST", "local/links");
+await page.goto(signIn, { waitUntil: "domcontentloaded" });
 await page.evaluateOnNewDocument(() => { try { localStorage.setItem("bm-preview-v2:onboarded", "1"); } catch {} });
 
 const ws = "?ws=demo";

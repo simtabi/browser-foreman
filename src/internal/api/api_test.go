@@ -3,6 +3,7 @@ package api
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -27,7 +28,7 @@ func newServer(t *testing.T, token string) *Server {
 	c.APIToken = token
 	c.Storage.Path = t.TempDir()
 	st := webhooks.NewStore(t.TempDir())
-	data, err := store.Open("json", t.TempDir())
+	data, err := store.Open("json", t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +58,7 @@ func do(h http.Handler, method, url, body, host, origin, token string) *httptest
 }
 
 func TestHealthAndHostOriginGuard(t *testing.T) {
-	h := newServer(t, "tok").Handler()
+	h := newServer(t, apiTok).Handler()
 	if w := do(h, "GET", "/api/v1/health", "", "127.0.0.1:8765", "", ""); w.Code != 200 || w.Header().Get("X-Frame-Options") != "DENY" {
 		t.Fatalf("health %d", w.Code)
 	}
@@ -77,31 +78,31 @@ func TestHealthAndHostOriginGuard(t *testing.T) {
 }
 
 func TestWritesNeedTheToken(t *testing.T) {
-	h := newServer(t, "tok").Handler()
-	body := `{"url":"https://hooks.example.com/x","events":["*"],"secret":"0123456789abcdef"}`
+	h := newServer(t, apiTok).Handler()
+	body := `{"url":"https://hooks.example.com/x","events":["*"],"secret":"` + hookSecret + `"}`
 	if w := do(h, "POST", "/api/v1/webhooks", body, "127.0.0.1:8765", "", ""); w.Code != 401 {
 		t.Fatalf("no token: %d", w.Code)
 	}
-	if w := do(h, "POST", "/api/v1/webhooks", body, "127.0.0.1:8765", "", "nope"); w.Code != 401 {
+	if w := do(h, "POST", "/api/v1/webhooks", body, "127.0.0.1:8765", "", rand.Text()); w.Code != 401 {
 		t.Fatalf("wrong token: %d", w.Code)
 	}
-	w := do(h, "POST", "/api/v1/webhooks", body, "127.0.0.1:8765", "", "tok")
-	if w.Code != 201 || strings.Contains(w.Body.String(), "0123456789abcdef") {
+	w := do(h, "POST", "/api/v1/webhooks", body, "127.0.0.1:8765", "", apiTok)
+	if w.Code != 201 || strings.Contains(w.Body.String(), hookSecret) {
 		t.Fatalf("create %d %s (the secret must never be echoed)", w.Code, w.Body)
 	}
-	if w := do(h, "GET", "/api/v1/webhooks", "", "127.0.0.1:8765", "", "tok"); !strings.Contains(w.Body.String(), "hooks.example.com") || strings.Contains(w.Body.String(), "0123456789abcdef") {
+	if w := do(h, "GET", "/api/v1/webhooks", "", "127.0.0.1:8765", "", apiTok); !strings.Contains(w.Body.String(), "hooks.example.com") || strings.Contains(w.Body.String(), hookSecret) {
 		t.Fatalf("list %s", w.Body)
 	}
-	if w := do(h, "POST", "/api/v1/webhooks", `{"url":"http://169.254.169.254/","events":["*"],"secret":"0123456789abcdef"}`, "127.0.0.1:8765", "", "tok"); w.Code != 400 {
+	if w := do(h, "POST", "/api/v1/webhooks", `{"url":"http://169.254.169.254/","events":["*"],"secret":"`+hookSecret+`"}`, "127.0.0.1:8765", "", apiTok); w.Code != 400 {
 		t.Fatalf("metadata target: %d", w.Code)
 	}
-	if w := do(newServer(t, "").Handler(), "GET", "/api/v1/webhooks", "", "127.0.0.1:8765", "", "x"); w.Code != 503 {
+	if w := do(newServer(t, "").Handler(), "GET", "/api/v1/webhooks", "", "127.0.0.1:8765", "", rand.Text()); w.Code != 503 {
 		t.Fatalf("no token configured: %d", w.Code)
 	}
 }
 
 func TestEventsStreamReplaysAndStreams(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	_, _ = s.Bus.Publish("a.one", nil)
 	_, _ = s.Bus.Publish("a.two", nil)
 	ts := httptest.NewServer(s.Handler())
@@ -110,7 +111,7 @@ func TestEventsStreamReplaysAndStreams(t *testing.T) {
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, "GET", ts.URL+"/api/v1/events", nil)
 	req.Header.Set("Last-Event-ID", "1")
-	req.Header.Set("Authorization", "Bearer tok")
+	req.Header.Set("Authorization", "Bearer "+apiTok)
 	resp, err := ts.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -133,7 +134,7 @@ func TestEventsStreamReplaysAndStreams(t *testing.T) {
 }
 
 func TestWorkspacesAreReadOnlyAndNeedTheToken(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	ctx := context.Background()
 	_, _ = s.Data.CreateWorkspace(ctx, "main", "Chrome", time.Now())
 	tree := store.Tree{Root: &store.Node{ID: "root", Kind: store.KindFolder, Children: []*store.Node{
@@ -143,28 +144,31 @@ func TestWorkspacesAreReadOnlyAndNeedTheToken(t *testing.T) {
 	if w := do(h, "GET", "/api/v1/workspaces", "", "127.0.0.1:8765", "", ""); w.Code != 401 {
 		t.Fatalf("bookmarks without the token: %d", w.Code)
 	}
-	if w := do(h, "GET", "/api/v1/workspaces", "", "127.0.0.1:8765", "", "tok"); w.Code != 200 || !strings.Contains(w.Body.String(), `"bookmarks":1`) {
+	if w := do(h, "GET", "/api/v1/workspaces", "", "127.0.0.1:8765", "", apiTok); w.Code != 200 || !strings.Contains(w.Body.String(), `"bookmarks":1`) {
 		t.Fatalf("list %d %s", w.Code, w.Body)
 	}
-	if w := do(h, "GET", "/api/v1/workspaces/main", "", "127.0.0.1:8765", "", "tok"); w.Code != 200 || !strings.Contains(w.Body.String(), "https://go.dev/") {
+	if w := do(h, "GET", "/api/v1/workspaces/main", "", "127.0.0.1:8765", "", apiTok); w.Code != 200 || !strings.Contains(w.Body.String(), "https://go.dev/") {
 		t.Fatalf("tree %d %s", w.Code, w.Body)
 	}
-	if w := do(h, "GET", "/api/v1/workspaces/main?at=9", "", "127.0.0.1:8765", "", "tok"); w.Code != 404 {
+	if w := do(h, "GET", "/api/v1/workspaces/main?at=9", "", "127.0.0.1:8765", "", apiTok); w.Code != 404 {
 		t.Fatalf("missing entry %d", w.Code)
 	}
-	if w := do(h, "GET", "/api/v1/workspaces/nope/history", "", "127.0.0.1:8765", "", "tok"); w.Code != 404 {
+	if w := do(h, "GET", "/api/v1/workspaces/nope/history", "", "127.0.0.1:8765", "", apiTok); w.Code != 404 {
 		t.Fatalf("missing workspace %d", w.Code)
 	}
-	if w := do(h, "DELETE", "/api/v1/workspaces/main", "", "127.0.0.1:8765", "", "tok"); w.Code != 405 {
+	if w := do(h, "DELETE", "/api/v1/workspaces/main", "", "127.0.0.1:8765", "", apiTok); w.Code != 405 {
 		t.Fatalf("workspaces are read-only here: %d", w.Code)
 	}
 }
 
 func TestCrossSiteLoadsAreRefused(t *testing.T) {
-	h := newServer(t, "tok").Handler()
+	srv := newServer(t, apiTok)
+	h := srv.Handler()
+	page := signedIn(t, srv) // the page's own loads carry its sign-in
 	req := func(site, mode string) int {
 		r := httptest.NewRequest("GET", "/api/v1/browsers/icon?name=Google%20Chrome", nil)
 		r.Host = "127.0.0.1:8765"
+		r.AddCookie(page)
 		r.Header.Set("Sec-Fetch-Site", site)
 		r.Header.Set("Sec-Fetch-Mode", mode)
 		w := httptest.NewRecorder()

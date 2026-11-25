@@ -71,7 +71,7 @@ func TestOpenAPIMatchesTheRoutes(t *testing.T) {
 }
 
 func TestOpenAPIIsPublic(t *testing.T) {
-	w := do(newServer(t, "tok").Handler(), "GET", "/api/v1/openapi.json", "", host, "", "")
+	w := do(newServer(t, apiTok).Handler(), "GET", "/api/v1/openapi.json", "", host, "", "")
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"openapi": "3.1.0"`) {
 		t.Fatalf("%d", w.Code)
 	}

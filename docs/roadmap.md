@@ -1,6 +1,6 @@
 # Roadmap
 
-Everything below ships in **v0.1.0**; the version is released when the last item is done. Each phase lands as its own
+Everything below shipped in **v0.1.0** (released 2026-11-10); later releases are under *After v0.1.0*. Each phase lands as its own
 pull request, with tests and docs.
 
 | Status | Meaning |
@@ -109,6 +109,11 @@ Added while the phases above were built, each with tests and docs:
 
 - v0.2.0: Settings › *Server settings* redesigned, with AI as one nested choice and the model picked from the
   provider's own list (`GET /api/v1/ai/models`); `make check` lints at CI's version.
+- v0.3.0: a security and reliability audit; two-way sync between a
+  browser and its workspace; *Save this page* and a dead-page badge in the extension; a `postgres` storage driver;
+  link results shown while a check runs; `webhook` and `doctor` commands; blank snapshots taken again.
+- Left after it: true windowing of the bookmark list for libraries past about 50,000 bookmarks (measured: a click deep
+  in a fully expanded list can take 0.6 to 1.8 s); the extensions' store listings; the hosted docs.
 
 ---
 [← Docs index](../README.md#documentation)

@@ -44,6 +44,11 @@ no letters to compare, because both ends are in the same browser. This also reco
 disconnected or denied, which does not ask again by itself. Installed or reloaded the extension after opening the
 page? Reload the page: they find each other when the page loads.
 
+An unconnected extension (0.1.9 and later) connects this way at once only to its usual server: the one it last used,
+or `127.0.0.1:8765`. A page at any other address on this computer, such as Browser Foreman moved to the next free
+port, or some other program, puts its address in the extension's popup and shows `?` on the icon instead; press
+**Connect** there if it is yours.
+
 How the page reaches the extension: a small content script on pages from this computer (`127.0.0.1`, `localhost`,
 already in the extension's permissions) passes two questions, *are you here?* and *connect to me*, to the
 extension. The extension checks the page's origin as the browser reports it, answers only pages on this computer,
@@ -154,6 +159,22 @@ again, so a fresh `make extension` takes effect without visiting the browser's e
   (`<browser>-before-write`), the changes are made, any order a browser placed differently is fixed, and the result is
   read back so the next write matches item for item. A workspace that was not read from this browser is refused,
   because writing it would remove everything; the browser's own top folders are never moved or removed.
+- **Keep in sync.** *Keep this browser and that workspace in sync*, under *Write a workspace into this browser*,
+  carries changes both ways from then on: a few seconds after you change the browser's bookmarks, and each minute for
+  changes made in Browser Foreman. The server merges the two against the last state they agreed on (the last read,
+  write-back or sync). A change made on one side is kept. Where both sides changed one bookmark, the side that changed
+  last wins, and that holds for a removal against an edit too. What the browser removes goes to the workspace's
+  Trash, never gone; notes, ratings and tags stay with the workspace. Only a workspace read from this browser can be
+  kept in sync with it.
+- **Save this page.** The popup's *Save this page* adds the page the tab shows to a workspace you choose, in a top
+  folder named *Saved from <browser>* (made the first time), with a picture of the tab as its snapshot. It only adds:
+  an address the workspace already holds is left where it is, nothing else in the workspace changes, and a snapshot
+  the page already has is kept (*Refresh* takes a new one). It needs the editor role. The
+  browser's own pages cannot be pictured, and are saved without one. Pressing the toolbar button is what lets the
+  extension picture the tab (the `activeTab` permission, from 0.1.10).
+- **A badge on dead pages.** On a page Browser Foreman has confirmed dead (two checks a day apart), the toolbar
+  button shows a red `!`. The extension asks the server about the page each tab shows; the server already receives
+  those addresses with the tab report.
 
 ## Routes
 
@@ -161,10 +182,10 @@ again, so a fresh `make extension` takes effect without visiting the browser's e
 |---|---|---|
 | `POST /api/v1/extension/pairings` | owner | a one-time pairing code |
 | `POST /api/v1/extension/pair` | anyone with a code | trade it for the extension's token |
-| `POST /api/v1/extension/requests` | an extension's origin | ask to connect in one click: an id, a poll secret, a match code |
+| `POST /api/v1/extension/requests` | an extension's origin, from this computer | ask to connect in one click: an id, a poll secret, a match code (an extension on another computer pairs with a code instead) |
 | `POST /api/v1/extension/requests/{id}/poll` | the asker (poll secret) | the answer; approved, the token, once |
 | `GET /api/v1/extension/requests` | owner | the requests waiting, with their match codes |
-| `POST /api/v1/extension/requests/{id}/approve`, `…/deny` | owner | answer one |
+| `POST /api/v1/extension/requests/{id}/approve`, `POST /api/v1/extension/requests/{id}/deny` | owner | answer one |
 | `GET /api/v1/extension/guide` | owner | each installed browser's build, whether it is built, its extensions page; each extension's version |
 | `POST /api/v1/extension/setup` | owner | open a browser's extensions page and show the build in Finder |
 | `GET /api/v1/extension/status` | viewer | the connected extensions |
@@ -172,6 +193,10 @@ again, so a fresh `make extension` takes effect without visiting the browser's e
 | `POST /api/v1/extension/bookmarks` | the extension (editor) | its bookmark tree, into a workspace |
 | `GET /api/v1/extension/commands?wait=25` | the extension | commands for its browser (long poll) |
 | `POST /api/v1/extension/commands/{id}/done` | the extension | what became of one |
+| `POST /api/v1/extension/pages` | the extension | body `{workspace, url, title, picture?}` (a JPEG or PNG data URL up to 8 MB): add the page to *Saved from <browser>*; `201` with the entry, or `200 {"already": true, "node"}` |
+| `POST /api/v1/extension/sync` | the extension | body `{workspace, base, changed, nodes}` (`base` 0: the last entry this browser and the workspace agreed on; `changed`: the browser's last bookmark change, Unix ms): merges and answers `{tree, conflicts, removed}` with the entry made, or `seq` when nothing changed |
+| `POST /api/v1/extension/sync/adopt` | the extension | body `{workspace, seq, nodes}`: the browser's bookmarks read back after writing merge entry `seq`; what the browser made takes its new ids (matched by folder path, title and address), on the workspace as it is now |
+| `GET /api/v1/extension/link?url=` | the extension | `{status, confirmed, archive, checked}` for one address, `{"status": "unchecked"}` when never checked |
 | `POST /api/v1/extension/commands` | owner | ask a browser to open links or a tab group, or to reload its extension (`"kind": "reload"`); at most 100 wait per browser, and each is forgotten after an hour |
 | `GET /api/v1/extension/commands/{id}` | viewer | a command and its state |
 

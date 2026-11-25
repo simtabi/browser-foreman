@@ -174,15 +174,14 @@ func TestJobPauseResumeCancel(t *testing.T) {
 	if j.Total != 20 {
 		t.Fatalf("duplicates kept: %d", j.Total)
 	}
-	for inside.Load() < 2 { // both workers are inside a check
-		time.Sleep(5 * time.Millisecond)
-	}
+	eventually(t, "both workers inside a check", func() bool { return inside.Load() >= 2 })
 	if !j.Pause() || j.View().State != Paused {
 		t.Fatal("pause")
 	}
 	gate <- struct{}{}
 	gate <- struct{}{} // the two checks under way finish
-	time.Sleep(100 * time.Millisecond)
+	eventually(t, "the two checks under way to finish", func() bool { return j.View().Checked >= 2 })
+	time.Sleep(50 * time.Millisecond) // the freed workers' chance to start another check, which a pause must refuse
 	if n, in := j.View().Checked, inside.Load(); n != 2 || in != 2 {
 		t.Fatalf("checks kept starting while paused: %d finished, %d reached the site", n, in)
 	}
@@ -190,9 +189,7 @@ func TestJobPauseResumeCancel(t *testing.T) {
 	for range 3 {
 		gate <- struct{}{}
 	}
-	for j.View().Checked < 5 {
-		time.Sleep(5 * time.Millisecond)
-	}
+	eventually(t, "five checks done", func() bool { return j.View().Checked >= 5 })
 	j.Cancel()
 	j.Wait()
 	v := j.View()
@@ -287,5 +284,15 @@ func TestASiteStillPausedIsWaitedOutOnce(t *testing.T) {
 	}
 	if len(j.Results()) != 6 {
 		t.Fatalf("%d results", len(j.Results()))
+	}
+}
+
+// eventually waits up to 10s for ok, failing the test with what it waited for.
+func eventually(t *testing.T, what string, ok func() bool) {
+	t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); !ok(); time.Sleep(5 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("waited 10s for %s", what)
+		}
 	}
 }

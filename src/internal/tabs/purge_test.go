@@ -12,7 +12,7 @@ import (
 
 func TestPurgeAndDelete(t *testing.T) {
 	ctx := context.Background()
-	data, err := store.Open("sqlite", t.TempDir())
+	data, err := store.Open("sqlite", t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestPurgeAndDelete(t *testing.T) {
 
 func TestDeleteAndPurgeKeepToOnePool(t *testing.T) {
 	ctx := context.Background()
-	data, err := store.Open("sqlite", t.TempDir())
+	data, err := store.Open("sqlite", t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

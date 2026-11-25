@@ -40,9 +40,9 @@ func TestPageInLocalMode(t *testing.T) {
 	tr, _, _ := s.Data.State(ctx, "main", 0)
 	tr.Root.Children[0].Children[0].Title = "</script><script>alert(1)</script> "
 	_, _ = s.Data.Commit(ctx, "main", 1, store.Change{Op: "edit", Summary: "x", Tree: tr}, time.Now())
-	w := get(s.Handler(), "/", nil)
+	w := get(s.Handler(), "/", signedIn(t, s))
 	body := w.Body.String()
-	if w.Code != 200 || !strings.Contains(body, `window.BF_V1 = {`) || !strings.Contains(body, `"token":"tok"`) {
+	if w.Code != 200 || !strings.Contains(body, `window.BF_V1 = {`) || !strings.Contains(body, `"token":"`+apiTok+`"`) {
 		t.Fatalf("%d %s", w.Code, body)
 	}
 	if strings.Contains(body, "</script><script>alert") || strings.Contains(body, " ") {
@@ -53,10 +53,10 @@ func TestPageInLocalMode(t *testing.T) {
 	if m == nil || strings.Count(body, `<script nonce="`+m[1]+`">`) != 2 || strings.Contains(csp, "unsafe-inline' 'nonce") {
 		t.Fatalf("every inline script must carry this response's nonce: %s", csp)
 	}
-	if w2 := get(s.Handler(), "/", nil); strings.Contains(w2.Header().Get("Content-Security-Policy"), m[1]) {
+	if w2 := get(s.Handler(), "/", signedIn(t, s)); strings.Contains(w2.Header().Get("Content-Security-Policy"), m[1]) {
 		t.Fatal("the nonce was reused")
 	}
-	if w := get(s.Handler(), "/?ws=nope", nil); w.Code != 404 {
+	if w := get(s.Handler(), "/?ws=nope", signedIn(t, s)); w.Code != 404 {
 		t.Fatalf("missing workspace %d", w.Code)
 	}
 	if w := get(s.Handler(), "/assets/js/app.js", nil); w.Code != 200 {
@@ -76,12 +76,13 @@ func TestPageWithoutTokenOrUI(t *testing.T) {
 	if w := get(withUI(newServer(t, "")).Handler(), "/", nil); w.Code != 503 || strings.Contains(w.Body.String(), "BF_V1") {
 		t.Fatalf("no token: %d", w.Code)
 	}
-	unbuilt := newServer(t, "tok")
+	unbuilt := newServer(t, apiTok)
 	unbuilt.UI = fstest.MapFS{}
 	if w := get(unbuilt.Handler(), "/", nil); w.Code != 200 || !strings.Contains(w.Body.String(), "make web") {
 		t.Fatalf("unbuilt UI: %d %s", w.Code, w.Body)
 	}
-	if w := get(withUI(newServer(t, "tok")).Handler(), "/", nil); !strings.Contains(w.Body.String(), "browser-foreman import") {
+	empty := withUI(newServer(t, apiTok))
+	if w := get(empty.Handler(), "/", signedIn(t, empty)); !strings.Contains(w.Body.String(), "browser-foreman import") {
 		t.Fatalf("no workspaces: %s", w.Body)
 	}
 }
@@ -114,7 +115,7 @@ func TestPageOpensTheFirstUnarchivedWorkspace(t *testing.T) {
 	main, _ := s.Data.Workspace(ctx, "main")
 	main.Archived = true
 	_ = s.Data.UpdateWorkspace(ctx, main)
-	body := get(s.Handler(), "/", nil).Body.String()
+	body := get(s.Handler(), "/", signedIn(t, s)).Body.String()
 	// The open workspace reaches the page with its colour and icon, so the top bar shows them.
 	if !strings.Contains(body, `"workspace":{"archived":false,"color":"teal","head":1,"icon":"flask","id":"zed"`) || !strings.Contains(body, `"workspaces":[`) {
 		t.Fatalf("%s", body[strings.Index(body, "BF_V1"):][:300])
@@ -129,17 +130,17 @@ func TestPageNeverOpensTheWorkspaceTrash(t *testing.T) {
 	main, _ := s.Data.Workspace(ctx, "main")
 	main.Deleted = time.Now()
 	_ = s.Data.UpdateWorkspace(ctx, main)
-	body := get(s.Handler(), "/", nil).Body.String()
+	body := get(s.Handler(), "/", signedIn(t, s)).Body.String()
 	if !strings.Contains(body, `"id":"zed"`) || strings.Contains(body, `"id":"main"`) {
 		t.Fatalf("a deleted workspace was opened or listed: %s", body[strings.Index(body, "BF_V1"):][:300])
 	}
-	if w := get(s.Handler(), "/?ws=main", nil); w.Code != 404 {
+	if w := get(s.Handler(), "/?ws=main", signedIn(t, s)); w.Code != 404 {
 		t.Fatalf("opening a deleted workspace by id: %d", w.Code)
 	}
 	zed, _ := s.Data.Workspace(ctx, "zed")
 	zed.Deleted = time.Now()
 	_ = s.Data.UpdateWorkspace(ctx, zed)
-	if body := get(s.Handler(), "/", nil).Body.String(); !strings.Contains(body, "workspace Trash") {
+	if body := get(s.Handler(), "/", signedIn(t, s)).Body.String(); !strings.Contains(body, "workspace Trash") {
 		t.Fatal("with every workspace deleted, the page must say so")
 	}
 }

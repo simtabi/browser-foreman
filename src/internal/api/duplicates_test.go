@@ -12,7 +12,7 @@ import (
 )
 
 func TestFindDuplicatesAndTrashTheCopies(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	ctx := context.Background()
 	_, _ = s.Data.CreateWorkspace(ctx, "main", "Main", time.Now())

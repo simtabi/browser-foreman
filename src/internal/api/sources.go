@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/simtabi/browser-foreman/src/internal/config"
 	"io"
 	"mime"
 	"net/http"
@@ -67,6 +68,12 @@ func (s *Server) addSources(w http.ResponseWriter, r *http.Request) {
 	if paths := q["path"]; len(paths) > 0 {
 		if store.RoleRank(principal(r).Role) < store.RoleRank(store.RoleOwner) {
 			writeErr(w, 403, "reading files on this computer is for owners")
+			return
+		}
+		// A path names a file on the server's own computer, so asking for one is for that computer only, as settings
+		// edits are: from elsewhere, upload the file instead.
+		if s.Cfg.Server.Mode == config.ModeAccounts && !fromThisComputer(r) {
+			writeErr(w, 403, "reading a file by its path works only from the server's own computer; upload the file instead")
 			return
 		}
 		if len(paths) > maxSources {

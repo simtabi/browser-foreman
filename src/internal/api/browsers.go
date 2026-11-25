@@ -29,6 +29,10 @@ func (s *Server) listBrowsers(w http.ResponseWriter, r *http.Request) {
 
 // browserIcon answers an installed browser's own app icon as a 64-pixel PNG (?name=Google Chrome).
 func (s *Server) browserIcon(w http.ResponseWriter, r *http.Request) {
+	if !s.mayViewPictures(r) {
+		writeErr(w, 401, "sign in first")
+		return
+	}
 	b, ok := s.Browsers.Find(r.URL.Query().Get("name"))
 	if !ok {
 		writeErr(w, 404, "no installed browser by that name")

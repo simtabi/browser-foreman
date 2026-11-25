@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -33,9 +34,11 @@ func linkWorkspace(t *testing.T, s *Server, base string) {
 	}
 }
 
+// waitCheck waits for a check to finish, up to 15 s: 4 s (200 × 20 ms) was too tight under the race detector on a
+// busy machine, where a throttled site's pause alone takes a good part of it.
 func waitCheck(t *testing.T, h http.Handler, id string) map[string]store.LinkResult {
 	t.Helper()
-	for range 200 {
+	for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); {
 		var out struct {
 			Job     struct{ Done bool }
 			Results map[string]store.LinkResult
@@ -75,7 +78,7 @@ func TestLinkChecksStoreResultsAndReportChanges(t *testing.T) {
 		_, _ = w.Write([]byte("hello"))
 	}))
 	defer site.Close()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	linkWorkspace(t, s, site.URL)
 	h := s.Handler()
 
@@ -125,7 +128,7 @@ func TestOneCheckAtATimeAndControls(t *testing.T) {
 		}
 	}))
 	defer site.Close()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	linkWorkspace(t, s, site.URL)
 	h := s.Handler()
 	id := start(t, h, `{"workspace":"links"}`)
@@ -170,7 +173,7 @@ func TestADeadLinkIsConfirmedADayLaterAndGetsItsArchiveCopy(t *testing.T) {
 		}
 	}))
 	defer site.Close()
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	s.WaybackAPI = site.URL + "/wayback"
 	linkWorkspace(t, s, site.URL)
 	h := s.Handler()
@@ -218,7 +221,7 @@ func TestADeadLinkIsConfirmedADayLaterAndGetsItsArchiveCopy(t *testing.T) {
 }
 
 func TestFailingGitHubLinksAreSettledThroughTheAPI(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	ctx := context.Background()
 	t0 := time.Now().Add(-48 * time.Hour)
 	s.Checker.Now = func() time.Time { return t0.Add(48 * time.Hour) }
@@ -278,7 +281,7 @@ func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f
 
 // A run asks GitHub's API about the GitHub links it found failing, once it finishes.
 func TestARunAsksGitHubAboutItsFailingGitHubLinks(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	ctx := context.Background()
 	_, _ = s.Data.CreateWorkspace(ctx, "links", "Links", time.Now())
@@ -308,7 +311,7 @@ func TestARunAsksGitHubAboutItsFailingGitHubLinks(t *testing.T) {
 
 // When gh cannot answer at all (signed out, no network), the run's own results stay and nothing more is asked.
 func TestGitHubThatCannotAnswerChangesNothing(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	ctx := context.Background()
 	asked := 0
 	s.GitHub = func(context.Context, string) linkcheck.GitHubAnswer { asked++; return linkcheck.GitHubAnswer{} }
@@ -323,15 +326,18 @@ func TestGitHubThatCannotAnswerChangesNothing(t *testing.T) {
 
 // Links a plain request could not settle are opened in Chrome and judged from what it shows.
 func TestBlockedLinksAreSettledInChrome(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	ctx := context.Background()
 	words := strings.Repeat("Plenty of real words on this page. ", 10)
+	var mu sync.Mutex // Render runs the fake from several goroutines at once
 	var opened []string
 	s.Snapper = &media.Snapper{Chrome: "/x/chrome",
-		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("93.184.216.34")}, nil },
+		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("203.0.113.10")}, nil },
 		Dump: func(_ context.Context, argv []string) ([]byte, error) {
 			u := argv[len(argv)-1]
+			mu.Lock()
 			opened = append(opened, u)
+			mu.Unlock()
 			if strings.Contains(u, "gone") {
 				return []byte("<html><title>Page not found</title></html>"), nil
 			}
@@ -365,7 +371,7 @@ func TestBlockedLinksAreSettledInChrome(t *testing.T) {
 
 // A run opens in Chrome the links it could not settle, once it finishes.
 func TestARunSettlesBlockedLinksInChrome(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	ctx := context.Background()
 	_, _ = s.Data.CreateWorkspace(ctx, "links", "Links", time.Now())
@@ -378,7 +384,7 @@ func TestARunSettlesBlockedLinksInChrome(t *testing.T) {
 	})
 	words := strings.Repeat("Plenty of real words on this page. ", 10)
 	s.Snapper = &media.Snapper{Chrome: "/x/chrome",
-		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("93.184.216.34")}, nil },
+		Resolve: func(context.Context, string) ([]net.IP, error) { return []net.IP{net.ParseIP("203.0.113.10")}, nil },
 		Dump: func(context.Context, []string) ([]byte, error) {
 			return []byte("<html><head><title>Item</title></head><body>" + words + "</body></html>"), nil
 		}}
@@ -395,7 +401,7 @@ func TestARunSettlesBlockedLinksInChrome(t *testing.T) {
 
 // Failing Stack Overflow questions are settled through the Stack Exchange API, a hundred to a request.
 func TestFailingStackOverflowLinksAreSettledThroughTheAPI(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	ctx := context.Background()
 	s.Checker.Client.Transport = roundTrip(func(r *http.Request) (*http.Response, error) {
 		body := `{"items":[]}`
@@ -420,7 +426,7 @@ func TestFailingStackOverflowLinksAreSettledThroughTheAPI(t *testing.T) {
 
 // A run asks the Stack Exchange API about the Stack Overflow links it could not settle, once it finishes.
 func TestARunAsksStackExchange(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	h := s.Handler()
 	ctx := context.Background()
 	_, _ = s.Data.CreateWorkspace(ctx, "links", "Links", time.Now())
@@ -444,4 +450,62 @@ func TestARunAsksStackExchange(t *testing.T) {
 	}
 	got, _ := s.Data.Links(ctx, nil)
 	t.Fatalf("%+v", got["https://stackoverflow.com/questions/11/x"])
+}
+
+// A page polling a running check asks for the results that arrived since it last asked: from counts what it has read.
+func TestResultsArriveWhileACheckRuns(t *testing.T) {
+	release := make(chan struct{})
+	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/b" {
+			<-release // B answers only once A's result has been read
+		}
+		_, _ = w.Write([]byte("hello"))
+	}))
+	defer site.Close()
+	defer close(release)
+	s := newServer(t, apiTok)
+	linkWorkspace(t, s, site.URL)
+	h := s.Handler()
+	id := start(t, h, `{"workspace":"links"}`)
+	type page struct {
+		Job     struct{ Done bool }
+		Results map[string]store.LinkResult
+		Next    int
+	}
+	read := func(from string) page {
+		var p page
+		w := send(h, "GET", "/api/v1/linkchecks/"+id+"?results=1&from="+from, "")
+		if w.Code != 200 {
+			t.Fatalf("from=%s: %d %s", from, w.Code, w.Body)
+		}
+		_ = json.Unmarshal(w.Body.Bytes(), &p)
+		return p
+	}
+	var first page
+	for deadline := time.Now().Add(10 * time.Second); len(first.Results) == 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("no result while the check ran")
+		}
+		first = read("0")
+	}
+	if first.Job.Done || first.Next != 1 || first.Results[site.URL+"/a"].Status != "ok" {
+		t.Fatalf("while running: %+v", first)
+	}
+	if again := read("1"); len(again.Results) != 0 || again.Next != 1 {
+		t.Fatalf("nothing new yet: %+v", again)
+	}
+	release <- struct{}{}
+	var rest page
+	for deadline := time.Now().Add(10 * time.Second); len(rest.Results) == 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("B never arrived")
+		}
+		rest = read("1")
+	}
+	if len(rest.Results) != 1 || rest.Results[site.URL+"/b"].Status != "ok" || rest.Next != 2 {
+		t.Fatalf("after: %+v", rest)
+	}
+	if w := send(h, "GET", "/api/v1/linkchecks/"+id+"?results=1&from=-1", ""); w.Code != 400 {
+		t.Fatalf("from=-1: %d", w.Code)
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -53,7 +54,7 @@ func node(t *testing.T, s *Server, id string) *store.Node {
 }
 
 func TestAnAITagJobWaitsForAClientAndApplies(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	aiWorkspace(t, s)
 	h := s.Handler()
 	w := send(h, "POST", "/api/v1/ai/jobs", `{"kind":"tag","workspace":"w","folder":"Bookmarks Bar/Dev","apply":true}`)
@@ -88,11 +89,11 @@ func TestAnAITagJobWaitsForAClientAndApplies(t *testing.T) {
 }
 
 // fakeProvider answers every dedupe group with all members the same page.
-type fakeProvider struct{ calls int }
+type fakeProvider struct{ calls atomic.Int32 } // Answer runs on the job goroutine, read by the test
 
 func (*fakeProvider) Name() string { return "fake" }
 func (f *fakeProvider) Answer(_ context.Context, j ai.Job) (ai.Results, error) {
-	f.calls++
+	f.calls.Add(1)
 	var r ai.Results
 	for _, g := range j.Groups {
 		v := ai.Verdict{Keep: g.Keep, Reason: "same release notes"}
@@ -105,7 +106,7 @@ func (f *fakeProvider) Answer(_ context.Context, j ai.Job) (ai.Results, error) {
 }
 
 func TestAProviderJudgesOnlyUncertainDuplicates(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	aiWorkspace(t, s)
 	f := &fakeProvider{}
 	s.AI = f
@@ -122,8 +123,8 @@ func TestAProviderJudgesOnlyUncertainDuplicates(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if !done || f.calls != 1 {
-		t.Fatalf("done %v, calls %d", done, f.calls)
+	if !done || f.calls.Load() != 1 {
+		t.Fatalf("done %v, calls %d", done, f.calls.Load())
 	}
 	tr, _, _ := s.Data.State(context.Background(), "w", 0)
 	if len(tr.Trash) != 1 || !strings.Contains(tr.Trash[0].Reason, "judged the same page by a model") {
@@ -132,7 +133,7 @@ func TestAProviderJudgesOnlyUncertainDuplicates(t *testing.T) {
 }
 
 func TestAIJobsRefuseWhatTheyCannotDo(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	aiWorkspace(t, s)
 	h := s.Handler()
 	for body, want := range map[string]string{
@@ -149,7 +150,7 @@ func TestAIJobsRefuseWhatTheyCannotDo(t *testing.T) {
 }
 
 func TestAIJobsOutliveARestart(t *testing.T) {
-	s := newServer(t, "tok")
+	s := newServer(t, apiTok)
 	aiWorkspace(t, s)
 	if w := send(s.Handler(), "POST", "/api/v1/ai/jobs", `{"kind":"tag","workspace":"w"}`); w.Code != 201 {
 		t.Fatalf("%d %s", w.Code, w.Body)
@@ -158,7 +159,7 @@ func TestAIJobsOutliveARestart(t *testing.T) {
 		t.Fatalf("the queue file: %v %v", st, err)
 	}
 	// A new server on the same state folder, with a provider: it takes the waiting job and answers it.
-	again := newServer(t, "tok")
+	again := newServer(t, apiTok)
 	again.Cfg.Storage.Path, again.Data = s.Cfg.Storage.Path, s.Data
 	f := &tagger{}
 	again.AI = f
@@ -169,15 +170,15 @@ func TestAIJobsOutliveARestart(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatalf("the job did not survive the restart: calls %d", f.calls)
+	t.Fatalf("the job did not survive the restart: calls %d", f.calls.Load())
 }
 
 // tagger tags every bookmark of a job "x".
-type tagger struct{ calls int }
+type tagger struct{ calls atomic.Int32 } // Answer runs on the job goroutine
 
 func (*tagger) Name() string { return "tagger" }
 func (f *tagger) Answer(_ context.Context, j ai.Job) (ai.Results, error) {
-	f.calls++
+	f.calls.Add(1)
 	var r ai.Results
 	for _, it := range j.Items {
 		r.Tags = append(r.Tags, ai.TagResult{ID: it.ID, Tags: []string{"x"}})

@@ -38,20 +38,34 @@ function restack(): void {
   if (backdrop) backdrop.style.zIndex = String(BASE_Z - 5 + STEP_Z * Math.max(0, open.length - 1));
 }
 
+// Keyboard and screen-reader users: a dialog takes the focus when it opens (unless something inside already has it),
+// keeps Tab inside itself while it is the topmost, and gives the focus back to what opened it when it closes.
+const openedFrom = new Map<HTMLElement, HTMLElement | null>();
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+export const focusables = (m: HTMLElement): HTMLElement[] =>
+  Array.from(m.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(e => !e.hidden && e.offsetParent !== null);
+
 export function showModal(id: string): void {
   const m = must<HTMLElement>(id);
   const under = visibleModals().filter(x => x !== m).length;
   m.style.zIndex = String(BASE_Z + STEP_Z * under);
   m.style.display = "block"; m.classList.add("show");
+  m.setAttribute("aria-modal", "true");
+  if (!openedFrom.has(m)) openedFrom.set(m, document.activeElement instanceof HTMLElement ? document.activeElement : null);
   if (!backdrop) { backdrop = el("div", "modal-backdrop fade show"); document.body.append(backdrop); }
   restack();
+  setTimeout(() => { if (!m.contains(document.activeElement)) (focusables(m)[0] ?? m).focus({ preventScroll: true }); }, 40);
 }
 
 export function hideModal(id: string): void {
   const m = must<HTMLElement>(id); m.classList.remove("show"); m.style.display = "none"; m.style.zIndex = "";
+  m.removeAttribute("aria-modal");
+  const back = openedFrom.get(m); openedFrom.delete(m);
   opts.afterHide?.(id);
   dropBackdrop();
   restack();
+  const top = visibleModals().pop(); // a confirm closing over a dialog gives the focus back inside that dialog
+  if (back && back.isConnected && (!top || top.contains(back))) back.focus({ preventScroll: true });
 }
 
 /** Text editor dialog: rename, new folder, descriptions. Resolves with the text, or null when cancelled. */
@@ -61,6 +75,7 @@ export function askText({ title, label, value = "", hint = "", multiline = false
     const area = must<HTMLTextAreaElement>("#textArea"), line = must<HTMLInputElement>("#textIn"), okBtn = must<HTMLButtonElement>("#textOk");
     const inp = multiline ? area : line;
     area.hidden = !multiline; line.hidden = multiline; inp.value = value;
+    must<HTMLLabelElement>("#textLabel").htmlFor = inp.id; // the label names the field shown, for screen readers
     const done = (v: string | null) => { hideModal("#textModal"); okBtn.onclick = null; inp.onkeydown = null; resolve(v); };
     okBtn.onclick = () => done(inp.value);
     inp.onkeydown = (e: KeyboardEvent) => { e.stopPropagation(); if (e.key === "Escape") done(null); if (e.key === "Enter" && (!multiline || e.metaKey || e.ctrlKey)) { e.preventDefault(); done(inp.value); } };
@@ -69,15 +84,32 @@ export function askText({ title, label, value = "", hint = "", multiline = false
   });
 }
 
+/** What Enter means in a confirm: the button that has the focus, so Enter on a focused Cancel cancels; OK only when
+ *  neither button has it. Enter used to mean OK wherever the focus was, and the dialog opens with Cancel focused. */
+export function enterMeans(focused: unknown, no: unknown): boolean {
+  return focused !== no;
+}
+
+// The confirm dialog is one element. A question asked while another is open (an extension asking to connect, on a
+// 3 s poll, over a delete) waits its turn; it used to take the dialog over, leave the first question unanswered, and
+// let the first one's Enter handler answer yes to it.
+let confirmTurn: Promise<unknown> = Promise.resolve();
+export function oneAtATime<T>(ask: () => Promise<T>): Promise<T> {
+  const turn = confirmTurn.then(ask, ask);
+  confirmTurn = turn.then(() => undefined, () => undefined);
+  return turn;
+}
+
 /** Confirm dialog: danger (red) for anything destructive or irreversible, primary for big but harmless jobs. */
-export function askConfirm({ title, body, ok = "Continue", no = "Cancel", danger = true }: ConfirmOptions): Promise<boolean> {
+export function askConfirm(o: ConfirmOptions): Promise<boolean> { return oneAtATime(() => confirmNow(o)); }
+function confirmNow({ title, body, ok = "Continue", no = "Cancel", danger = true }: ConfirmOptions): Promise<boolean> {
   return new Promise(resolve => {
     must("#confirmTitle").textContent = title; must("#confirmBody").textContent = body;
     must("#confirmBar").className = "modal-status " + (danger ? "bg-danger" : "bg-primary");
     must("#confirmIcon").className = "ti mb-2 " + (danger ? "ti-alert-triangle text-danger" : "ti-info-circle text-primary");
     const yes = must<HTMLButtonElement>("#confirmYes"), noBtn = must<HTMLButtonElement>("#confirmNo");
     yes.className = "btn " + (danger ? "btn-danger" : "btn-primary"); yes.textContent = ok; noBtn.textContent = no;
-    const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); done(false); } if (e.key === "Enter") { e.stopPropagation(); e.preventDefault(); done(true); } };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); done(false); } if (e.key === "Enter") { e.stopPropagation(); e.preventDefault(); done(enterMeans(document.activeElement, noBtn)); } };
     const done = (v: boolean) => { hideModal("#confirmModal"); yes.onclick = noBtn.onclick = null; document.removeEventListener("keydown", key, true); resolve(v); };
     yes.onclick = () => done(true); noBtn.onclick = () => done(false);
     document.addEventListener("keydown", key, true);
@@ -87,7 +119,8 @@ export function askConfirm({ title, body, ok = "Continue", no = "Cancel", danger
 
 /** Confirm with Not now: resolves "yes", "no", or "later" (also Escape), for a question that may wait, such as an
  *  extension asking to connect: later leaves it unanswered rather than refusing it. */
-export function askDecide({ title, body, ok = "Continue", no = "Cancel", later, danger = false }: DecideOptions): Promise<"yes" | "no" | "later"> {
+export function askDecide(o: DecideOptions): Promise<"yes" | "no" | "later"> { return oneAtATime(() => decideNow(o)); }
+function decideNow({ title, body, ok = "Continue", no = "Cancel", later, danger = false }: DecideOptions): Promise<"yes" | "no" | "later"> {
   return new Promise(resolve => {
     must("#confirmTitle").textContent = title; must("#confirmBody").textContent = body;
     must("#confirmBar").className = "modal-status " + (danger ? "bg-danger" : "bg-primary");
@@ -132,6 +165,15 @@ export function toast(text: string, kind: ToastKind = "info", title = ""): void 
  *  backdrop with no dialog left above it clears it. */
 export function installDialogs(o: DialogOptions = {}): void {
   opts = o;
+  // Tab and Shift-Tab go round the topmost dialog's own controls, never behind it.
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Tab") return;
+    const top = visibleModals().pop(); if (!top) return;
+    const f = focusables(top); if (!f.length) { e.preventDefault(); return; }
+    const first = f[0]!, last = f[f.length - 1]!, at = document.activeElement;
+    if (e.shiftKey && (at === first || !top.contains(at))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (at === last || !top.contains(at))) { e.preventDefault(); first.focus(); }
+  }, true);
   document.addEventListener("mousedown", e => { if (e.target === backdrop) dropBackdrop(); }, true);
   // Bubble phase: a field that handles Escape itself stops it first.
   document.addEventListener("keydown", e => {

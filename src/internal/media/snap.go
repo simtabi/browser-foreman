@@ -2,6 +2,7 @@ package media
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -51,9 +52,23 @@ func RunCommand(ctx context.Context, argv []string) error {
 var ErrNotPublic = errors.New("not a public web page: only http(s) addresses on the internet are snapped")
 
 // visit checks that raw is a page on the public internet and prepares Chrome for it: a profile made for this page
-// alone (dir; the caller removes it), and the arguments that keep Chrome to the address just checked. timeout covers
-// the whole visit.
-func (s Snapper) visit(ctx context.Context, raw string) (u *url.URL, dir string, args []string, timeout time.Duration, err error) {
+// alone (dir), the arguments that keep Chrome to the address just checked, and a proxy that keeps every other
+// request it makes (redirects, images, scripts, frames) to public addresses. The caller calls stop when Chrome is
+// done: it closes the proxy and removes dir. timeout covers the whole visit.
+func (s Snapper) visit(ctx context.Context, raw string) (u *url.URL, dir string, args []string, timeout time.Duration, stop func(), err error) {
+	u, dir, args, timeout, err = s.prepare(ctx, raw)
+	if err != nil {
+		return nil, "", nil, 0, nil, err
+	}
+	e, err := startEgress(false)
+	if err != nil {
+		os.RemoveAll(dir)
+		return nil, "", nil, 0, nil, err
+	}
+	return u, dir, append(args, chromeEgressArgs(e.addr())...), timeout, func() { e.close(); os.RemoveAll(dir) }, nil
+}
+
+func (s Snapper) prepare(ctx context.Context, raw string) (u *url.URL, dir string, args []string, timeout time.Duration, err error) {
 	u, err = url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
 		return nil, "", nil, 0, ErrNotPublic
@@ -103,15 +118,51 @@ func (s Snapper) visit(ctx context.Context, raw string) (u *url.URL, dir string,
 	return u, dir, args, timeout, nil
 }
 
-// Snap takes one page's snapshot and keeps it as a small JPEG.
+// ErrBlank: Chrome pictured nothing but one colour, twice; nothing is kept.
+var ErrBlank = errors.New("the page drew nothing (a blank picture, twice); nothing was kept")
+
+// Snap takes one page's snapshot and keeps it as a small JPEG. A blank picture is taken once more, with three times
+// the wait, and never kept.
 func (s Snapper) Snap(ctx context.Context, raw string) error {
-	u, dir, args, timeout, err := s.visit(ctx, raw)
+	img, err := s.shoot(ctx, raw)
+	if err == nil && Blank(img) {
+		slower := s
+		slower.Wait = 3 * cmp.Or(s.Wait, 8*time.Second)
+		img, err = slower.shoot(ctx, raw)
+		if err == nil && Blank(img) {
+			return ErrBlank
+		}
+	}
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(dir)
-	if s.Store.Dir == "" {
+	return s.Store.SaveThumb(raw, img)
+}
+
+// SaveThumb keeps a picture of a page as its snapshot: a JPEG of half its size.
+func (s Store) SaveThumb(raw string, img image.Image) error {
+	if s.Dir == "" {
 		return errors.New("no folder is set for snapshots")
+	}
+	var b bytes.Buffer
+	if err := jpeg.Encode(&b, half(img), &jpeg.Options{Quality: 72}); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(s.dir("thumbs"), 0o700); err != nil {
+		return err
+	}
+	return writeAtomic(filepath.Join(s.dir("thumbs"), ThumbKey(raw)+".jpg"), b.Bytes())
+}
+
+// shoot has Chrome picture one page and returns the picture.
+func (s Snapper) shoot(ctx context.Context, raw string) (image.Image, error) {
+	u, dir, args, timeout, stop, err := s.visit(ctx, raw)
+	if err != nil {
+		return nil, err
+	}
+	defer stop()
+	if s.Store.Dir == "" {
+		return nil, errors.New("no folder is set for snapshots")
 	}
 	shot := filepath.Join(dir, "shot.png")
 	cctx, cancel := context.WithTimeout(ctx, timeout)
@@ -122,25 +173,18 @@ func (s Snapper) Snap(ctx context.Context, raw string) error {
 		run = RunCommand
 	}
 	if err := run(cctx, argv); err != nil {
-		return fmt.Errorf("Chrome could not take it: %w", err)
+		return nil, fmt.Errorf("Chrome could not take it: %w", err)
 	}
 	f, err := os.Open(shot)
 	if err != nil {
-		return errors.New("Chrome wrote no picture")
+		return nil, errors.New("Chrome wrote no picture")
 	}
 	defer f.Close()
 	img, _, err := image.Decode(f)
 	if err != nil {
-		return fmt.Errorf("Chrome's picture is unreadable: %w", err)
+		return nil, fmt.Errorf("Chrome's picture is unreadable: %w", err)
 	}
-	var b bytes.Buffer
-	if err := jpeg.Encode(&b, half(img), &jpeg.Options{Quality: 72}); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(s.Store.dir("thumbs"), 0o700); err != nil {
-		return err
-	}
-	return writeAtomic(filepath.Join(s.Store.dir("thumbs"), ThumbKey(raw)+".jpg"), b.Bytes())
+	return img, nil
 }
 
 // half shrinks a picture to half its size, averaging each 2x2 block.
@@ -228,11 +272,11 @@ func (l *limited) Write(p []byte) (int, error) {
 // Render opens raw in headless Chrome, as Snap does (a throwaway profile, the address pinned), lets it run, and
 // returns the page as Chrome built it: what a person would see, where a plain request met a bot check.
 func (s Snapper) Render(ctx context.Context, raw string) ([]byte, error) {
-	u, dir, args, timeout, err := s.visit(ctx, raw)
+	u, _, args, timeout, stop, err := s.visit(ctx, raw)
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(dir)
+	defer stop()
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	dump := s.Dump

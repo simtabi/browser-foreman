@@ -89,6 +89,21 @@ export class Client {
   }
   commands(wait: number): Promise<{ commands: Command[] }> { return this.call("GET", `extension/commands?wait=${wait}`); }
   done(id: string, ok: boolean, error = "", result?: unknown): Promise<unknown> { return this.call("POST", `extension/commands/${encodeURIComponent(id)}/done`, { ok, error, ...(result === undefined ? {} : { result }) }); }
+  /** Save the page this browser is on into a workspace (its "Saved from <browser>" folder), with a picture of it. */
+  savePage(workspace: string, url: string, title: string, picture = ""): Promise<{ already?: boolean; entry?: { seq: number } }> {
+    return this.call("POST", "extension/pages", { workspace, url, title, ...(picture ? { picture } : {}) });
+  }
+  /** Merge this browser's bookmarks with the workspace kept in sync with them; base 0: from when they last agreed.
+   *  changed: when the browser's bookmarks last changed (Unix ms; 0: not since base). Answers the merged tree. */
+  sync(workspace: string, base: number, changed: number, nodes: unknown[]): Promise<{ tree: { root: any }; seq?: number; entry?: { seq: number }; conflicts: number; removed: number }> {
+    return this.call("POST", "extension/sync", { workspace, base, changed, nodes });
+  }
+  /** After writing the merge into the browser: its bookmarks read back, under the browser's ids. */
+  adopt(workspace: string, seq: number, nodes: unknown[]): Promise<{ seq?: number; entry?: { seq: number } }> {
+    return this.call("POST", "extension/sync/adopt", { workspace, seq, nodes });
+  }
+  /** What Browser Foreman knows about one address: its status, and whether it is confirmed dead. */
+  link(url: string): Promise<{ status: string; confirmed?: boolean; archive?: string }> { return this.call("GET", `extension/link?url=${encodeURIComponent(url)}`); }
   workspaces(): Promise<{ workspaces: { id: string; name: string; bookmarks: number }[] }> { return this.call("GET", "workspaces"); }
   workspace(id: string): Promise<{ tree: any; workspace: { head: number } }> { return this.call("GET", `workspaces/${encodeURIComponent(id)}`); }
 }
@@ -96,6 +111,12 @@ export class Client {
 export interface PairRequest { id: string; poll: string; match: string; expires: string }
 
 export interface Command { id: string; kind: "open" | "open-group" | "reload" | "read-bookmarks" | "write-bookmarks"; urls: string[]; title?: string; color?: string; incognito?: boolean; workspace?: string; expect?: string }
+
+/** The toolbar badge for the page a tab shows: "!" on a link Browser Foreman has confirmed dead, else nothing. */
+export function linkBadge(l: { status: string; confirmed?: boolean }): { text: string; title: string } {
+  if (l.status === "dead" && l.confirmed) return { text: "!", title: "Browser Foreman: this page stopped working (confirmed by two checks a day apart)" };
+  return { text: "", title: "" };
+}
 
 /** Tab group colours the browsers accept; anything else becomes grey. */
 export const GROUP_COLORS = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
@@ -157,6 +178,14 @@ export function connectRefusal(origin: string, server: string, paired: boolean):
     return `the extension is connected to ${new URL(server).origin}: disconnect it there (or in its popup) first`;
   }
   return "";
+}
+
+/** Whether a page's request to connect waits for the person instead of going ahead: an unconnected extension connects
+ *  by itself only to its usual server (the one it last used, or the default address). Any other page on this computer,
+ *  which could be some other program's server, gets the address put in the popup, where Connect must be pressed. */
+export function needsConfirmation(origin: string, server: string, paired: boolean): boolean {
+  if (paired) return false; // a connected extension is held to its own server by connectRefusal
+  try { return new URL(origin).origin !== new URL(server).origin; } catch { return true; }
 }
 
 /** Which messages the background takes from whom: a page (through the bridge) only "page-hello" and "page-connect";

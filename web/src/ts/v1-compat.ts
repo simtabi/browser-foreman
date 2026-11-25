@@ -82,7 +82,20 @@ export async function legacy(method: string, path: string, query: string, body: 
     if (path.startsWith("rechecks/")) {
       const j = await call("GET", "linkchecks/" + encodeURIComponent(path.slice("rechecks/".length)) + "?results=1");
       const res = Object.values(j.results ?? {}) as any[];
-      return ok({ newly_broken: res.filter(r => r.status === "dead").map(r => ({ url: r.url, before: "", note: r.note ?? "" })), fixed: [] });
+      // Newly broken: dead now, and something else before this run (a link dead already is not news); fixed: the reverse.
+      const prev: Record<string, string> = j.previous ?? {};
+      const was = (u: string) => (u in prev ? prev[u] : undefined);
+      return ok({
+        newly_broken: res.filter(r => r.status === "dead" && was(r.url) !== undefined && was(r.url) !== "dead")
+          .map(r => ({ url: r.url, before: was(r.url) ?? "", note: r.note ?? "" })),
+        fixed: res.filter(r => r.status === "ok" && was(r.url) === "dead").map(r => ({ url: r.url, before: "dead", note: r.note ?? "" })),
+      });
+    }
+    // A workspace's history (the Timeline's edits), from /workspaces/{id}/history, in the shape the page reads.
+    const hist = /^ws\/([^/]+)\/history$/.exec(path);
+    if (hist) {
+      const j = await call("GET", "workspaces/" + encodeURIComponent(decodeURIComponent(hist[1] ?? "")) + "/history");
+      return ok({ entries: (j.history ?? []).map((e: any) => ({ seq: e.seq, at: e.at, op: e.op, summary: e.summary })) });
     }
     return null;
   }

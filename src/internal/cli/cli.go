@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -52,7 +51,7 @@ func Root() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd(), userCmd(), tokenCmd(), backupCmd(), restoreCmd(), pairCmd(), mcpCmd(), mergeCmd(), sortCmd(), applyCmd(), stopCmd(), serviceCmd(), notifyCmd(), aiCmd())
+	root.AddCommand(serveCmd(), versionCmd(), configCmd(), importCmd(), workspaceCmd(), storageCmd(), userCmd(), tokenCmd(), backupCmd(), restoreCmd(), pairCmd(), mcpCmd(), mergeCmd(), sortCmd(), applyCmd(), stopCmd(), serviceCmd(), notifyCmd(), aiCmd(), openCmd(), pageDetailsCmd(), webhookCmd(), doctorCmd())
 	return root
 }
 
@@ -83,7 +82,11 @@ func serveCmd() *cobra.Command {
 			terminal := term.IsTerminal(int(os.Stdout.Fd()))
 			l, err := bind(ctx, c, replace, cmd.OutOrStdout())
 			if errors.Is(err, errAlreadyRunning) {
-				showPage(ctx, cmd.OutOrStdout(), c.Server.Addr, shouldOpen(c.Server.Open, open, noOpen, terminal))
+				if link, err := pageLink(ctx, c, c.Server.Addr); err == nil {
+					showPage(ctx, cmd.OutOrStdout(), link, shouldOpen(c.Server.Open, open, noOpen, terminal))
+				} else {
+					fmt.Fprintf(cmd.OutOrStdout(), "Open it with `browser-foreman open` (%v).\n", err)
+				}
 				return nil
 			}
 			if err != nil {
@@ -91,7 +94,7 @@ func serveCmd() *cobra.Command {
 			}
 			defer l.Close()
 			c.Server.Addr = l.Addr().String()
-			data, err := store.Open(c.Storage.Driver, c.Storage.Path)
+			data, err := store.Open(c.Storage.Driver, c.Storage.Path, c.Storage.DSN)
 			if err != nil {
 				return err
 			}
@@ -117,17 +120,25 @@ func serveCmd() *cobra.Command {
 				fmt.Fprintf(cmd.ErrOrStderr(), "desktop notifications are off: %v\n", err)
 			} else {
 				srv.Notifier = n
-				go func() { // so `browser-foreman notify ping` and scripts can show a notification through this server
-					if err := n.Listen(ctx); err != nil && ctx.Err() == nil {
-						fmt.Fprintf(cmd.ErrOrStderr(), "notification listener: %v\n", err)
-					}
-				}()
+				if why := notify.ListenProblem(n); why != "" {
+					fmt.Fprintf(cmd.ErrOrStderr(), "notification listener off: %s\n", why)
+				} else {
+					go func() { // so `browser-foreman notify ping` and scripts can show a notification through this server
+						if err := n.Listen(ctx); err != nil && ctx.Err() == nil {
+							fmt.Fprintf(cmd.ErrOrStderr(), "notification listener: %v\n", err)
+						}
+					}()
+				}
 			}
 			srv.Background(ctx)
 			go func() { // once it answers, so the page loads at once
 				for range 50 {
 					if answers(ctx, c.Server.Addr) {
-						showPage(ctx, cmd.OutOrStdout(), c.Server.Addr, shouldOpen(c.Server.Open, open, noOpen, terminal))
+						link := "http://" + c.Server.Addr + "/"
+						if c.Server.Mode == config.ModeLocal {
+							link = srv.LocalLink() // works once, within two minutes: signs in the browser that opens it
+						}
+						showPage(ctx, cmd.OutOrStdout(), link, shouldOpen(c.Server.Open, open, noOpen, terminal))
 						return
 					}
 					time.Sleep(100 * time.Millisecond)
@@ -139,6 +150,32 @@ func serveCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&replace, "replace", false, "stop the Browser Foreman already running on the address and take its place")
 	cmd.Flags().BoolVar(&open, "open", false, "open the page in the default browser (server.open: auto opens it when started from a terminal)")
 	cmd.Flags().BoolVar(&noOpen, "no-open", false, "do not open the page in the browser")
+	return cmd
+}
+
+func openCmd() *cobra.Command {
+	var printOnly bool
+	cmd := &cobra.Command{
+		Use:   "open",
+		Short: "Open the page in your browser, signed in",
+		Long: "Asks the running server for a one-time link and opens it in the default browser. In local mode the page\n" +
+			"opens only through such a link, so no other program or person on this computer can act as you; the link works\n" +
+			"once, within two minutes. --print shows it instead of opening it.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			_, c, err := load()
+			if err != nil {
+				return err
+			}
+			link, err := pageLink(cmd.Context(), c, serverAddr(cmd.Context(), c))
+			if err != nil {
+				return err
+			}
+			showPage(cmd.Context(), cmd.OutOrStdout(), link, !printOnly)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&printOnly, "print", false, "print the link instead of opening it")
 	return cmd
 }
 
@@ -172,7 +209,7 @@ func newServer(c config.Config, data store.Store, now func() time.Time) *api.Ser
 		Browsers: bs,
 		Media:    media.Store{Dir: filepath.Join(c.Storage.Path, "media")},
 		Dispatch: &webhooks.Dispatcher{
-			Store: hooks, Client: &http.Client{Timeout: c.Webhooks.Timeout.Duration}, Attempts: c.Webhooks.Attempts,
+			Store: hooks, Client: webhooks.NewClient(c.Webhooks.Timeout.Duration), Attempts: c.Webhooks.Attempts,
 			Backoff: 2 * time.Second, Now: now,
 			Log: func(d webhooks.Delivery) {
 				if err := deliveries.Add(d); err != nil {

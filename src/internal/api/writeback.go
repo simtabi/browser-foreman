@@ -43,12 +43,29 @@ func (x serverExtension) Run(ctx context.Context, browser string, cmd map[string
 		}
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, x.withdraw(c, ctx.Err())
 		case <-deadline:
-			return nil, fmt.Errorf("%s's extension did not answer within %s: is it connected, and is %s open?", browser, wait, browser)
+			return nil, x.withdraw(c, fmt.Errorf("%s's extension did not answer within %s: is it connected, and is %s open?", browser, wait, browser))
 		case <-time.After(300 * time.Millisecond):
 		}
 	}
+}
+
+// withdraw takes back a command its caller stopped waiting for. One still queued is cancelled, so the extension never
+// runs it after the person was told it failed (it would otherwise wait in the queue for an hour, and a write-back could
+// still be applied with no read-back or drift check). One already sent may still run, and the error says so.
+func (x serverExtension) withdraw(c *command, why error) error {
+	s := x.s
+	s.ext.mu.Lock()
+	defer s.ext.mu.Unlock()
+	switch c.State {
+	case "queued":
+		c.State, c.Error = "failed", "cancelled: nobody was waiting for it any more"
+		return why
+	case "sent":
+		return fmt.Errorf("%w; the extension had already taken it, so it may still be applied: check the browser", why)
+	}
+	return why
 }
 
 // writebackIn is a write-back as the page asks for it: always through the browser's extension.

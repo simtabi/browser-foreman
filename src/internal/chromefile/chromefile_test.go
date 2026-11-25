@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -191,23 +192,32 @@ func TestRunningAndReplace(t *testing.T) {
 	if Running(profile) {
 		t.Fatal("running with no lock")
 	}
-	if err := os.Symlink("host-123", filepath.Join(user, "SingletonLock")); err != nil {
-		t.Fatal(err)
-	}
-	if !Running(profile) {
-		t.Fatal("a SingletonLock link (Chromium's, which points nowhere) was not seen")
+	if runtime.GOOS != "windows" { // Windows has no SingletonLock: running_windows_test.go checks its lockfile
+		if err := os.Symlink("host-123", filepath.Join(user, "SingletonLock")); err != nil {
+			t.Fatal(err)
+		}
+		if !Running(profile) {
+			t.Fatal("a SingletonLock link (Chromium's, which points nowhere) was not seen")
+		}
 	}
 	path, keep := filepath.Join(profile, "Bookmarks"), filepath.Join(profile, "Bookmarks.before-write")
 	if err := os.WriteFile(path, []byte("old"), 0o640); err != nil {
 		t.Fatal(err)
 	}
-	if err := Replace(path, []byte("new"), keep); err != nil {
-		t.Fatal(err)
+	if k, err := Replace(path, []byte("new"), keep); err != nil || k != keep {
+		t.Fatal(k, err)
 	}
 	got, _ := os.ReadFile(path)
 	kept, _ := os.ReadFile(keep)
 	info, _ := os.Stat(path)
 	if string(got) != "new" || string(kept) != "old" || info.Mode().Perm() != 0o640 {
 		t.Fatalf("file %q kept %q mode %v", got, kept, info.Mode().Perm())
+	}
+	// A second write-back in the same second keeps its copy under the next name, never over the first.
+	k2, err := Replace(path, []byte("newer"), keep)
+	first, _ := os.ReadFile(keep)
+	second, _ := os.ReadFile(k2)
+	if err != nil || k2 != keep+"-2" || string(first) != "old" || string(second) != "new" {
+		t.Fatalf("%q %v: first %q second %q", k2, err, first, second)
 	}
 }

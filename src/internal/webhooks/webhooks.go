@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/simtabi/browser-foreman/src/internal/atomicfile"
 	"net"
 	"net/http"
 	"net/url"
@@ -26,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/simtabi/browser-foreman/src/internal/events"
@@ -65,11 +67,46 @@ func CheckURL(raw string) error {
 	if strings.EqualFold(host, "metadata.google.internal") {
 		return fmt.Errorf("webhook url %q is a cloud metadata address", host)
 	}
-	if ip := net.ParseIP(host); ip != nil && (ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast()) {
+	if ip := net.ParseIP(host); ip != nil && refusedIP(ip) {
 		return fmt.Errorf("webhook url %q is a link-local, multicast or unspecified address", host)
 	}
 	return nil
 }
+
+// refusedIP is what a webhook may never reach: link-local addresses (the cloud metadata service lives at
+// 169.254.169.254), multicast and unspecified ones. Loopback and the local network stay allowed.
+func refusedIP(ip net.IP) bool {
+	return ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast()
+}
+
+var errRefusedAddress = errors.New("refused: webhooks may not reach link-local, multicast or unspecified addresses")
+
+// NewClient is the client webhooks are delivered with. CheckURL only sees the address as typed; this applies the same
+// rule to every address actually connected to, so a name that resolves to the metadata service is refused too. It
+// never follows a redirect: the receiver's own answer is the answer.
+func NewClient(timeout time.Duration) *http.Client {
+	dialer := &net.Dialer{Timeout: timeout, Control: func(_, address string, _ syscall.RawConn) error {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil {
+			return err
+		}
+		if ip := net.ParseIP(host); ip != nil && refusedIP(ip) {
+			return errRefusedAddress
+		}
+		return nil
+	}}
+	return &http.Client{
+		Timeout:       timeout,
+		Transport:     &http.Transport{DialContext: dialer.DialContext, TLSHandshakeTimeout: timeout, ResponseHeaderTimeout: timeout},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+}
+
+// maxWait is the longest wait between two tries of one delivery.
+const maxWait = 5 * time.Minute
+
+// nextWait doubles a wait, up to maxWait.
+func nextWait(w time.Duration) time.Duration { return min(2*w, maxWait) }
 
 // Sign returns the X-Brofo-Signature value for body at time t.
 func Sign(secret string, t time.Time, body []byte) string {
@@ -120,6 +157,17 @@ func (s *Store) List() ([]Subscription, error) {
 	return s.read()
 }
 
+// Get returns one subscription by id, and whether there is one.
+func (s *Store) Get(id string) (Subscription, bool, error) {
+	all, err := s.List()
+	for _, x := range all {
+		if x.ID == id {
+			return x, true, err
+		}
+	}
+	return Subscription{}, false, err
+}
+
 func (s *Store) read() ([]Subscription, error) {
 	b, err := os.ReadFile(s.path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -137,11 +185,7 @@ func (s *Store) write(all []Subscription) error {
 		return err
 	}
 	b, _ := json.MarshalIndent(all, "", "  ")
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, s.path)
+	return atomicfile.Write(s.path, append(b, '\n'), 0o600)
 }
 
 // Add stores a new subscription after checking its URL and event patterns.
@@ -220,7 +264,7 @@ func (d *Dispatcher) Deliver(ctx context.Context, e events.Event) []Delivery {
 		if !s.Active || !s.Matches(e.Type) {
 			continue
 		}
-		rec := d.send(ctx, s, e, body)
+		rec := d.send(ctx, s, e, body, true)
 		if d.Log != nil {
 			d.Log(rec)
 		}
@@ -229,20 +273,107 @@ func (d *Dispatcher) Deliver(ctx context.Context, e events.Event) []Delivery {
 	return out
 }
 
+// queueSize is how many events wait for one webhook while its receiver is busy or down. It is well above the event
+// bus's own buffer (256, in api.Run), so a healthy receiver never loses an event the bus kept, even through a burst
+// such as a link check reporting thousands of changed links.
+const queueSize = 1024
+
+type job struct {
+	sub  Subscription
+	e    events.Event
+	body []byte
+}
+
+// Run delivers the events from ch until ctx ends or ch closes. Each webhook gets its own queue and worker, so a slow
+// or dead receiver delays only its own deliveries, retries included. When its queue is full, the event is recorded
+// (through Log) as not sent rather than dropped without a trace.
+// A webhook's queue is made the first time it gets an event; one removed later keeps an idle worker until Run ends.
+func (d *Dispatcher) Run(ctx context.Context, ch <-chan events.Event) {
+	queues := map[string]chan job{}
+	var wg sync.WaitGroup
+	defer func() {
+		for _, q := range queues {
+			close(q)
+		}
+		wg.Wait()
+	}()
+	for {
+		var e events.Event
+		var ok bool
+		select {
+		case <-ctx.Done():
+			return
+		case e, ok = <-ch:
+			if !ok {
+				return
+			}
+		}
+		subs, err := d.Store.List()
+		if err != nil {
+			d.log(Delivery{Event: e.ID, Type: e.Type, Error: err.Error(), At: d.Now()})
+			continue
+		}
+		body, _ := json.Marshal(e)
+		for _, s := range subs {
+			if !s.Active || !s.Matches(e.Type) {
+				continue
+			}
+			q := queues[s.ID]
+			if q == nil {
+				q = make(chan job, queueSize)
+				queues[s.ID] = q
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for j := range q {
+						d.log(d.send(ctx, j.sub, j.e, j.body, true))
+					}
+				}()
+			}
+			select {
+			case q <- job{s, e, body}:
+			default:
+				d.log(Delivery{Subscription: s.ID, Event: e.ID, Type: e.Type, At: d.Now(),
+					Error: "not sent: this webhook's queue is full (its receiver is slow or down)"})
+			}
+		}
+	}
+}
+
+func (d *Dispatcher) log(rec Delivery) {
+	if d.Log != nil {
+		d.Log(rec)
+	}
+}
+
 // SendOne delivers one event to one subscription, whatever its event patterns (the API's test button).
 func (d *Dispatcher) SendOne(ctx context.Context, s Subscription, e events.Event) Delivery {
 	body, _ := json.Marshal(e)
-	rec := d.send(ctx, s, e, body)
+	rec := d.send(ctx, s, e, body, false) // the test button: s was just read
 	if d.Log != nil {
 		d.Log(rec)
 	}
 	return rec
 }
 
-func (d *Dispatcher) send(ctx context.Context, s Subscription, e events.Event, body []byte) Delivery {
+// send delivers one event to s. queued: it waited in s's queue, so s is read again before each attempt.
+func (d *Dispatcher) send(ctx context.Context, s Subscription, e events.Event, body []byte, queued bool) Delivery {
 	rec := Delivery{Subscription: s.ID, Event: e.ID, Type: e.Type}
 	wait := d.Backoff
 	for attempt := 1; attempt <= d.Attempts; attempt++ {
+		// The webhook as it is now: an event queued before it was removed or turned off is not sent, and one queued
+		// before its address or secret changed goes to the new address, signed with the new secret.
+		if queued && d.Store != nil {
+			cur, ok, err := d.Store.Get(s.ID)
+			if err != nil || !ok || !cur.Active {
+				rec.Error = "not sent: the webhook was removed or turned off"
+				if err != nil {
+					rec.Error = "not sent: " + err.Error()
+				}
+				break
+			}
+			s = cur
+		}
 		rec.Attempts = attempt
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.URL, bytes.NewReader(body))
 		if err != nil {
@@ -263,6 +394,10 @@ func (d *Dispatcher) send(ctx context.Context, s Subscription, e events.Event, b
 				break
 			}
 			rec.Error = "answered " + resp.Status
+			if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+				rec.Error += ": redirects are not followed"
+				break
+			}
 			if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
 				break // the receiver refused it; sending it again will not help
 			}
@@ -277,7 +412,7 @@ func (d *Dispatcher) send(ctx context.Context, s Subscription, e events.Event, b
 				return rec
 			case <-time.After(wait):
 			}
-			wait *= 2
+			wait = nextWait(wait)
 		}
 	}
 	rec.At = d.Now()

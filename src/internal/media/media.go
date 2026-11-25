@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"github.com/simtabi/browser-foreman/src/internal/atomicfile"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -71,12 +72,13 @@ func (s Store) Icon(host string) string {
 // many bookmarks at once (Icon and HasThumb read the folder per call).
 type Index struct {
 	icons  map[string]string // name stem (sum(host, 12)) -> file
-	thumbs map[string]bool   // ThumbKey
+	thumbs map[string]int64  // ThumbKey -> size in bytes
+	dir    string            // the snapshots folder
 }
 
 // Index reads the icons and snapshots folders once. A Store with no Dir, or a missing folder, holds nothing.
 func (s Store) Index() Index {
-	x := Index{icons: map[string]string{}, thumbs: map[string]bool{}}
+	x := Index{icons: map[string]string{}, thumbs: map[string]int64{}, dir: s.dir("thumbs")}
 	if s.Dir == "" {
 		return x
 	}
@@ -93,7 +95,11 @@ func (s Store) Index() Index {
 	if es, err := os.ReadDir(s.dir("thumbs")); err == nil {
 		for _, e := range es {
 			if n := e.Name(); !e.IsDir() && strings.HasSuffix(n, ".jpg") {
-				x.thumbs[strings.TrimSuffix(n, ".jpg")] = true
+				size := int64(-1) // unknown: decoded if it is ever asked about
+				if info, err := e.Info(); err == nil {
+					size = info.Size()
+				}
+				x.thumbs[strings.TrimSuffix(n, ".jpg")] = size
 			}
 		}
 	}
@@ -109,7 +115,10 @@ func (x Index) Icon(host string) string {
 }
 
 // HasThumb reports whether the index holds a snapshot of a page.
-func (x Index) HasThumb(u string) bool { return x.thumbs[ThumbKey(u)] }
+func (x Index) HasThumb(u string) bool {
+	_, ok := x.thumbs[ThumbKey(u)]
+	return ok
+}
 
 // HasThumb reports whether a page has a snapshot.
 func (s Store) HasThumb(u string) bool {
@@ -160,10 +169,4 @@ func (s Store) Path(kind, name string) (string, string, error) {
 	return "", "", ErrName
 }
 
-func writeAtomic(path string, b []byte) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
-}
+func writeAtomic(path string, b []byte) error { return atomicfile.Write(path, b, 0o600) }

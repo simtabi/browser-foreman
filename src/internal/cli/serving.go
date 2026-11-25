@@ -239,8 +239,7 @@ func shouldOpen(setting string, open, noOpen, terminal bool) bool {
 }
 
 // showPage prints the page's link on a line of its own and, when wanted, opens it in the default browser.
-func showPage(ctx context.Context, out io.Writer, addr string, open bool) {
-	link := "http://" + addr + "/"
+func showPage(ctx context.Context, out io.Writer, link string, open bool) {
 	fmt.Fprintf(out, "Open Browser Foreman: %s\n", link)
 	if !open {
 		return
@@ -257,4 +256,35 @@ func showPage(ctx context.Context, out io.Writer, addr string, open bool) {
 	if err != nil {
 		fmt.Fprintf(out, "Could not open it in the browser (%v): open the link above.\n", err)
 	}
+}
+
+// pageLink asks the server running on addr for a link to its page. In local mode that is a one-time link, made with
+// the token from .env, which signs the browser that opens it in; in accounts mode it is the page, which asks people
+// to sign in.
+func pageLink(ctx context.Context, c config.Config, addr string) (string, error) {
+	if c.Server.Mode != config.ModeLocal {
+		return "http://" + addr + "/", nil
+	}
+	if c.APIToken == "" {
+		return "", errors.New("no API token is set: run `browser-foreman config init`")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+addr+"/api/v1/local/links", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.APIToken)
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	if err != nil {
+		return "", fmt.Errorf("Browser Foreman is not answering on %s: start it with `browser-foreman serve`", addr)
+	}
+	defer resp.Body.Close()
+	var out struct {
+		URL   string `json:"url"`
+		Error string `json:"error"`
+	}
+	_ = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&out)
+	if resp.StatusCode != http.StatusCreated || out.URL == "" {
+		return "", fmt.Errorf("the server on %s gave no link (%d %s): is it this computer's Browser Foreman, with the same token?", addr, resp.StatusCode, out.Error)
+	}
+	return out.URL, nil
 }

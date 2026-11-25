@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -20,9 +21,38 @@ type checkRunner struct {
 	mu    sync.Mutex
 	jobs  map[string]*linkcheck.Job
 	order []string            // job ids, oldest first
-	stats map[string]*runStat // per job: what changed
+	stats map[string]*statBox // per job: what changed
 	live  string              // the running job's id, "" when none
 }
+
+// statBox holds one check's counts with the lock its callbacks hold while counting, so a reader takes a copy under
+// the same lock instead of reading them as they change.
+type statBox struct {
+	mu sync.Mutex
+	v  runStat
+	// previous is, for each link whose status this run changed, what it was before ("" for a link never checked), so
+	// a report can tell a link that just broke from one that was dead already.
+	previous map[string]string
+}
+
+func (b *statBox) snapshot() runStat {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.v
+}
+
+func (b *statBox) changed() map[string]string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make(map[string]string, len(b.previous))
+	for k, v := range b.previous {
+		out[k] = v
+	}
+	return out
+}
+
+// keptChecks is how many finished checks listChecks still reports; older ones are forgotten.
+const keptChecks = 50
 
 // runStat counts, for one check, the links that broke and the ones that came back.
 type runStat struct {
@@ -32,6 +62,8 @@ type runStat struct {
 	// NewlyConfirmed counts links this check confirmed dead (a second dead result at least a day after the first):
 	// what the scheduled re-check's notification reports as stopped working.
 	NewlyConfirmed int `json:"newly_confirmed"`
+	// SaveErrors counts results that could not be saved: the check ran, but those links keep what was known before.
+	SaveErrors int `json:"save_errors,omitempty"`
 }
 
 // webURLs lists the http and https addresses of the bookmarks under the given nodes (every bookmark when none).
@@ -106,7 +138,8 @@ func (s *Server) job(w http.ResponseWriter, r *http.Request) (*linkcheck.Job, bo
 	return j, true
 }
 
-// getCheck reports progress; ?results=1 adds every result so far, by URL.
+// getCheck reports progress; ?results=1 adds every result so far, by URL, and with &from=N only those after the first
+// N, with "next" to ask from next time.
 func (s *Server) getCheck(w http.ResponseWriter, r *http.Request) {
 	j, ok := s.job(w, r)
 	if !ok {
@@ -114,7 +147,22 @@ func (s *Server) getCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	out := map[string]any{"job": j.View()}
 	if r.URL.Query().Get("results") == "1" {
-		out["results"] = j.Results()
+		if from := r.URL.Query().Get("from"); from != "" {
+			n, err := strconv.Atoi(from)
+			if err != nil || n < 0 {
+				writeErr(w, 400, "from must be a count of results already read")
+				return
+			}
+			out["results"], out["next"] = j.ResultsFrom(n)
+		} else {
+			out["results"] = j.Results()
+		}
+		s.checks.mu.Lock()
+		box := s.checks.stats[j.ID]
+		s.checks.mu.Unlock()
+		if box != nil {
+			out["previous"] = box.changed() // url → status before this run, for the links it changed
+		}
 	}
 	writeJSON(w, 200, out)
 }
@@ -160,7 +208,7 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 	s.checks.mu.Lock()
 	defer s.checks.mu.Unlock()
 	if s.checks.jobs == nil {
-		s.checks.jobs, s.checks.stats = map[string]*linkcheck.Job{}, map[string]*runStat{}
+		s.checks.jobs, s.checks.stats = map[string]*linkcheck.Job{}, map[string]*statBox{}
 	}
 	if s.checks.live != "" {
 		return nil, fmt.Errorf("%w: %s", errCheckRunning, s.checks.live)
@@ -172,18 +220,23 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 	b := make([]byte, 6)
 	_, _ = rand.Read(b)
 	id := "lc_" + hex.EncodeToString(b)
-	var mu sync.Mutex
+	box := &statBox{v: runStat{Workspace: wsID}}
+	mu, stat := &box.mu, &box.v // the callbacks count under box.mu, which readers take too
 	var batch, archive []store.LinkResult
 	var failing []string
 	changed, dead := 0, 0
-	stat := &runStat{Workspace: wsID}
 	flush := func() {
 		mu.Lock()
 		todo := batch
 		batch = nil
 		mu.Unlock()
 		if len(todo) > 0 {
-			_ = s.Data.SaveLinks(context.Background(), todo)
+			if err := s.Data.SaveLinks(context.Background(), todo); err != nil {
+				mu.Lock()
+				stat.SaveErrors += len(todo)
+				mu.Unlock()
+				s.say("Link check results not saved: %v", err)
+			}
 		}
 	}
 	job := s.Checker.Start(id, urls, 12, func(res linkcheck.Result) linkcheck.Result {
@@ -198,7 +251,14 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		mu.Unlock()
 		// A check that could not reach the site says nothing new about it: keep what an earlier check found, so a
 		// network hiccup never turns a working or dead link into "could not verify".
+		// It is still an attempt: save what was known with this check's time, or the link stays due and the hourly
+		// sweep comes back to this workspace for ever, never reaching the ones after it.
 		if res.Status == linkcheck.StatusUnverified && known && before.Status != linkcheck.StatusUnverified {
+			kept := before
+			kept.Checked = res.Checked
+			mu.Lock()
+			batch = append(batch, kept)
+			mu.Unlock()
 			return res
 		}
 		res = linkcheck.Settle(before, known, res)
@@ -219,6 +279,10 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		}
 		if !known || before.Status != res.Status {
 			changed++
+			if box.previous == nil {
+				box.previous = map[string]string{}
+			}
+			box.previous[res.URL] = before.Status // under mu, which is box.mu
 		}
 		mu.Unlock()
 		if known && before.Status != res.Status {
@@ -230,8 +294,9 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		return res
 	})
 	s.checks.jobs[id], s.checks.live = job, id
-	s.checks.stats[id] = stat
+	s.checks.stats[id] = box
 	s.checks.order = append(s.checks.order, id)
+	s.forgetOldChecks()
 	_, _ = s.Bus.Publish("linkcheck.started", map[string]any{"id": id, "workspace": wsID, "total": job.Total})
 	go func() {
 		job.Wait()
@@ -241,7 +306,7 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		s.checks.live = ""
 		s.checks.mu.Unlock()
 		mu.Lock()
-		_, _ = s.Bus.Publish("linkcheck.finished", map[string]any{"id": id, "workspace": wsID, "state": v.State, "checked": v.Checked, "total": v.Total, "changed": changed, "dead": dead})
+		_, _ = s.Bus.Publish("linkcheck.finished", map[string]any{"id": id, "workspace": wsID, "state": v.State, "checked": v.Checked, "total": v.Total, "changed": changed, "dead": dead, "save_errors": stat.SaveErrors})
 		found, fails := archive, failing
 		mu.Unlock()
 		if v.State == linkcheck.Done { // after the run is reported finished: these are slow and optional
@@ -252,6 +317,33 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		}
 	}()
 	return job, nil
+}
+
+// forgetOldChecks keeps the newest keptChecks checks (and the running one); s.checks.mu is held.
+func (s *Server) forgetOldChecks() {
+	for len(s.checks.order) > keptChecks {
+		id := s.checks.order[0]
+		if id == s.checks.live {
+			break
+		}
+		delete(s.checks.jobs, id)
+		delete(s.checks.stats, id)
+		s.checks.order = s.checks.order[1:]
+	}
+}
+
+// say tells the console (serve's terminal or the service log) about a problem worth seeing; quiet in tests.
+func (s *Server) say(format string, a ...any) {
+	if s.Console != nil {
+		fmt.Fprintf(s.Console, format+"\n", a...)
+	}
+}
+
+// saveResults saves results from the optional steps after a check, reporting a failure instead of dropping it.
+func (s *Server) saveResults(ctx context.Context, rs []store.LinkResult) {
+	if err := s.Data.SaveLinks(ctx, rs); err != nil {
+		s.say("Link check results not saved: %v", err)
+	}
 }
 
 // listChecks reports the running check and the earlier ones since the server started, newest first.
@@ -265,7 +357,7 @@ func (s *Server) listChecks(w http.ResponseWriter, _ *http.Request) {
 	out := []run{}
 	for i := len(s.checks.order) - 1; i >= 0; i-- {
 		id := s.checks.order[i]
-		out = append(out, run{s.checks.jobs[id].View(), *s.checks.stats[id]})
+		out = append(out, run{s.checks.jobs[id].View(), s.checks.stats[id].snapshot()})
 	}
 	var live any
 	if s.checks.live != "" {
@@ -326,7 +418,7 @@ func (s *Server) lookUpArchives(rs []store.LinkResult) {
 			found = append(found, r)
 		}
 	}
-	_ = s.Data.SaveLinks(ctx, found)
+	s.saveResults(ctx, found)
 }
 
 // maxGitHubLookups caps the GitHub questions one run asks (each takes a few API calls).
@@ -359,7 +451,7 @@ func (s *Server) askGitHub(urls []string) {
 			return
 		}
 		before, known := prev[u]
-		_ = s.Data.SaveLinks(ctx, []store.LinkResult{linkcheck.Settle(before, known, r)})
+		s.saveResults(ctx, []store.LinkResult{linkcheck.Settle(before, known, r)})
 	}
 }
 
@@ -412,7 +504,7 @@ func (s *Server) renderBlocked(urls []string) {
 				if err != nil || prev[u].Status != linkcheck.StatusUnverified {
 					continue // settled meanwhile
 				}
-				_ = s.Data.SaveLinks(ctx, []store.LinkResult{linkcheck.Settle(prev[u], true, r)})
+				s.saveResults(ctx, []store.LinkResult{linkcheck.Settle(prev[u], true, r)})
 			}
 		}()
 	}
@@ -453,5 +545,5 @@ func (s *Server) askStackExchange(urls []string) {
 		before, known := prev[u]
 		save = append(save, linkcheck.Settle(before, known, r))
 	}
-	_ = s.Data.SaveLinks(ctx, save)
+	s.saveResults(ctx, save)
 }

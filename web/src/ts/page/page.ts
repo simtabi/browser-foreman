@@ -161,6 +161,7 @@ function persist() {
 // Never lose the last half-second of edits: when the page is hidden or closed, write at once.
 function persistNow() { clearTimeout(saveTimer); const s = st(); if (s.edited) store.set("tree-" + mode, {root: plain(s.root), titles: s.titles, notes: s.notes, ratings: s.ratings, tags: s.tags, gone: [...s.gone], trashFrom: s.trashFrom}); }
 addEventListener("pagehide", persistNow);
+WS?.onFlush?.(persistNow); // an undo or a dialog right after an edit first hands that edit to the server
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") persistNow(); });
 // With a server the edits are saved in the workspace (with its history); opened as a file, they stay in this browser.
 const EDITED = () => WS ? "Edited · saved in this workspace, with its history" : "Edited · kept in this browser";
@@ -1159,7 +1160,7 @@ const APP = {name: "Browser Foreman", version: "0.1.0", year: 2026, licence: "MI
   tagline: "Clean bookmarks, safe tabs.",
   description: "Keeps what your browser should never lose. For bookmarks: finds duplicates, checks every link, separates dead pages from dead sites, sorts them into one structure built on your own folders, and writes a standard file your browser imports. For tabs: saves every open window and tab, incognito included if you choose, so after a crash you can see what was open and reopen it. Everything runs on this computer.",
   company: "Simtabi LLC", site: "https://simtabi.com", oss: "https://opensource.simtabi.com", github: "https://github.com/simtabi",
-  maintainer: "Imani Manyara", maintainerEmail: "imani@simtabi.com", contact: "opensource@simtabi.com", security: "security@simtabi.com",
+  maintainer: "Imani Manyara", maintainerEmail: "opensource@simtabi.com", contact: "opensource@simtabi.com", security: "security@simtabi.com",
   author: "Imani Manyara", org: "Simtabi LLC"};
 const CREDITS = [
   ["Go", "1.26", "BSD-3-Clause", "https://go.dev", "The language the server is written in"],
@@ -1490,11 +1491,16 @@ function paintSel(old) {
     e.classList.toggle("sel", k === sel); e.setAttribute("aria-selected", String(k === sel || marked.has(rows[k].node)));
   }
   rowEl(sel)?.scrollIntoView({block: "nearest"});
+  markActive();
 }
+// The tree keeps the focus while the arrows move a highlight inside it: aria-activedescendant names the row, so a screen
+// reader announces each move.
+function markActive() { if (rows[sel]) list.setAttribute("aria-activedescendant", `bm-row-${sel}`); else list.removeAttribute("aria-activedescendant"); }
 function rowNodes(r, idx) {
     const out = [];
     // The row's element is built by src/web/ts/views/tree-rows.ts; selection, clicks, menus and drag are wired here.
     const {row: d, twisty} = rowElement(r, idx, {selected: idx === sel, marked: marked.has(r.node), draggable: !readOnly() && !r.trash && !grouped()}, ROW_DEPS);
+    if (idx === sel) markActive();
     if (twisty) twisty.onclick = e => { e.stopPropagation(); sel = idx; toggle(r, !r.open); };
     d.onclick = e => {
       if (!(e.metaKey || e.ctrlKey || e.shiftKey) && !marked.size) { const old = sel; anchor = idx; sel = idx; paintSel(old); show(); list.focus(); return; }
@@ -1820,7 +1826,31 @@ function trackJob(job, total) {
     $("#jobPause").disabled = $("#jobCancel").disabled = true; $("#jobTitle").textContent = "Stopping…";
     ctl("cancel");
   };
-  let misses = 0;
+  // was: each link's status before this refresh (first result seen); kept0: links whose earlier status was kept because
+  // this check could not reach them. Both are by id, so a link answered twice (a later try) counts once.
+  let misses = 0; const kept0 = new Set(), was = new Map();
+  const now = Date.now(), kept = store.get("refreshed") || {}, applied = new Map();  // id -> the result applied
+  // apply takes results as they arrive, while the check runs and at its end; a result already applied is skipped, so
+  // the counts hold, and a later try of the same link (a changed result) applies again.
+  const apply = results => {
+    let any = false;
+    for (const [id, r] of Object.entries(results || {})) {
+      const seen = JSON.stringify(r); if (applied.get(id) === seen) continue;
+      applied.set(id, seen);
+      const i = ITEM.get(+id); if (!i) continue;
+      any = true;
+      if (!was.has(id)) was.set(id, i.s);
+      // A timeout or a blocked check says nothing new: keep what was known rather than downgrade a link to "could not verify".
+      if (r.s === "unverified" && i.s !== "unverified" && i.s !== "unchecked") { kept0.add(id); if (r.h) { i.h = r.h; thumbVer.set(r.h, now); } continue; }
+      kept0.delete(id); // a later try reached it
+      i.s = r.s; i.n = r.n; if (r.h) { i.h = r.h; thumbVer.set(r.h, now); }
+      // Every check field: a newer result clears what an older one set (n is set above).
+      for (const k of LINK_FIELDS) if (k !== "n") { if (k in r) i[k] = r[k]; else delete i[k]; }
+      kept[id] = {s: i.s, h: i.h, ...Object.fromEntries(LINK_FIELDS.map(k => [k, i[k]]))};
+    }
+    if (any) store.set("refreshed", kept);
+    return any;
+  };
   const tick = async () => {
     let j; try { if (WS?.job) j = await WS.job(job); else { const r = await fetch("api/job/" + job); if (r.status === 404) j = {done: true, state: "lost", results: {}, rendered: 0}; else j = await r.json(); } }
     catch { if (++misses > 15) { finish({done: true, state: "lost", results: {}, rendered: 0}); return; } setTimeout(tick, 2000); return; }
@@ -1834,6 +1864,7 @@ function trackJob(job, total) {
     $("#jobBar").classList.toggle("bg-warning", j.state === "paused");
     $("#jobSpin").hidden = j.state === "paused" || j.done;
     if (j.done) return finish(j);
+    if (apply(j.results)) { summary(); build(); }  // links turn as they are checked
     $("#jobTitle").textContent = j.state === "paused" ? "Paused" : j.state === "cancelled" ? "Stopping…" :
       j.phase === "checking" ? `Checking links` : "Taking snapshots";
     $("#jobDetail").textContent = (j.phase === "checking" ? `${j.checked} of ${total} checked` : `${j.rendered} of ${j.render_total} snapshots`) +
@@ -1844,22 +1875,11 @@ function trackJob(job, total) {
     setTimeout(tick, 1200);
   };
   const finish = j => {
-    let changed = 0; const now = Date.now(), kept = store.get("refreshed") || {};
-    let kept0 = 0;
-    for (const [id, r] of Object.entries(j.results)) {
-      const i = ITEM.get(+id); if (!i) continue;
-      // A timeout or a blocked check says nothing new: keep what was known rather than downgrade a link to "could not verify".
-      if (r.s === "unverified" && i.s !== "unverified" && i.s !== "unchecked") { kept0++; if (r.h) { i.h = r.h; thumbVer.set(r.h, now); } continue; }
-      if (i.s !== r.s) changed++;
-      i.s = r.s; i.n = r.n; if (r.h) { i.h = r.h; thumbVer.set(r.h, now); }
-      // Every check field: a newer result clears what an older one set (n is set above).
-      for (const k of LINK_FIELDS) if (k !== "n") { if (k in r) i[k] = r[k]; else delete i[k]; }
-      kept[id] = {s: i.s, h: i.h, ...Object.fromEntries(LINK_FIELDS.map(k => [k, i[k]]))};
-    }
-    store.set("refreshed", kept);
+    apply(j.results);
+    let changed = 0; for (const [id, s0] of was) if (ITEM.get(+id)?.s !== s0) changed++;
     jobRunning = false; panel.hidden = true; $("#job").hidden = true; summary(); build();
     const got = j.checked ?? Object.keys(j.results).length, what = `${got.toLocaleString()} of ${total.toLocaleString()} checked · ${changed} changed status · ${j.rendered} new snapshot${j.rendered === 1 ? "" : "s"}` +
-      (kept0 ? ` · ${kept0} could not be reached this time, so their earlier status is kept` : "");
+      (kept0.size ? ` · ${kept0.size} could not be reached this time, so their earlier status is kept` : "");
     if (j.state === "cancelled") toast(what + ". Results so far are applied.", "warning", "Refresh stopped");
     else if (j.state === "failed") toast((j.error || "The refresh failed") + ". Results so far are applied.", "danger", "Refresh failed");
     else if (j.state === "lost") toast("The server stopped answering, or was restarted. Start the refresh again.", "danger", "Refresh interrupted");
@@ -2499,8 +2519,8 @@ function showLink(i, id) {
     ["Original title", st().titles[id] != null ? i.t : ""],
     ["Page's own description", noteOf(id) && i.ds ? i.ds : ""],
     ["The page says", i.og?.description && i.og.description !== descOf(id) ? i.og.description : ""],
-    ["Its own address", i.og?.canonical && i.og.canonical !== i.u ? (() => { const c = el("a", "text-truncate min-w-0", shortUrl(i.og.canonical, 110)); c.href = i.og.canonical; c.target = "_blank"; c.rel = "noopener noreferrer"; c.dataset.tip = "The address the page names as its own (canonical)"; return c; })() : ""],
-    ["Archived copy", i.ar ? (() => { const c = el("a", "text-truncate min-w-0", "Internet Archive"); c.href = i.ar; c.target = "_blank"; c.rel = "noopener noreferrer"; c.dataset.tip = i.ar; return c; })() : ""],
+    ["Its own address", i.og?.canonical && i.og.canonical !== i.u && isWeb(i.og.canonical) ? (() => { const c = el("a", "text-truncate min-w-0", shortUrl(i.og.canonical, 110)); c.href = i.og.canonical; c.target = "_blank"; c.rel = "noopener noreferrer"; c.dataset.tip = "The address the page names as its own (canonical)"; return c; })() : ""],
+    ["Archived copy", i.ar && isWeb(i.ar) ? (() => { const c = el("a", "text-truncate min-w-0", "Internet Archive"); c.href = i.ar; c.target = "_blank"; c.rel = "noopener noreferrer"; c.dataset.tip = i.ar; return c; })() : ""],
     ["Live preview", i.fr === "refused" ? "Not possible: the site forbids being shown inside another page" : ""],
     ["In the Trash", !readOnly() && inTrash(id) ? "from " + (nice((st().trashFrom[id] || {}).path || "") || "top level") : ""],
     ["Duplicate of", i.k ? "the copy kept in " + nice(i.kg || i.k) : ""],

@@ -86,6 +86,7 @@ type siteState struct {
 	cool    time.Time // paused until
 	backoff time.Duration
 	strikes int
+	held    int // callers between AcquireFor and Release: the site is never forgotten while one is
 }
 
 // Limiter keeps every check polite per site: a cap on requests at once, spaced starts, a pause (doubling, up to 15
@@ -113,15 +114,54 @@ func (l *Limiter) rule(site string) Rule {
 	return l.Default
 }
 
+// hold returns the site's state and counts the caller in, so forgetQuiet leaves it alone until release.
+func (l *Limiter) hold(site string) *siteState {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	s := l.stateLocked(site)
+	s.held++
+	return s
+}
+
+// unhold counts a caller out of the site's state.
+func (l *Limiter) unhold(s *siteState) {
+	l.mu.Lock()
+	s.held--
+	l.mu.Unlock()
+}
+
 func (l *Limiter) state(site string) *siteState {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	return l.stateLocked(site)
+}
+
+// stateLocked is state with l.mu held.
+func (l *Limiter) stateLocked(site string) *siteState {
 	s := l.sites[site]
 	if s == nil {
+		if len(l.sites) >= maxSites {
+			l.forgetQuiet()
+		}
 		s = &siteState{sem: make(chan struct{}, max(1, l.rule(site).Concurrent))}
 		l.sites[site] = s
 	}
 	return s
+}
+
+// maxSites is how many sites the limiter remembers before it forgets the quiet ones.
+const maxSites = 20000
+
+// forgetQuiet drops the sites that are in exactly the state a new one starts in: nothing in flight, no pause to wait
+// out, no strikes, no backoff. Forgetting them changes nothing; a site that asked to slow down is always kept. l.mu
+// is held.
+func (l *Limiter) forgetQuiet() {
+	now := l.Now()
+	for k, s := range l.sites {
+		if s.held == 0 && len(s.sem) == 0 && !now.Before(s.next) && !now.Before(s.cool) && s.strikes == 0 && s.backoff == 0 {
+			delete(l.sites, k)
+		}
+	}
 }
 
 // Acquire waits for a slot for rawURL's site. It returns false when the site stays paused past MaxWait or ctx ends;
@@ -133,15 +173,17 @@ func (l *Limiter) Acquire(ctx context.Context, rawURL string) (string, bool) {
 // AcquireFor is Acquire, waiting up to maxWait.
 func (l *Limiter) AcquireFor(ctx context.Context, rawURL string, maxWait time.Duration) (string, bool) {
 	site := Site(rawURL)
-	s := l.state(site)
+	s := l.hold(site) // released by Release, or below when no slot is taken
 	deadline := l.Now().Add(maxWait)
 	wait := time.NewTimer(maxWait)
 	defer wait.Stop()
 	select {
 	case s.sem <- struct{}{}:
 	case <-wait.C:
+		l.unhold(s)
 		return site, false
 	case <-ctx.Done():
+		l.unhold(s)
 		return site, false
 	}
 	for {
@@ -159,12 +201,14 @@ func (l *Limiter) AcquireFor(ctx context.Context, rawURL string, maxWait time.Du
 		l.mu.Unlock()
 		if start.After(deadline) {
 			<-s.sem
+			l.unhold(s)
 			return site, false
 		}
 		select {
 		case <-time.After(min(start.Sub(now), 5*time.Second)):
 		case <-ctx.Done():
 			<-s.sem
+			l.unhold(s)
 			return site, false
 		}
 	}
@@ -172,8 +216,13 @@ func (l *Limiter) AcquireFor(ctx context.Context, rawURL string, maxWait time.Du
 
 // Release frees the slot and learns from what happened. retryAfter is the site's Retry-After, when it sent one.
 func (l *Limiter) Release(site string, o Outcome, retryAfter time.Duration) {
-	s := l.state(site)
 	l.mu.Lock()
+	s := l.sites[site] // the state AcquireFor held: a held site is never forgotten
+	if s == nil {
+		l.mu.Unlock()
+		return
+	}
+	s.held--
 	now := l.Now()
 	switch o {
 	case RateLimited:

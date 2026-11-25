@@ -28,6 +28,7 @@ type Job struct {
 	checked int
 	ended   time.Time
 	results map[string]Result
+	order   []string // the URLs in the order their results arrived (one again when a later try replaces it)
 	cancel  context.CancelFunc
 	done    chan struct{}
 }
@@ -111,6 +112,7 @@ func (c *Checker) Start(id string, urls []string, workers int, onResult func(Res
 					}
 					j.mu.Lock()
 					j.results[u] = r
+					j.order = append(j.order, u)
 					j.checked++
 					j.mu.Unlock()
 				}
@@ -206,6 +208,19 @@ func (j *Job) Results() map[string]Result {
 		out[k] = v
 	}
 	return out
+}
+
+// ResultsFrom returns the results that arrived after the first from, and how many have arrived in all: the next from.
+// A page polling a running check asks for only what is new.
+func (j *Job) ResultsFrom(from int) (map[string]Result, int) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	from = min(max(from, 0), len(j.order))
+	out := make(map[string]Result, len(j.order)-from)
+	for _, u := range j.order[from:] {
+		out[u] = j.results[u]
+	}
+	return out, len(j.order)
 }
 
 // Wait blocks until the job has stopped.

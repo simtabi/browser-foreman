@@ -13,7 +13,7 @@ const src = join(here, "extension");
 const version = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
 execFileSync(process.execPath, [join(root, "node_modules", "typescript", "bin", "tsc"), "-p", src], { stdio: "inherit" });
 
-const hosts = ["http://127.0.0.1/*", "http://localhost/*"];
+const hosts = ["http://127.0.0.1/*", "http://localhost/*", "http://[::1]/*"]; // every loopback address the server may listen on
 const base = {
   manifest_version: 3, name: "Browser Foreman", version,
   description: "Your tabs and bookmarks, kept by Browser Foreman on this computer.",
@@ -25,10 +25,10 @@ const base = {
   action: { default_popup: "popup.html", default_title: "Browser Foreman", default_icon: { 16: "icons/16.png", 32: "icons/32.png" } },
 };
 const manifests = {
-  chromium: { ...base, permissions: ["tabs", "tabGroups", "bookmarks", "storage", "alarms"], background: { service_worker: "background.js" }, minimum_chrome_version: "116" },
-  firefox: { ...base, permissions: ["tabs", "bookmarks", "storage", "alarms"], background: { scripts: ["background.js"] },
+  chromium: { ...base, permissions: ["tabs", "tabGroups", "bookmarks", "storage", "alarms", "activeTab"], background: { service_worker: "background.js" }, minimum_chrome_version: "116" },
+  firefox: { ...base, permissions: ["tabs", "bookmarks", "storage", "alarms", "activeTab"], background: { scripts: ["background.js"] },
     browser_specific_settings: { gecko: { id: "{8c5f2b9e-4f3a-4d0b-9a61-3e2c7b1d6f40}", strict_min_version: "121.0" } } },
-  safari: { ...base, permissions: ["tabs", "bookmarks", "storage", "alarms"], background: { service_worker: "background.js" } },
+  safari: { ...base, permissions: ["tabs", "bookmarks", "storage", "alarms", "activeTab"], background: { service_worker: "background.js" } },
 };
 for (const [target, manifest] of Object.entries(manifests)) {
   const out = join(root, "dist", "extension", target);

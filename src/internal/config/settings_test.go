@@ -1,8 +1,10 @@
 package config
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,7 +41,7 @@ func find(fs []Field, key string) Field {
 }
 
 func TestDescribeNeverShowsASecret(t *testing.T) {
-	secret := "sk-" + strings.Repeat("x", 8) + "generated" // never a real key
+	secret := "sk-" + rand.Text()
 	p := setup(t, `{"ai":{"provider":"openai","model":"gpt-x"}}`, "# keys\nOPENAI_API_KEY="+secret+"\n")
 	fs, mode, err := Describe(p, noEnv)
 	if err != nil {
@@ -68,8 +70,8 @@ func TestDescribeNeverShowsASecret(t *testing.T) {
 }
 
 func TestApplyWritesKeysToEnvAndKeepsItsComments(t *testing.T) {
-	p := setup(t, `{"server":{"addr":"127.0.0.1:8765"}}`, "# keep me\nANTHROPIC_BASE_URL=https://example.test\nBROFO_API_TOKEN=abc\n")
-	key := strings.Repeat("k", 12)
+	p := setup(t, `{"server":{"addr":"127.0.0.1:8765"}}`, "# keep me\nANTHROPIC_BASE_URL=https://example.test\nBROFO_API_TOKEN="+rand.Text()+"\n")
+	key := rand.Text()
 	res, err := Apply(p, noEnv, map[string]json.RawMessage{"ANTHROPIC_API_KEY": raw(key), "ai.provider": raw("anthropic")}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -210,6 +212,9 @@ func TestTagsLoaderAndEnvExampleAgree(t *testing.T) {
 			if f.Key == "ai.provider" && (ch == "openai" || ch == "ollama") {
 				vals["ai.model"] = raw("m")
 			}
+			if f.Key == "storage.driver" && ch == "postgres" {
+				vals["BROFO_STORAGE_DSN"] = raw("postgres://brofo@127.0.0.1:55433/brofo_test")
+			}
 			if f.Key == "server.mode" && ch == "accounts" {
 				continue // needs accounts set up; Validate accepts it, checked in config_test
 			}
@@ -222,7 +227,7 @@ func TestTagsLoaderAndEnvExampleAgree(t *testing.T) {
 
 func TestInitMakesEnvFromTheExample(t *testing.T) {
 	p := Paths{Config: t.TempDir(), State: t.TempDir()}
-	tok := strings.Repeat("t", 16)
+	tok := rand.Text()
 	if _, err := Init(p, tok); err != nil {
 		t.Fatal(err)
 	}
@@ -232,5 +237,61 @@ func TestInitMakesEnvFromTheExample(t *testing.T) {
 	}
 	if c, err := Load(p, noEnv); err != nil || c.APIToken != tok {
 		t.Fatalf("%v %q", err, c.APIToken)
+	}
+}
+
+// The OpenAI key goes wherever ai.openai_url points, so pointing it elsewhere is as risky as moving the server:
+// otherwise anyone who may edit safe settings could read the write-only key.
+func TestTheOpenAIAddressGuardsItsKey(t *testing.T) {
+	p := setup(t, `{}`, "")
+	addr := map[string]json.RawMessage{"ai.openai_url": raw("https://elsewhere.example/v1")}
+	if _, err := Apply(p, noEnv, addr, true); !errors.Is(err, ErrLocked) {
+		t.Fatalf("safe mode let ai.openai_url through: %v", err)
+	}
+	p = setup(t, `{"settings":{"edit":"all"}}`, "")
+	if _, err := Apply(p, noEnv, addr, false); !errors.Is(err, ErrConfirm) {
+		t.Fatalf("all mode without a confirmation: %v", err)
+	}
+	if _, err := Apply(p, noEnv, addr, true); err != nil {
+		t.Fatal(err)
+	}
+	if f := find(mustDescribe(t, p), "ai.ollama_url"); !f.Editable || f.Risky {
+		t.Fatalf("Ollama's address carries no key and stays an ordinary setting: %+v", f)
+	}
+}
+
+func mustDescribe(t *testing.T, p Paths) []Field {
+	t.Helper()
+	fs, _, err := Describe(p, noEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fs
+}
+
+// A certificate needs its key, and a trusted proxy must be an address or a range.
+func TestTLSAndProxySettingsAreChecked(t *testing.T) {
+	c := Defaults()
+	c.Server.TLSCert = "/no/such/cert.pem"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "together") {
+		t.Fatalf("a certificate without a key: %v", err)
+	}
+	c.Server.TLSKey = "/no/such/key.pem"
+	if err := c.Validate(); err == nil {
+		t.Fatal("unreadable certificate files were accepted")
+	}
+	c = Defaults()
+	c.Server.TrustedProxy = []string{"10.0.0.0/8", "192.0.2.1", "not-an-address"}
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "not-an-address") {
+		t.Fatalf("a bad proxy entry: %v", err)
+	}
+	c.Server.TrustedProxy = c.Server.TrustedProxy[:2]
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for ip, want := range map[string]bool{"10.9.8.7": true, "192.0.2.1": true, "192.0.2.2": false} {
+		if c.Server.Behind(net.ParseIP(ip)) != want {
+			t.Errorf("Behind(%s) != %v", ip, want)
+		}
 	}
 }

@@ -42,6 +42,33 @@ const seen = [];
 const client = new C.Client("http://127.0.0.1:8765", "brofo_x", async (url, init) => { seen.push([url, init.headers.Authorization]); return { ok: false, status: 423, json: async () => ({ error: "locked" }) }; });
 await assert.rejects(client.sendBookmarks([]), /locked/); n++;
 eq(seen[0], ["http://127.0.0.1:8765/api/v1/extension/bookmarks", "Bearer brofo_x"]);
+// saving a page and asking about a link: the routes, the body and the address escaped
+{
+  const calls = [];
+  const c = new C.Client("http://127.0.0.1:8765", "brofo_x", async (url, init) => { calls.push([init.method, url, init.body]); return { ok: true, status: 200, json: async () => ({ status: "dead", confirmed: true }) }; });
+  await c.savePage("main", "https://a.example/x?y=1", "A", "data:image/jpeg;base64,AA==");
+  await c.savePage("main", "https://b.example/", "B");
+  await c.link("https://a.example/x?y=1&z=2");
+  eq(calls[0].slice(0, 2), ["POST", "http://127.0.0.1:8765/api/v1/extension/pages"]);
+  eq(JSON.parse(calls[0][2]), { workspace: "main", url: "https://a.example/x?y=1", title: "A", picture: "data:image/jpeg;base64,AA==" });
+  eq(JSON.parse(calls[1][2]), { workspace: "main", url: "https://b.example/", title: "B" }, "no picture: none sent");
+  eq(calls[2].slice(0, 2), ["GET", "http://127.0.0.1:8765/api/v1/extension/link?url=https%3A%2F%2Fa.example%2Fx%3Fy%3D1%26z%3D2"]);
+}
+// two-way sync: the merge request and the adopt after writing it
+{
+  const calls = [];
+  const c = new C.Client("http://127.0.0.1:8765", "brofo_x", async (url, init) => { calls.push([init.method, url, JSON.parse(init.body)]); return { ok: true, status: 200, json: async () => ({ seq: 4, tree: { root: {} }, conflicts: 0, removed: 0 }) }; });
+  await c.sync("chrome-live", 0, 1700000000000, [{ id: "0" }]);
+  await c.adopt("chrome-live", 4, [{ id: "0" }]);
+  eq(calls.map(x => x.slice(0, 2)), [["POST", "http://127.0.0.1:8765/api/v1/extension/sync"], ["POST", "http://127.0.0.1:8765/api/v1/extension/sync/adopt"]]);
+  eq(calls[0][2], { workspace: "chrome-live", base: 0, changed: 1700000000000, nodes: [{ id: "0" }] });
+  eq(calls[1][2], { workspace: "chrome-live", seq: 4, nodes: [{ id: "0" }] });
+}
+// the badge: only a link confirmed dead is marked
+eq(C.linkBadge({ status: "dead", confirmed: true }).text, "!");
+eq(C.linkBadge({ status: "dead", confirmed: false }).text, "", "dead once is only a suspicion");
+eq(C.linkBadge({ status: "ok" }).text, "");
+eq(C.linkBadge({ status: "unchecked" }), { text: "", title: "" });
 
 // ---- apply: a fake bookmarks API that behaves like the browser's ----
 function fake(roots) {
@@ -108,6 +135,11 @@ eq(C.connectRefusal("http://127.0.0.1:8765", "http://127.0.0.1:8765", true), "",
 eq(C.connectRefusal("http://127.0.0.1:8768", "http://127.0.0.1:8765", false), "", "unconnected: the asking page's server, which must still approve it");
 ok(/disconnect it there/.test(C.connectRefusal("http://127.0.0.1:8768", "http://127.0.0.1:8765", true)), "connected: never taken by another port");
 ok(/on this computer/.test(C.connectRefusal("https://evil.example", "http://127.0.0.1:8765", false)), "not from the web");
+// Unconnected, it connects by itself only to its usual server; another page on this computer must be confirmed in the popup.
+eq(C.needsConfirmation("http://127.0.0.1:8765", "http://127.0.0.1:8765", false), false, "its usual server: at once");
+eq(C.needsConfirmation("http://127.0.0.1:8768", "http://127.0.0.1:8765", false), true, "another port: confirmed in the popup first");
+eq(C.needsConfirmation("http://localhost:8765", "http://127.0.0.1:8765", false), true, "another name for this computer is another origin");
+eq(C.needsConfirmation("http://127.0.0.1:8768", "http://127.0.0.1:8765", true), false, "connected: connectRefusal decides");
 ok(C.messageAllowed(true, "page-hello") && C.messageAllowed(true, "page-connect"), "a page's two requests");
 ok(!C.messageAllowed(true, "pair") && !C.messageAllowed(true, "apply") && !C.messageAllowed(true, "unpair") && !C.messageAllowed(true, undefined), "nothing else from a page");
 ok(!C.messageAllowed(false, "page-connect") && C.messageAllowed(false, "status"), "the popup keeps its own, not the bridge's");

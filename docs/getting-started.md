@@ -28,12 +28,18 @@ browser-foreman serve
 ```
 
 ```text
-Browser Foreman 0.1.0-dev on http://127.0.0.1:8765 (config …/.config/browser-foreman, state …/.local/state/browser-foreman)
-Open Browser Foreman: http://127.0.0.1:8765/
+Browser Foreman 0.2.0 on http://127.0.0.1:8765 (config …/.config/browser-foreman, state …/.local/state/browser-foreman)
+Open Browser Foreman: http://127.0.0.1:8765/open/…
 ```
 
 Started from a terminal, it also opens that page in your default browser (`server.open`; `--no-open` skips it). If
-it is already running, `serve` says so, gives the same link, and opens it.
+it is already running, `serve` says so, gives a new link, and opens it. The link works once, within two minutes, and
+signs in the browser that opens it, for 30 days: the page never hands its token to anything else on this computer.
+To open it again later, or in another browser:
+
+```bash
+browser-foreman open
+```
 
 Check it answers:
 
@@ -56,8 +62,11 @@ In local mode the answer also names the service, its version and its process.
 `browser-foreman stop` stops the running server, as Ctrl-C in its terminal would. Both `stop` and `--replace` signal
 only a process that answers as Browser Foreman and whose program is `browser-foreman`.
 
-A server on a fallback port records its address in `server.json` in the state folder. `mcp`, `pair`, `apply` and
-`stop` read it, so they find the server there. A browser extension paired with the usual address needs pairing again.
+`browser-foreman doctor` checks the configuration, the storage folder, the token, notifications, the running server and
+whether it can take page snapshots, one `ok`, `warn` or `fail` line each, and fails when any check fails.
+
+A server on a fallback port records its address in `server.json` in the state folder. `mcp`, `pair`, `apply`, `stop`,
+`webhook` and `doctor` read it, so they find the server there. A browser extension paired with the usual address needs pairing again.
 To keep one port, set `server.addr`.
 
 ## Watch events
@@ -65,7 +74,7 @@ To keep one port, set `server.addr`.
 Every change is an event. Follow them live:
 
 ```bash
-curl -N http://127.0.0.1:8765/api/v1/events
+curl -N http://127.0.0.1:8765/api/v1/events -H "Authorization: Bearer $BROFO_API_TOKEN"
 ```
 
 A client that reconnects sends `Last-Event-ID` and receives what it missed. See [events](tools/events.md).
@@ -73,9 +82,10 @@ A client that reconnects sends `Last-Event-ID` and receives what it missed. See 
 ## Add a webhook
 
 ```bash
+BROFO_WEBHOOK_SECRET=$(openssl rand -hex 32)  # keep it: the receiver checks signatures with it
 curl -X POST http://127.0.0.1:8765/api/v1/webhooks \
   -H "Authorization: Bearer $BROFO_API_TOKEN" -H 'Content-Type: application/json' \
-  -d '{"url": "https://example.com/brofo", "events": ["*"], "secret": "a-long-random-secret-value"}'
+  -d "{\"url\": \"https://example.com/brofo\", \"events\": [\"*\"], \"secret\": \"$BROFO_WEBHOOK_SECRET\"}"
 ```
 
 Send it a test event, using the `id` the call returned:

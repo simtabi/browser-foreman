@@ -9,8 +9,13 @@ LDFLAGS := -s -w -X $(PKG)/internal/version.Version=$(VERSION) -X $(PKG)/interna
 HOST_OS := $(shell go env GOOS | sed 's/darwin/macos/')
 # The golangci-lint CI runs (.github/workflows/ci.yml); a test keeps the two equal.
 GOLANGCI_VERSION := v2.15.0
+# The govulncheck that make vuln and CI run.
+GOVULNCHECK_VERSION := v1.10.0
+# vet compiles for each of these too: the build-tagged files for other systems are otherwise first compiled when a
+# release tag is built, where a mistake burns the tag.
+VET_OSES := darwin linux windows freebsd
 
-.PHONY: help build test vet fmt lint universal cross web check screenshots
+.PHONY: help build test vet fmt lint tidy vuln notices testdb-up testdb-down universal cross web check screenshots
 help:  ## list targets
 	@grep -E '^[a-z-]+:.*##' Makefile | sed 's/:.*## /\t/'
 
@@ -18,11 +23,29 @@ build: web  ## this machine: build/<os>/browser-foreman
 	mkdir -p build/$(HOST_OS)
 	CGO_ENABLED=0 go -C src build -trimpath -ldflags '$(LDFLAGS)' -o ../build/$(HOST_OS)/$(BINARY) ./cmd/$(BINARY)
 
-test:  ## unit tests
-	go -C src test -count=1 ./...
+test:  ## unit tests, under the race detector (CI runs this too)
+	go -C src test -race -count=1 ./...
 
-vet:  ## go vet
+vet:  ## go vet, for this system and for every system in VET_OSES
 	go -C src vet ./...
+	@for os in $(VET_OSES); do echo "go vet (GOOS=$$os)"; GOOS=$$os go -C src vet ./... || exit 1; done
+
+tidy:  ## go.mod and go.sum hold exactly what the code needs (fails when go mod tidy would change them)
+	go -C src mod tidy -diff
+
+vuln:  ## known vulnerabilities in code the binary calls (govulncheck at GOVULNCHECK_VERSION)
+	cd src && go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
+
+notices:  ## .cache/notices/THIRD_PARTY_NOTICES for the release: licences of the linked Go modules and bundled npm packages (after make web)
+	go -C src test -count=1 -run TestThirdPartyNoticesCanBeWritten ./internal/version -notices-out "$(CURDIR)/.cache/notices/THIRD_PARTY_NOTICES"
+
+TESTDB := test/postgres/compose.yaml
+testdb-up:  ## start the disposable Postgres the postgres driver's tests use (127.0.0.1:55433; waits until it answers)
+	docker compose -f $(TESTDB) up -d --wait
+	@echo 'BROFO_TEST_POSTGRES_DSN=postgres://brofo@127.0.0.1:55433/brofo_test?sslmode=disable'
+
+testdb-down:  ## stop it and drop everything in it
+	docker compose -f $(TESTDB) down -v
 
 fmt:  ## gofmt check (fails when a file needs formatting)
 	@test -z "$$(gofmt -l src)" || (gofmt -l src; exit 1)
@@ -63,4 +86,4 @@ extension-safari: extension  ## wrap the Safari build in an Xcode project (needs
 	xcrun safari-web-extension-converter web/dist/extension/safari --project-location web/dist/extension/safari-xcode \
 	  --app-name "Browser Foreman" --bundle-identifier com.simtabi.browser-foreman --no-open --force
 
-check: fmt vet lint test  ## what CI runs for Go; then cd web && npm run check:web && npm run test:web
+check: fmt vet tidy lint vuln test  ## what CI runs for Go; then cd web && npm run check:web && npm run test:web

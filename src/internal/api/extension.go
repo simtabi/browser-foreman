@@ -134,7 +134,7 @@ func (s *Server) pair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := s.Now()
-	key := "pair:" + clientKey(r)
+	key := "pair:" + s.clientKey(r)
 	if ok, until := s.Limit.Allowed(key, now); !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(int(until.Sub(now).Seconds())+1))
 		writeErr(w, http.StatusTooManyRequests, "too many wrong codes; try again later")
@@ -310,8 +310,20 @@ func (s *Server) queueCommand(w http.ResponseWriter, r *http.Request) {
 	s.ext.byID[in.ID] = &in
 	close(s.ext.wake) // wake every waiting extension
 	s.ext.wake = make(chan struct{})
+	answer := in // copied under the lock: a waiting extension may mark it sent the moment the lock is let go
 	s.ext.mu.Unlock()
-	writeJSON(w, 202, map[string]any{"command": in})
+	writeJSON(w, 202, map[string]any{"command": answer})
+}
+
+// requeue puts commands marked sent back in the queue, when the answer carrying them could not be delivered.
+func (s *Server) requeue(sent []command) {
+	s.ext.mu.Lock()
+	defer s.ext.mu.Unlock()
+	for _, c := range sent {
+		if x := s.ext.byID[c.ID]; x != nil && x.State == "sent" {
+			x.State = "queued"
+		}
+	}
 }
 
 // nextCommands answers an extension's long poll (?wait= up to 25 seconds) with the commands queued for its browser.
@@ -335,7 +347,10 @@ func (s *Server) nextCommands(w http.ResponseWriter, r *http.Request, browser st
 			if out == nil {
 				out = []command{}
 			}
-			writeJSON(w, 200, map[string]any{"commands": out})
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(map[string]any{"commands": out}); err != nil {
+				s.requeue(out) // the extension never got them: they wait for its next poll instead of being lost
+			}
 			return
 		}
 		select {
