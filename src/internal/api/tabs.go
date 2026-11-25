@@ -237,7 +237,7 @@ func (s *Server) reportSweep(ctx context.Context, workspace string, job *linkche
 		return
 	}
 	s.checks.mu.Lock()
-	st := *s.checks.stats[job.ID]
+	st := s.checks.stats[job.ID].snapshot()
 	s.checks.mu.Unlock()
 	addr := s.Cfg.Server.Addr
 	if s.Listener != nil {
