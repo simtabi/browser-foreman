@@ -13,7 +13,7 @@ const src = join(here, "extension");
 const version = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
 execFileSync(process.execPath, [join(root, "node_modules", "typescript", "bin", "tsc"), "-p", src], { stdio: "inherit" });
 
-const hosts = ["http://127.0.0.1/*", "http://localhost/*"];
+const hosts = ["http://127.0.0.1/*", "http://localhost/*", "http://[::1]/*"]; // every loopback address the server may listen on
 const base = {
   manifest_version: 3, name: "Browser Foreman", version,
   description: "Your tabs and bookmarks, kept by Browser Foreman on this computer.",

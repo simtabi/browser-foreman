@@ -14,7 +14,8 @@ const say = (id: string, text: string, bad = false) => { const el = $(id); el.te
 
 async function show(): Promise<void> {
   const s = await ask({ kind: "status" });
-  $("unpaired").hidden = s.paired; $("paired").hidden = !s.paired; $("write").hidden = !s.paired; $("foot").hidden = !s.paired;
+  $("unpaired").hidden = s.paired; $("paired").hidden = !s.paired; $("write").hidden = !s.paired || !s.bookmarks; $("foot").hidden = !s.paired;
+  $("read").hidden = !s.bookmarks; // Safari: no bookmarks API for extensions
   ($("server") as HTMLInputElement).value = s.offer && !s.paired ? s.offer : s.server;
   if (s.offer && !s.paired) say("askMsg", `A Browser Foreman page at ${s.offer} asked to connect. Press Connect if it is yours.`);
   $("who").textContent = s.browser; $("where").textContent = s.server;

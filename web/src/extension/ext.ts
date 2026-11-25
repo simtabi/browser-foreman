@@ -11,7 +11,7 @@ export interface ExtApi {
   tabs: { create(o: { url: string; windowId?: number; active?: boolean }): Promise<ExtTab>; group?(o: { tabIds: number[]; createProperties?: { windowId?: number } }): Promise<number>;
     onUpdated: Hook<(id: number, change: { url?: string; title?: string; status?: string }) => void>; onRemoved: Hook<() => void>; onCreated: Hook<() => void>; onMoved: Hook<() => void>; onAttached: Hook<() => void> };
   tabGroups?: { query(q: object): Promise<ExtGroup[]>; update(id: number, o: { title?: string; color?: string; collapsed?: boolean }): Promise<ExtGroup>; onUpdated: Hook<() => void> };
-  bookmarks: { getTree(): Promise<ExtBookmark[]>; create(o: { parentId: string; index?: number; title: string; url?: string }): Promise<ExtBookmark>;
+  bookmarks?: { getTree(): Promise<ExtBookmark[]>; create(o: { parentId: string; index?: number; title: string; url?: string }): Promise<ExtBookmark>;
     update(id: string, o: { title?: string; url?: string }): Promise<ExtBookmark>; move(id: string, o: { parentId: string; index?: number }): Promise<ExtBookmark>;
     remove(id: string): Promise<void>; removeTree(id: string): Promise<void> };
   storage: { local: { get(keys: string[] | string): Promise<Record<string, any>>; set(o: Record<string, unknown>): Promise<void>; remove(keys: string[] | string): Promise<void> } };

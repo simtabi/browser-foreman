@@ -156,7 +156,7 @@ ext.runtime.onInstalled.addListener(everything); // after an install, update or 
 // ---- the popup's requests ----
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 async function readInto(c: Client, workspace?: string): Promise<string> {
-  const nodes = await ext.bookmarks.getTree();
+  const nodes = await bookmarksApi().getTree();
   return (await c.sendBookmarks(nodes, workspace)).entry.summary;
 }
 /** Writes a workspace into this browser: refuses if the browser's bookmarks are no longer the ones the plan was made
@@ -165,33 +165,39 @@ async function readInto(c: Client, workspace?: string): Promise<string> {
  *  workspace, so its ids are the browser's and a second write changes nothing. Returns the counts. */
 async function writeWorkspace(c: Client, workspace: string, expect?: string): Promise<Record<string, unknown>> {
   if (expect) {
-    const now = await extFingerprint(await ext.bookmarks.getTree() as any);
+    const now = await extFingerprint(await bookmarksApi().getTree() as any);
     if (now !== expect) throw new Error("this browser's bookmarks changed since the plan was made: nothing was written; plan again");
   }
   const ws = (await c.workspace(workspace)).tree.root as WsNode;
-  const p = plan(await ext.bookmarks.getTree() as ExtBookmark[], ws);
+  const p = plan(await bookmarksApi().getTree() as ExtBookmark[], ws);
   const counts = { created: p.created, updated: p.updated, moved: p.moved, removedBookmarks: p.removedBookmarks, removedFolders: p.removedFolders, steps: p.steps.length };
   // The browser's bookmarks as they are now go to the server first, so this write can be undone from there.
   const backup = await readInto(c, `${slug(thisBrowser())}-before-write`);
-  const made = await run(p, ext.bookmarks);
+  const made = await run(p, bookmarksApi());
   // Browsers differ on how a move's index counts within one folder: re-plan and fix any order left over.
   for (let i = 0; i < 3; i++) {
-    const fix = plan(await ext.bookmarks.getTree() as ExtBookmark[], ws, made);
+    const fix = plan(await bookmarksApi().getTree() as ExtBookmark[], ws, made);
     if (!fix.steps.length) break;
     if (fix.steps.some(s => s.op === "create" || s.op === "remove")) throw new Error("the browser's bookmarks changed while writing; read them again and retry");
-    await run(fix, ext.bookmarks);
+    await run(fix, bookmarksApi());
   }
   // Read the result back, so the workspace's ids are the browser's and the next write matches nothing twice.
   const reread = await readInto(c, workspace);
   return { ...counts, backup, reread };
 }
 
+/** The browser's bookmarks API, or a plain error where there is none: Safari gives its extensions no bookmarks API,
+ *  so reading or writing bookmarks there says so instead of failing on a missing object. */
+function bookmarksApi(): NonNullable<typeof ext.bookmarks> {
+  if (!ext.bookmarks) throw new Error("this browser gives extensions no access to bookmarks: import its bookmarks file in Browser Foreman instead");
+  return ext.bookmarks;
+}
 async function handle(msg: any): Promise<unknown> {
   switch (msg.kind) {
     case "status": {
       const s = await settings();
       const st = await ext.storage.local.get(["lastReport", "lastError", "offer"]);
-      return { paired: !!s.token, server: s.server ?? "http://127.0.0.1:8765", browser: s.browser ?? thisBrowser(), ...st };
+      return { paired: !!s.token, server: s.server ?? "http://127.0.0.1:8765", browser: s.browser ?? thisBrowser(), bookmarks: !!ext.bookmarks, ...st };
     }
     case "pair": {
       const browser = thisBrowser();
@@ -224,7 +230,7 @@ async function handle(msg: any): Promise<unknown> {
         if (!msg.expect) throw new Error("preview the change first");
         return writeWorkspace(c, msg.workspace, msg.expect);
       }
-      const tree = await ext.bookmarks.getTree() as ExtBookmark[];
+      const tree = await bookmarksApi().getTree() as ExtBookmark[];
       const ws = (await c.workspace(msg.workspace)).tree.root as WsNode;
       const p = plan(tree, ws);
       return { created: p.created, updated: p.updated, moved: p.moved, removedBookmarks: p.removedBookmarks, removedFolders: p.removedFolders,
