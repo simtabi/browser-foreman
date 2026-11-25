@@ -14,7 +14,8 @@ const say = (id: string, text: string, bad = false) => { const el = $(id); el.te
 
 async function show(): Promise<void> {
   const s = await ask({ kind: "status" });
-  $("unpaired").hidden = s.paired; $("paired").hidden = !s.paired; $("write").hidden = !s.paired; $("foot").hidden = !s.paired;
+  $("unpaired").hidden = s.paired; $("paired").hidden = !s.paired; $("write").hidden = !s.paired || !s.bookmarks; $("foot").hidden = !s.paired;
+  $("read").hidden = !s.bookmarks; // Safari: no bookmarks API for extensions
   ($("server") as HTMLInputElement).value = s.offer && !s.paired ? s.offer : s.server;
   if (s.offer && !s.paired) say("askMsg", `A Browser Foreman page at ${s.offer} asked to connect. Press Connect if it is yours.`);
   $("who").textContent = s.browser; $("where").textContent = s.server;
@@ -58,15 +59,23 @@ $("pair").onclick = async () => {
     await show();
   } catch (e) { say("pairMsg", (e as Error).message, true); }
 };
-$("send").onclick = async () => { await ask({ kind: "report" }).catch(() => {}); await show(); };
+// The popup shows what went wrong rather than going quiet: a failed call says so in the section it came from.
+const shown = () => show().catch(e => say("askMsg", (e as Error).message, true));
+$("send").onclick = async () => { await ask({ kind: "report" }).catch(() => {}); await shown(); };
 $("read").onclick = async () => {
   try { say("readMsg", "Reading…"); say("readMsg", (await ask({ kind: "read" })).summary); await show(); }
   catch (e) { say("readMsg", (e as Error).message, true); }
 };
+// What Write applies: the workspace previewed, onto the bookmarks as they were when previewed. Another choice of
+// workspace needs a new preview.
+let previewed: { workspace: string; expect: string } | null = null;
+($("ws") as HTMLSelectElement).onchange = () => { previewed = null; $("apply").hidden = true; say("planMsg", ""); };
 $("preview").onclick = async () => {
-  $("apply").hidden = true;
+  $("apply").hidden = true; previewed = null;
   try {
-    const p = await ask({ kind: "plan", workspace: ($("ws") as HTMLSelectElement).value });
+    const workspace = ($("ws") as HTMLSelectElement).value;
+    const p = await ask({ kind: "plan", workspace });
+    previewed = { workspace, expect: p.expect };
     if (!p.steps) return say("planMsg", "This browser already matches that workspace.");
     say("planMsg", `${p.created} added, ${p.updated} renamed or readdressed, ${p.moved} moved, ` +
       `${p.removedBookmarks} bookmark${p.removedBookmarks === 1 ? "" : "s"} and ${p.removedFolders} folder${p.removedFolders === 1 ? "" : "s"} removed.`, p.removedBookmarks > 0);
@@ -76,8 +85,12 @@ $("preview").onclick = async () => {
 $("apply").onclick = async () => {
   if (!confirm("Write this workspace into this browser's bookmarks? The bookmarks as they are now are saved to Browser Foreman first.")) return;
   $("apply").hidden = true;
-  try { say("planMsg", "Writing…"); const r = await ask({ kind: "apply", workspace: ($("ws") as HTMLSelectElement).value }); say("planMsg", `Done. Saved first: ${r.backup}`); }
+  if (!previewed) return;
+  try { say("planMsg", "Writing…"); const r = await ask({ kind: "apply", ...previewed }); previewed = null; say("planMsg", `Done. Saved first: ${r.backup}`); }
   catch (e) { say("planMsg", (e as Error).message, true); }
 };
-$("unpair").onclick = async () => { await ask({ kind: "unpair" }); await show(); };
-void show().then(waitForAnswer);  // reopening the popup while a request waits shows its code again
+$("unpair").onclick = async () => {
+  try { await ask({ kind: "unpair" }); } catch (e) { say("readMsg", (e as Error).message, true); }
+  await shown();
+};
+void shown().then(waitForAnswer);  // reopening the popup while a request waits shows its code again

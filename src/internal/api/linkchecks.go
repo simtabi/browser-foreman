@@ -29,12 +29,25 @@ type checkRunner struct {
 type statBox struct {
 	mu sync.Mutex
 	v  runStat
+	// previous is, for each link whose status this run changed, what it was before ("" for a link never checked), so
+	// a report can tell a link that just broke from one that was dead already.
+	previous map[string]string
 }
 
 func (b *statBox) snapshot() runStat {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.v
+}
+
+func (b *statBox) changed() map[string]string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make(map[string]string, len(b.previous))
+	for k, v := range b.previous {
+		out[k] = v
+	}
+	return out
 }
 
 // keptChecks is how many finished checks listChecks still reports; older ones are forgotten.
@@ -133,6 +146,12 @@ func (s *Server) getCheck(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{"job": j.View()}
 	if r.URL.Query().Get("results") == "1" {
 		out["results"] = j.Results()
+		s.checks.mu.Lock()
+		box := s.checks.stats[j.ID]
+		s.checks.mu.Unlock()
+		if box != nil {
+			out["previous"] = box.changed() // url → status before this run, for the links it changed
+		}
 	}
 	writeJSON(w, 200, out)
 }
@@ -249,6 +268,10 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		}
 		if !known || before.Status != res.Status {
 			changed++
+			if box.previous == nil {
+				box.previous = map[string]string{}
+			}
+			box.previous[res.URL] = before.Status // under mu, which is box.mu
 		}
 		mu.Unlock()
 		if known && before.Status != res.Status {

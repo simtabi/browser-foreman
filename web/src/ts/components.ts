@@ -190,11 +190,14 @@ export const rechecks = () => ({
   timer: 0,
   async init() { await this.load(); },
   async load() {
-    try { this.status = await api.path("rechecks").get(); } catch { this.status = null; return; }
-    const last = this.status?.runs.find(r => r.state !== "running");
-    if (last && last.newly_broken + last.fixed) this.report = await api.path("rechecks", last.run_id).get();
     clearTimeout(this.timer);
-    if (this.status?.running) this.timer = window.setTimeout(() => this.load(), 5000);
+    try { this.status = await api.path("rechecks").get(); } catch { this.status = null; return; }
+    // While a check runs, look again in 5 s whatever happens below: a failed report must not freeze the panel.
+    if (this.status?.running) this.timer = window.setTimeout(() => void this.load(), 5000);
+    const last = this.status?.runs.find(r => r.state !== "running");
+    if (last && last.newly_broken + last.fixed) {
+      try { this.report = await api.path("rechecks", last.run_id).get(); } catch { this.report = null; }
+    }
   },
   get current() { return this.status?.runs.find(r => r.state === "running") ?? null; },
   get last() { return this.status?.runs.find(r => r.state !== "running") ?? null; },
@@ -205,11 +208,15 @@ export const rechecks = () => ({
     if (!(await confirm({ title: "Re-check every link now?", ok: "Start", danger: false, body: "Every bookmarked link is visited again, a few at a time and politely. It takes a while; the page stays usable and you can stop it." }))) return;
     try { await api.path("rechecks", "run").post(); toast("Link re-check started.", "info"); await this.load(); } catch (e) { toast(String((e as Error).message ?? e), "danger"); }
   },
-  async stop() { await api.path("rechecks", "cancel").post(); await this.load(); },
+  async stop() {
+    try { await api.path("rechecks", "cancel").post(); } catch (e) { toast(String((e as Error).message ?? e), "danger", "Not stopped"); }
+    await this.load();
+  },
   async setWayback(on: boolean) {
     if (on && !(await confirm({ title: "Look up dead links in the Internet Archive?", ok: "Turn on", danger: false,
       body: "Once a link is confirmed dead, its address is sent to archive.org to find the closest saved copy, which then shows with the link. Only confirmed-dead links are sent, at most 200 per run. Nothing is sent while this is off." }))) { await this.load(); return; }
-    await api.path("tabs", "settings").post({ wayback: on }); await this.load();
+    try { await api.path("tabs", "settings").post({ wayback: on }); } catch (e) { toast(String((e as Error).message ?? e), "danger", "Not changed"); }
+    await this.load();
     toast(on ? "Dead links will be looked up in the Internet Archive" : "Internet Archive lookups off", "success");
   },
   async setRender(on: boolean) {

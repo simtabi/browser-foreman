@@ -48,6 +48,7 @@ export interface RowState { selected: boolean; marked: boolean; draggable: boole
 export function rowElement(r: BookmarkRow, idx: number, st: RowState, d: RowDeps): { row: HTMLElement; twisty: HTMLElement | null } {
   const row = el("div", "bm-row " + r.kind + (r.trash ? " trash" : "") + (st.selected ? " sel" : "") + (st.marked ? " marked" : ""));
   row.setAttribute("role", "treeitem"); row.setAttribute("aria-level", String(r.depth + 1));
+  row.id = `bm-row-${idx}`; // the tree names its active row by this (aria-activedescendant), so screen readers follow it
   row.setAttribute("aria-selected", String(st.selected || st.marked));
   // Indent by margin, not padding, so hover and selection start at the row's own level instead of the pane edge.
   row.style.marginLeft = (6 + r.depth * 18) + "px";

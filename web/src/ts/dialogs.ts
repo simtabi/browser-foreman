@@ -38,20 +38,34 @@ function restack(): void {
   if (backdrop) backdrop.style.zIndex = String(BASE_Z - 5 + STEP_Z * Math.max(0, open.length - 1));
 }
 
+// Keyboard and screen-reader users: a dialog takes the focus when it opens (unless something inside already has it),
+// keeps Tab inside itself while it is the topmost, and gives the focus back to what opened it when it closes.
+const openedFrom = new Map<HTMLElement, HTMLElement | null>();
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+export const focusables = (m: HTMLElement): HTMLElement[] =>
+  Array.from(m.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(e => !e.hidden && e.offsetParent !== null);
+
 export function showModal(id: string): void {
   const m = must<HTMLElement>(id);
   const under = visibleModals().filter(x => x !== m).length;
   m.style.zIndex = String(BASE_Z + STEP_Z * under);
   m.style.display = "block"; m.classList.add("show");
+  m.setAttribute("aria-modal", "true");
+  if (!openedFrom.has(m)) openedFrom.set(m, document.activeElement instanceof HTMLElement ? document.activeElement : null);
   if (!backdrop) { backdrop = el("div", "modal-backdrop fade show"); document.body.append(backdrop); }
   restack();
+  setTimeout(() => { if (!m.contains(document.activeElement)) (focusables(m)[0] ?? m).focus({ preventScroll: true }); }, 40);
 }
 
 export function hideModal(id: string): void {
   const m = must<HTMLElement>(id); m.classList.remove("show"); m.style.display = "none"; m.style.zIndex = "";
+  m.removeAttribute("aria-modal");
+  const back = openedFrom.get(m); openedFrom.delete(m);
   opts.afterHide?.(id);
   dropBackdrop();
   restack();
+  const top = visibleModals().pop(); // a confirm closing over a dialog gives the focus back inside that dialog
+  if (back && back.isConnected && (!top || top.contains(back))) back.focus({ preventScroll: true });
 }
 
 /** Text editor dialog: rename, new folder, descriptions. Resolves with the text, or null when cancelled. */
@@ -61,6 +75,7 @@ export function askText({ title, label, value = "", hint = "", multiline = false
     const area = must<HTMLTextAreaElement>("#textArea"), line = must<HTMLInputElement>("#textIn"), okBtn = must<HTMLButtonElement>("#textOk");
     const inp = multiline ? area : line;
     area.hidden = !multiline; line.hidden = multiline; inp.value = value;
+    must<HTMLLabelElement>("#textLabel").htmlFor = inp.id; // the label names the field shown, for screen readers
     const done = (v: string | null) => { hideModal("#textModal"); okBtn.onclick = null; inp.onkeydown = null; resolve(v); };
     okBtn.onclick = () => done(inp.value);
     inp.onkeydown = (e: KeyboardEvent) => { e.stopPropagation(); if (e.key === "Escape") done(null); if (e.key === "Enter" && (!multiline || e.metaKey || e.ctrlKey)) { e.preventDefault(); done(inp.value); } };
@@ -150,6 +165,15 @@ export function toast(text: string, kind: ToastKind = "info", title = ""): void 
  *  backdrop with no dialog left above it clears it. */
 export function installDialogs(o: DialogOptions = {}): void {
   opts = o;
+  // Tab and Shift-Tab go round the topmost dialog's own controls, never behind it.
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Tab") return;
+    const top = visibleModals().pop(); if (!top) return;
+    const f = focusables(top); if (!f.length) { e.preventDefault(); return; }
+    const first = f[0]!, last = f[f.length - 1]!, at = document.activeElement;
+    if (e.shiftKey && (at === first || !top.contains(at))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (at === last || !top.contains(at))) { e.preventDefault(); first.focus(); }
+  }, true);
   document.addEventListener("mousedown", e => { if (e.target === backdrop) dropBackdrop(); }, true);
   // Bubble phase: a field that handles Escape itself stops it first.
   document.addEventListener("keydown", e => {
