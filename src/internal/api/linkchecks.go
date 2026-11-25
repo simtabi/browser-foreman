@@ -198,7 +198,14 @@ func (s *Server) StartCheck(wsID string, urls []string) (*linkcheck.Job, error) 
 		mu.Unlock()
 		// A check that could not reach the site says nothing new about it: keep what an earlier check found, so a
 		// network hiccup never turns a working or dead link into "could not verify".
+		// It is still an attempt: save what was known with this check's time, or the link stays due and the hourly
+		// sweep comes back to this workspace for ever, never reaching the ones after it.
 		if res.Status == linkcheck.StatusUnverified && known && before.Status != linkcheck.StatusUnverified {
+			kept := before
+			kept.Checked = res.Checked
+			mu.Lock()
+			batch = append(batch, kept)
+			mu.Unlock()
 			return res
 		}
 		res = linkcheck.Settle(before, known, res)
