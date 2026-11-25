@@ -30,7 +30,7 @@ func TestAnUnreachableRecheckStillMovesOn(t *testing.T) {
 	cutoff := time.Now().Add(-time.Hour)
 	s.recheckStale(ctx)
 	var got map[string]store.LinkResult
-	for range 200 {
+	for range 800 { // 20 s: an unreachable site waits out the checker's own 5 s timeout first, slower on a busy machine
 		got, _ = s.Data.Links(ctx, urls)
 		if got[urls[0]].Checked.After(cutoff) && got[urls[1]].Checked.After(cutoff) {
 			break
